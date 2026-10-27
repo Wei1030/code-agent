@@ -42,7 +42,7 @@
     axis: '#c3c2b7',
   };
 
-  const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+  const FONT = "system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif";
   const MONO = "'Cascadia Code', Consolas, 'SFMono-Regular', Menlo, monospace";
 
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -53,7 +53,12 @@
     if (bold) return tw(s, size) * 1.08;
     let w = 0;
     for (const ch of String(s)) {
-      if ('il.,:;|!\'` '.includes(ch)) w += 0.3;
+      const code = ch.codePointAt(0);
+      // CJK ideographs, kana, fullwidth forms and CJK punctuation are one em wide.
+      if (code >= 0x2e80 && code <= 0x9fff) w += 1;
+      else if (code >= 0xac00 && code <= 0xd7af) w += 1;
+      else if (code >= 0xff00 && code <= 0xffef) w += 1;
+      else if ('il.,:;|!\'` '.includes(ch)) w += 0.3;
       else if ('mwMW@'.includes(ch)) w += 0.85;
       else if (ch >= 'A' && ch <= 'Z') w += 0.66;
       else if (ch >= '0' && ch <= '9') w += 0.56;
@@ -120,17 +125,18 @@
 
   /** Wrap text into lines of at most `maxW` pixels. */
   function wrap(s, maxW, size = 13, mono = false) {
-    const words = String(s).split(' ');
+    // Tokens: single CJK characters (breakable anywhere), runs of other text, runs of spaces.
+    const tokens = String(s).match(/[⺀-鿿＀-￯]|[^\s⺀-鿿＀-￯]+|\s+/g) || [];
     const out = [];
     let cur = '';
-    for (const w of words) {
-      const next = cur ? cur + ' ' + w : w;
-      if (tw(next, size, mono) > maxW && cur) {
-        out.push(cur);
-        cur = w;
+    for (const tok of tokens) {
+      const next = cur + tok;
+      if (tw(next, size, mono) > maxW && cur.trim()) {
+        out.push(cur.trimEnd());
+        cur = tok.trimStart();
       } else cur = next;
     }
-    if (cur) out.push(cur);
+    if (cur.trim()) out.push(cur.trimEnd());
     return out;
   }
 
@@ -488,14 +494,14 @@
 
   // ------------------------------------------------------------ app shell
   const NAV = [
-    ['sessions', 'chat', 'Sessions'],
-    ['agents', 'agent', 'Agents'],
+    ['sessions', 'chat', '会话'],
+    ['agents', 'agent', '代理'],
     ['mcp', 'plug', 'MCP'],
-    ['skills', 'spark', 'Skills'],
-    ['hooks', 'hook', 'Hooks'],
-    ['jobs', 'braces', 'Jobs'],
-    ['usage', 'chart', 'Usage'],
-    ['settings', 'gear', 'Settings'],
+    ['skills', 'spark', '技能'],
+    ['hooks', 'hook', '钩子'],
+    ['jobs', 'braces', '作业'],
+    ['usage', 'chart', '用量'],
+    ['settings', 'gear', '设置'],
   ];
 
   /** Page background, top bar and nav rail. o: nav, approvals, workspace */
@@ -506,7 +512,7 @@
     out += rect(16, 12, 24, 24, { r: 6, fill: C.ink });
     out += path('M22 24l5-6M22 24l5 6M33 18v12', { c: '#fff', sw: 2 });
     out += t(50, 29.5, 'Code Agent', { s: 15, w: 700 });
-    out += t(150, 29.5, 'Powered by Claude', { s: 11, c: C.muted });
+    out += t(150, 29.5, '由 Claude 驱动', { s: 11, c: C.muted });
     // workspace switcher
     out += rect(258, 9, 230, 30, { r: 6, fill: C.surface2, stroke: C.border });
     out += ic('folder', 268, 16, 16, C.ink2);
@@ -515,21 +521,23 @@
     // command search
     out += rect(560, 9, 360, 30, { r: 6, fill: C.surface2, stroke: C.border });
     out += ic('search', 571, 16, 16, C.muted);
-    out += t(595, 28.5, 'Search sessions, commands, settings…', { s: 13, c: C.muted });
+    out += t(595, 28.5, '搜索会话、命令、设置…', { s: 13, c: C.muted });
     out += kbd(880, 15, 'Ctrl K');
     // right side
-    out += rect(1150, 11, 108, 26, { r: 13, fill: C.surface2, stroke: C.border });
-    out += dot(1164, 24, C.good, 4);
-    out += t(1174, 28.5, 'Warm pool 1', { s: 12, c: C.ink2 });
+    out += rect(1112, 11, 96, 26, { r: 13, fill: C.surface2, stroke: C.border });
+    out += dot(1126, 24, C.good, 4);
+    out += t(1136, 28.5, '预热池 1', { s: 12, c: C.ink2 });
+    out += ic('globe', 1224, 14, 20, C.ink2);
+    out += t(1248, 29, o.lang ?? '中', { s: 12, w: 600, c: C.ink2 });
     out += ic('bell', 1278, 13, 22, C.ink2);
     const ap = o.approvals ?? 0;
     if (ap) {
       out += circle(1297, 15, 8, { fill: C.crit });
       out += t(1297, 19, String(ap), { s: 10.5, w: 700, c: '#fff', a: 'middle' });
     }
-    out += avatar(1318, 10, 'M', '#52514e');
-    out += t(1352, 22, 'API key', { s: 11, c: C.muted });
-    out += t(1352, 36, 'Anthropic', { s: 11, c: C.ink2, w: 500 });
+    out += avatar(1318, 10, 'W', '#52514e');
+    out += t(1352, 22, o.authKind ?? 'Claude 订阅', { s: 11, c: C.muted });
+    out += t(1352, 36, o.authName ?? 'Max', { s: 11, c: C.ink2, w: 500 });
     // nav rail
     out += rect(0, 49, 64, 851, { fill: C.surface }) + vline(64, 49, 851);
     NAV.forEach(([id, icon, label], i) => {
@@ -537,7 +545,7 @@
       const on = id === o.nav;
       if (on) out += rect(8, y, 48, 52, { r: 8, fill: C.accentSoft });
       out += ic(icon, 21, y + 8, 22, on ? C.accent : C.ink2);
-      out += t(32, y + 44, label, { s: 10.5, w: on ? 600 : 500, c: on ? C.accent : C.ink2, a: 'middle' });
+      out += t(32, y + 44, label, { s: 11, w: on ? 600 : 500, c: on ? C.accent : C.ink2, a: 'middle' });
     });
     out += ic('moon', 21, 846, 20, C.muted);
     return out;
@@ -548,13 +556,13 @@
     const x = 65;
     const w = 239;
     let out = rect(x, 49, w, 851, { fill: C.surface2 }) + vline(x + w, 49, 851);
-    out += btn(x + 12, 62, 'New session', { v: 'primary', icon: 'plus', w: w - 24 - 38 });
+    out += btn(x + 12, 62, '新建会话', { v: 'primary', icon: 'plus', w: w - 24 - 38 });
     out += btn(x + w - 46, 62, '', { icon: 'filter', w: 34 });
-    out += t(x + 14, 122, 'LIVE', { s: 11, w: 600, c: C.muted, ls: 0.6 });
+    out += t(x + 14, 122, '运行中', { s: 11, w: 600, c: C.muted, ls: 0.6 });
     const live = o.live ?? [
-      ['Fix flaky checkout tests', 'requires_action', 'shop-api'],
-      ['Refactor auth middleware', 'running', 'shop-api'],
-      ['Docs: API reference', 'idle', 'shop-web'],
+      ['修复结账测试偶发失败', 'requires_action', 'shop-api'],
+      ['重构鉴权中间件', 'running', 'shop-api'],
+      ['文档：API 参考', 'idle', 'shop-web'],
     ];
     live.forEach(([title, st, ws, note], i) => {
       const y = 132 + i * 54;
@@ -564,17 +572,17 @@
       out += circle(x + 20, y + 17, 4.5, { fill: sc });
       if (st === 'running') out += circle(x + 20, y + 17, 7.5, { stroke: C.accentLine, sw: 1.5 });
       out += t(x + 32, y + 21, title, { s: 13, w: on ? 600 : 500 });
-      const label = note ?? (st === 'requires_action' ? 'Needs approval' : st === 'running' ? 'Running · 2m 14s' : 'Idle');
+      const label = note ?? (st === 'requires_action' ? '待审批' : st === 'running' ? '运行中 · 2分14秒' : '空闲');
       out += t(x + 32, y + 38, `${ws} · ${label}`, { s: 11.5, c: st === 'requires_action' ? C.warnInk : C.muted });
     });
     const ry = 132 + live.length * 54 + 18;
-    out += t(x + 14, ry, 'RECENT', { s: 11, w: 600, c: C.muted, ls: 0.6 });
+    out += t(x + 14, ry, '最近', { s: 11, w: 600, c: C.muted, ls: 0.6 });
     const recent = o.recent ?? [
-      ['Add rate limiting to /orders', '2h ago', 'perf'],
-      ['Investigate memory leak', 'Yesterday', null],
-      ['Migrate to Postgres 17', 'Mon', 'db'],
-      ['Write release notes 3.2', 'Oct 21', null],
-      ['Review PR #482', 'Oct 20', 'review'],
+      ['为 /orders 添加限流', '2 小时前', 'perf'],
+      ['排查内存泄漏', '昨天', null],
+      ['迁移到 Postgres 17', '周一', 'db'],
+      ['撰写 3.2 版本说明', '10月21日', null],
+      ['评审 PR #482', '10月20日', 'review'],
     ];
     recent.forEach(([title, when, tag], i) => {
       const y = ry + 12 + i * 44;
@@ -582,17 +590,17 @@
       out += t(x + 14, y + 32, when, { s: 11, c: C.muted });
       if (tag) out += chip(x + 14 + tw(when, 11) + 8, y + 21, tag, { h: 15, s: 10 });
     });
-    out += t(x + 14, 884, 'All sessions →', { s: 12, w: 500, c: C.accent });
+    out += t(x + 14, 884, '全部会话 →', { s: 12, w: 500, c: C.accent });
     return out;
   }
 
   /** Live session header row. */
   function sessionHeader(x, y, w, o = {}) {
     let out = rect(x, y, w, 56, { fill: C.surface }) + hline(x, y + 56, w);
-    out += t(x + 20, y + 24, o.title ?? 'Fix flaky checkout tests', { s: 15, w: 600 });
-    out += ic('pencil', x + 20 + tw(o.title ?? 'Fix flaky checkout tests', 15, false, true) + 8, y + 12, 14, C.muted);
+    out += t(x + 20, y + 24, o.title ?? '修复结账测试偶发失败', { s: 15, w: 600 });
+    out += ic('pencil', x + 20 + tw(o.title ?? '修复结账测试偶发失败', 15, false, true) + 8, y + 12, 14, C.muted);
     const st = o.state ?? 'running';
-    const stl = { running: ['info', 'Running'], requires_action: ['warn', 'Needs your input'], idle: ['idle', 'Idle'] }[st];
+    const stl = { running: ['info', '运行中'], requires_action: ['warn', '等待你的操作'], idle: ['idle', '空闲'] }[st];
     out += status(x + 20, y + 32, stl[0], stl[1]);
     out += t(x + 20 + chip.w(stl[1], { icon: 1 }) + 10, y + 46, o.sub ?? 'shop-api · main', { s: 11.5, c: C.muted });
     // controls at right
@@ -601,23 +609,23 @@
     let out2 = btn(rx, y + 13, '', { v: 'dangerOutline', icon: 'stop', w: 32 });
     rx -= 80;
     out2 += rect(rx, y + 13, 72, 30, { r: 6, fill: C.surface2, stroke: C.border });
-    out2 += t(rx + 9, y + 25, o.budget ?? 'Cost · cap $5', { s: 10, c: C.muted });
+    out2 += t(rx + 9, y + 25, o.budget ?? '费用 · 上限 $5', { s: 10, c: C.muted });
     out2 += t(rx + 9, y + 38.5, o.cost ?? '$0.42', { s: 12.5, w: 600 });
     rx -= 104;
     const pct = o.ctx ?? 38;
     out2 += rect(rx, y + 13, 96, 30, { r: 6, fill: C.surface2, stroke: C.border });
-    out2 += t(rx + 9, y + 25, 'Context', { s: 10, c: C.muted });
+    out2 += t(rx + 9, y + 25, '上下文', { s: 10, c: C.muted });
     out2 += t(rx + 87, y + 25, pct + '%', { s: 10, w: 600, a: 'end', c: pct > 80 ? C.crit : C.ink2 });
     out2 += progress(rx + 9, y + 32, 78, pct, pct > 80 ? C.crit : pct > 60 ? C.warn : C.accent, 5);
     rx -= 160;
     out2 += rect(rx, y + 13, 152, 30, { r: 6, fill: o.modeBg ?? C.surface, stroke: o.modeStroke ?? C.borderStrong });
     out2 += ic(o.modeIcon ?? 'shield', rx + 8, y + 20, 16, o.modeInk ?? C.ink2);
-    out2 += t(rx + 30, y + 32.5, o.mode ?? 'Ask before edits', { s: 12.5, w: 500, c: o.modeInk ?? C.ink });
+    out2 += t(rx + 30, y + 32.5, o.mode ?? '编辑前询问', { s: 12.5, w: 500, c: o.modeInk ?? C.ink });
     out2 += ic('chevDown', rx + 130, y + 20, 16, C.ink2);
     rx -= 160;
     out2 += rect(rx, y + 13, 152, 30, { r: 6, fill: C.surface, stroke: C.borderStrong });
     out2 += ic('cpu', rx + 8, y + 20, 16, C.ink2);
-    out2 += t(rx + 30, y + 32.5, o.model ?? 'Opus 5.5 · high', { s: 12.5, w: 500 });
+    out2 += t(rx + 30, y + 32.5, o.model ?? 'Opus 5.5 · 高', { s: 12.5, w: 500 });
     out2 += ic('chevDown', rx + 130, y + 20, 16, C.ink2);
     return out + out2;
   }
@@ -635,7 +643,7 @@
       }
       if (o.ghost) out += t(x + 16 + tw(text, 14) + 4, y + 28, o.ghost, { s: 14, c: C.muted });
     } else {
-      out += t(x + 16, y + 28, o.ph ?? 'Ask, or type / for commands and @ to mention files', { s: 14, c: C.muted });
+      out += t(x + 16, y + 28, o.ph ?? '输入问题；/ 调用命令，@ 引用文件', { s: 14, c: C.muted });
     }
     const by = y + h - 40;
     out += btn(x + 10, by, '', { v: 'ghost', icon: 'clip', w: 32 });
@@ -643,12 +651,12 @@
     out += btn(x + 78, by, '', { v: 'ghost', icon: 'at', w: 32 });
     out += btn(x + 112, by, '', { v: 'ghost', icon: 'slash', w: 32 });
     out += vline(x + 152, by + 6, 20);
-    out += t(x + 164, by + 20, o.hint ?? 'Enter to send · Shift+Enter newline', { s: 11.5, c: C.muted });
+    out += t(x + 164, by + 20, o.hint ?? 'Enter 发送 · Shift+Enter 换行 · 输入法组字时回车不发送', { s: 11.5, c: C.muted });
     if (o.running) {
-      out += btn(x + w - 214, by, 'Queue', { v: 'secondary', icon: 'queue', w: 92 });
-      out += btn(x + w - 114, by, 'Interrupt', { v: 'dangerOutline', icon: 'stop', w: 102 });
+      out += btn(x + w - 194, by, '排队', { v: 'secondary', icon: 'queue', w: 80 });
+      out += btn(x + w - 106, by, '中断', { v: 'dangerOutline', icon: 'stop', w: 94 });
     } else {
-      out += btn(x + w - 92, by, 'Send', { v: 'primary', icon: 'send', w: 80 });
+      out += btn(x + w - 92, by, '发送', { v: 'primary', icon: 'send', w: 80 });
     }
     return out;
   }
@@ -657,13 +665,13 @@
   const L = { MX: 305, MW: 795, TX: 329, TW: 747, IX: 1101, IW: 339, CY: 776 };
 
   /** Inspector column with tabs. tab = index into INSPECTOR_TABS. */
-  const INSPECTOR_TABS = ['Tasks', 'Background', 'Changes', 'Checkpoints', 'Context'];
+  const INSPECTOR_TABS = ['任务', '后台', '变更', '检查点', '上下文'];
   function inspector(tab, o = {}) {
     let out = rect(L.IX, 49, L.IW, 851, { fill: C.surface }) + vline(L.IX, 49, 851);
-    out += t(L.IX + 16, 76, o.title ?? 'Inspector', { s: 12, w: 600, c: C.muted, ls: 0.4 });
+    out += t(L.IX + 16, 76, o.title ?? '检查器', { s: 12, w: 600, c: C.muted, ls: 0.4 });
     out += ic('dots', L.IX + L.IW - 34, 64, 18, C.ink2);
     out += ic('expand', L.IX + L.IW - 62, 65, 16, C.ink2);
-    out += tabs(L.IX + 16, 112, o.tabs ?? INSPECTOR_TABS, tab, { s: 12, gap: 12 });
+    out += tabs(L.IX + 16, 112, o.tabs ?? INSPECTOR_TABS, tab, { s: 13, gap: 22 });
     out += hline(L.IX, 123, L.IW);
     return out;
   }
@@ -696,12 +704,12 @@
     const lines = wrap(text, w - 64, 14);
     const h = 24 + lines.length * 21 + (o.attach ? 34 : 0);
     let out = rect(x, y, w, h, { r: 10, fill: C.accentSoft });
-    out += avatar(x + 10, y + 10, 'M', '#52514e', 12);
+    out += avatar(x + 10, y + 10, 'W', '#52514e', 12);
     lines.forEach((ln, i) => (out += t(x + 44, y + 27 + i * 21, ln, { s: 14 })));
     if (o.attach) out += chip(x + 44, y + 22 + lines.length * 21, o.attach, { icon: 'image', h: 22, bg: C.surface });
     if (o.hover) {
-      out += btn(x + w - 214, y - 14, 'Rewind', { icon: 'rewind', h: 26, s: 12 });
-      out += btn(x + w - 120, y - 14, 'Branch', { icon: 'branch', h: 26, s: 12 });
+      out += btn(x + w - 178, y - 14, '回退文件', { icon: 'rewind', h: 26, s: 12 });
+      out += btn(x + w - 86, y - 14, '分叉', { icon: 'branch', h: 26, s: 12 });
     }
     return out;
   }
@@ -711,8 +719,8 @@
     let out = rect(x, y, w, 32, { r: 6, fill: C.surface2, stroke: C.border, dash: '3 3' });
     out += ic(o.open ? 'chevDown' : 'chevRight', x + 8, y + 8, 16, C.muted);
     out += ic('bulb', x + 28, y + 8, 16, C.muted);
-    out += t(x + 50, y + 20.5, `Thinking · ${o.dur ?? '6s'}`, { s: 12, w: 600, c: C.ink2 });
-    out += t(x + 50 + tw(`Thinking · ${o.dur ?? '6s'}`, 12) + 12, y + 20.5, o.preview ?? '', { s: 12, i: true, c: C.muted });
+    out += t(x + 50, y + 20.5, `思考 · ${o.dur ?? '6 秒'}`, { s: 12, w: 600, c: C.ink2 });
+    out += t(x + 50 + tw(`思考 · ${o.dur ?? '6 秒'}`, 12, false, true) + 12, y + 20.5, o.preview ?? '', { s: 12, i: true, c: C.muted });
     return out;
   }
 

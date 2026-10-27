@@ -1,65 +1,67 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Code Agent — Interaction Prototype</title>
+  <title>Code Agent — 交互稿</title>
   <link rel="stylesheet" href="prototype.css">
 </head>
 <body>
   <aside id="toc">
     <div class="toc-head">
       <div class="brand">Code Agent</div>
-      <div class="sub">Interaction prototype · v0.1</div>
+      <div class="sub">交互稿 · v0.2</div>
     </div>
-    <label class="toggle"><input type="checkbox" id="toggle-markers" checked> Show markers</label>
+    <label class="toggle"><input type="checkbox" id="toggle-markers" checked> 显示标注</label>
     <nav id="toc-links">
-      <a href="#how-to-read">How to read</a>
-      <a href="#global">Global interactions</a>
+      <a href="#how-to-read">阅读说明</a>
+      <a href="#global">全局交互规则</a>
     </nav>
   </aside>
 
   <main>
     <header class="intro">
-      <h1>Code Agent — Interaction Prototype</h1>
+      <h1>Code Agent — 交互稿</h1>
       <p>
-        A local web workbench over the Claude Agent SDK (TypeScript). Every screen below is drawn
-        entirely in SVG. Numbered markers point at interactive elements; the table under each screen
-        explains the interaction, what the UI does, and which SDK surface it relies on.
-        Requirement IDs (FR-…) refer to <a href="../requirements.md">docs/requirements.md</a>.
+        基于 Claude Agent SDK（TypeScript）的本地 Web 工作台。下面每个页面的界面和布局全部用 SVG 绘制。
+        编号标注指向可交互的元素；每页下方的表格说明交互方式、界面行为以及所依赖的 SDK 接口。
+        需求编号（FR-…）对应 <a href="../requirements.zh-CN.md">docs/requirements.zh-CN.md</a>
+        （英文版 <a href="../requirements.md">docs/requirements.md</a>）。
       </p>
     </header>
 
     <section id="how-to-read" class="doc">
-      <h2>How to read</h2>
+      <h2>阅读说明</h2>
       <div class="legend">
         <div><svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="11.5" fill="#fff"/><circle cx="13" cy="13" r="10" fill="#e5197d"/><text x="13" y="17" font-size="11" font-weight="700" fill="#fff" text-anchor="middle" font-family="system-ui">1</text></svg>
-          Annotation marker. Click a marker to jump to its note; hover a note to highlight its marker.</div>
-        <div><span class="sw" style="background:#3b5bdb"></span> Accent — primary actions, selection, running state.</div>
-        <div><span class="sw" style="background:#fab219"></span> Warning — needs the user's input (always with an icon and a label).</div>
-        <div><span class="sw" style="background:#d03b3b"></span> Critical — errors, destructive actions, bypass mode.</div>
-        <div><span class="sw" style="background:#0ca30c"></span> Good — completed, connected, approved.</div>
-        <div><span class="sw dash"></span> Dashed outline — collapsed or secondary content (thinking, drafts).</div>
+          标注。点击标注跳到对应说明；鼠标悬停在说明上会高亮对应标注。</div>
+        <div><span class="sw" style="background:#3b5bdb"></span> 强调色 —— 主要操作、选中项、运行中状态。</div>
+        <div><span class="sw" style="background:#fab219"></span> 警示 —— 需要用户处理（总是配合图标和文字）。</div>
+        <div><span class="sw" style="background:#d03b3b"></span> 危险 —— 错误、破坏性操作、跳过权限检查。</div>
+        <div><span class="sw" style="background:#0ca30c"></span> 正常 —— 已完成、已连接、已批准。</div>
+        <div><span class="sw dash"></span> 虚线框 —— 折叠或次要内容（思考过程、草稿）。</div>
       </div>
       <p>
-        Canvas size is 1440 × 900 (a 1440 px wide desktop browser). Each screen has buttons to
-        open the SVG on its own or download it. The prototype is static: states that would follow an
-        interaction are shown as separate screens or variants.
+        画布尺寸为 1440 × 900（1440 像素宽的桌面浏览器）。每页都可以单独打开或下载 SVG。
+        交互稿是静态的：交互之后的状态以单独页面或「变体」的形式给出。
+        界面文字为简体中文；代码、命令、工具名、SDK 字段和第三方内容保持原文，这本身也是多语言需求（FR-I18N）的一部分，详见 P25。
       </p>
     </section>
 
     <section id="global" class="doc">
-      <h2>Global interactions</h2>
+      <h2>全局交互规则</h2>
       <table class="notes">
-        <thead><tr><th>Area</th><th>Rule</th></tr></thead>
+        <thead><tr><th>方面</th><th>规则</th></tr></thead>
         <tbody>
-          <tr><td>Keyboard</td><td><kbd>Ctrl K</kbd> command / search · <kbd>Ctrl N</kbd> new session · <kbd>Enter</kbd> send, <kbd>Shift Enter</kbd> newline · <kbd>Esc</kbd> interrupt the running turn (when the composer is empty) · <kbd>Ctrl B</kbd> move running work to the background · <kbd>Shift Tab</kbd> cycle permission mode · <kbd>1</kbd>–<kbd>4</kbd> pick an option in approval / question panels · <kbd>Ctrl .</kbd> toggle inspector · <kbd>Alt ↑/↓</kbd> switch live session.</td></tr>
-          <tr><td>Real time</td><td>Every live session streams over one WebSocket. Each event has a sequence number; after a reconnect the client asks for events after its last sequence and the server replays them. Nothing in the UI is "fire and forget": every command shows pending → done / failed.</td></tr>
-          <tr><td>Session state</td><td>The SDK's <code>session_state_changed</code> drives one indicator used everywhere: a blue ring = running, amber dot + "Needs …" = requires action, grey = idle. The browser tab title gets a prefix (● / !) and the favicon a badge.</td></tr>
-          <tr><td>Needs-input priority</td><td>When a session needs input (approval, question, plan, elicitation), the request docks above the composer. If the user is in another session or tab, the top-bar bell counts it and an (opt-in) browser notification is sent. Answering anywhere resolves it everywhere.</td></tr>
-          <tr><td>Destructive actions</td><td>Delete session, rewind files, bypass permissions and clearing the conversation always ask for confirmation, and say what cannot be undone.</td></tr>
-          <tr><td>Version gating</td><td>Features the running Claude Code version lacks (read from the init message) are hidden or shown disabled with the minimum version in a tooltip.</td></tr>
-          <tr><td>Empty, loading, error</td><td>Lists show an empty state with the primary action; loading uses skeleton rows; errors show the SDK error text with a retry action. See P24 for session-level states.</td></tr>
+          <tr><td>快捷键</td><td><kbd>Ctrl K</kbd> 命令 / 搜索 · <kbd>Ctrl N</kbd> 新建会话 · <kbd>Enter</kbd> 发送，<kbd>Shift Enter</kbd> 换行 · <kbd>Esc</kbd> 中断当前轮（输入框为空时）· <kbd>Ctrl B</kbd> 把运行中的工作转入后台 · <kbd>Shift Tab</kbd> 循环切换权限模式 · <kbd>1</kbd>–<kbd>4</kbd> 在审批 / 提问面板中选择选项 · <kbd>Ctrl .</kbd> 开关检查器 · <kbd>Alt ↑/↓</kbd> 切换运行中的会话。</td></tr>
+          <tr><td>输入法</td><td>输入法组字期间按 <kbd>Enter</kbd> 只确认候选词，永远不会发送或提交。适用于所有「回车提交」的输入框。快捷键避开常见的输入法切换组合。</td></tr>
+          <tr><td>实时性</td><td>每个运行中的会话通过一条 WebSocket 推送事件，每个事件带序号；重连后客户端请求最后序号之后的事件，服务端重放。界面上没有「发出即不管」的操作：每个命令都显示 进行中 → 完成 / 失败。</td></tr>
+          <tr><td>会话状态</td><td>SDK 的 <code>session_state_changed</code> 驱动一个处处一致的指示：蓝色圆环 = 运行中，琥珀色圆点 + 「等待…」 = 需要你处理，灰色 = 空闲。浏览器标签页标题加前缀（● / !），网站图标加角标。</td></tr>
+          <tr><td>待处理优先</td><td>会话需要你处理（审批、提问、计划、征询）时，请求停靠在输入框上方。若你在其他会话或标签页，顶栏铃铛计数，并（可选）发送浏览器通知。在任一处处理后，所有地方同步消失。</td></tr>
+          <tr><td>破坏性操作</td><td>删除会话、回退文件、跳过权限检查和清空对话一律先确认，并说明哪些内容无法撤销。</td></tr>
+          <tr><td>版本适配</td><td>当前运行的 Claude Code 版本（从 init 消息读取）不支持的功能会隐藏，或禁用并在提示中注明最低版本。</td></tr>
+          <tr><td>语言</td><td>界面语言即时切换无需刷新（顶栏地球图标或 P25）。SDK 返回的代码映射为本地化文案并可展开原文；第三方内容和工具输出保持原文；Claude 生成的内容由「回复语言」决定。</td></tr>
+          <tr><td>空、加载、错误</td><td>列表为空时显示一句说明和主要操作；加载时用骨架行；出错时显示本地化提示、SDK 原文和重试操作。会话级状态见 P24。</td></tr>
         </tbody>
       </table>
     </section>

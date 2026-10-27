@@ -8,46 +8,43 @@
   // ------------------------------------------------------------------ P01
   window.SCREENS.push({
     id: 'P01',
-    group: 'Overview',
-    title: 'Architecture and navigation map',
-    summary: 'How the pieces fit: the browser talks only to the local Node server; the server runs one SDK `query()` per live session, each backed by a Claude Code process. Below, the navigation map shows every screen in this prototype and where it lives.',
-    frs: ['§4.1 Architecture', '§7 Information architecture', 'NFR-02', 'NFR-04'],
+    group: '总览',
+    title: '架构与导航地图',
+    summary: '各部分如何协作：浏览器只与本机 Node 服务通信；服务为每个运行中的会话调用一次 SDK 的 `query()`，背后各有一个 Claude Code 进程。下半部分的导航地图列出交互稿中的所有页面及其位置。',
+    frs: ['§4.1 架构', '§7 信息架构', 'NFR-02', 'NFR-04'],
     draw() {
       let s = rect(0, 0, 1440, 900, { fill: C.page });
-      s += t(40, 46, 'Runtime architecture', { s: 18, w: 700 });
+      s += t(40, 46, '运行时架构', { s: 18, w: 700 });
 
-      // Browser
       s += rect(40, 66, 330, 330, { r: 12, fill: C.surface, stroke: C.border });
-      s += t(60, 94, 'Browser · single-page app', { s: 14, w: 700 });
-      s += box(60, 112, 290, 56, 'Views', 'screens rendered from SDK events');
-      s += box(60, 180, 290, 56, 'Session stores', 'one store per live session');
-      s += box(60, 248, 290, 56, 'WebSocket client', 'commands out · events in, with seq');
+      s += t(60, 94, '浏览器 · 单页应用', { s: 14, w: 700 });
+      s += box(60, 112, 290, 56, '视图', '由 SDK 事件渲染界面');
+      s += box(60, 180, 290, 56, '会话状态', '每个运行中的会话一份');
+      s += box(60, 248, 290, 56, 'WebSocket 客户端', '发出命令 · 接收带序号的事件');
       s += rect(60, 318, 290, 58, { r: 8, fill: C.surface2, stroke: C.border, dash: '4 3' });
-      s += t(205, 342, 'No SDK, no credentials', { s: 12.5, w: 600, a: 'middle', c: C.ink2 });
-      s += t(205, 360, 'everything goes through the server', { s: 11, a: 'middle', c: C.muted });
+      s += t(205, 342, '不含 SDK，不接触凭据', { s: 12.5, w: 600, a: 'middle', c: C.ink2 });
+      s += t(205, 360, '一切经由本机服务', { s: 11, a: 'middle', c: C.muted });
 
-      // Server
       s += rect(450, 66, 560, 330, { r: 12, fill: C.surface, stroke: C.border });
-      s += t(470, 94, 'Node.js server · 127.0.0.1 + access token', { s: 14, w: 700 });
-      s += box(470, 112, 160, 70, 'REST API', ['history · registries', 'settings · usage']);
-      s += box(470, 194, 160, 70, 'WebSocket hub', ['fan-out to tabs', 'replay from seq']);
-      s += box(470, 276, 160, 100, 'Registries', ['profiles · MCP', 'agents · hooks · jobs', 'cost ledger · secrets']);
+      s += t(470, 94, 'Node.js 服务 · 127.0.0.1 + 访问令牌', { s: 14, w: 700 });
+      s += box(470, 112, 160, 70, 'REST API', ['历史 · 注册表', '设置 · 用量']);
+      s += box(470, 194, 160, 70, 'WebSocket 中枢', ['分发到各标签页', '按序号重放']);
+      s += box(470, 276, 160, 100, '注册表', ['配置方案 · MCP', '代理 · 钩子 · 作业', '费用账本 · 密钥']);
       s += rect(650, 112, 340, 264, { r: 10, fill: C.accentSoft, stroke: C.accentLine });
       s += t(666, 134, 'SessionManager → LiveSession × N', { s: 13, w: 700, c: C.accent });
-      s += box(666, 148, 150, 52, 'Query', 'query() handle');
-      s += box(826, 148, 150, 52, 'Input queue', 'AsyncIterable input');
-      s += box(666, 210, 150, 52, 'Pending requests', 'approvals · questions');
-      s += box(826, 210, 150, 52, 'Event buffer', 'ring buffer, seq');
-      s += box(666, 272, 310, 52, 'Callbacks', 'canUseTool · hooks · onElicitation · app tools');
-      s += t(666, 346, 'Controls: interrupt · setModel · setPermissionMode', { s: 11, c: C.ink2 });
+      s += box(666, 148, 150, 52, 'Query', 'query() 句柄');
+      s += box(826, 148, 150, 52, '输入队列', 'AsyncIterable 输入');
+      s += box(666, 210, 150, 52, '待处理请求', '审批 · 提问');
+      s += box(826, 210, 150, 52, '事件缓冲', '环形缓冲 · 序号');
+      s += box(666, 272, 310, 52, '回调', 'canUseTool · hooks · onElicitation · 应用工具');
+      s += t(666, 346, '控制：interrupt · setModel · setPermissionMode', { s: 11, c: C.ink2 });
       s += t(666, 362, 'applyFlagSettings · rewindFiles · stopTask · close', { s: 11, c: C.ink2 });
 
-      // Claude Code side
-      s += box(1090, 66, 310, 104, 'Claude Code process × N', ['bundled binary, one per live session', 'agent loop · built-in tools · MCP clients'], { fill: C.surface, sw: 1.5 });
-      s += box(1090, 192, 310, 52, 'Model provider', 'Anthropic API · Bedrock · Vertex · Foundry');
-      s += box(1090, 258, 310, 52, 'MCP servers', 'stdio · HTTP · SSE (+ in-process via SDK)');
-      s += box(1090, 336, 150, 60, '~/.claude', ['transcripts · settings', 'CLAUDE.md · skills'], { fill: C.surface2 });
-      s += box(1250, 336, 150, 60, '~/.code-agent', ['SQLite · profiles', 'secrets · ledger'], { fill: C.surface2 });
+      s += box(1090, 66, 310, 104, 'Claude Code 进程 × N', ['未修改的官方二进制，每个会话一个', 'Agent 循环 · 内置工具 · MCP 客户端'], { fill: C.surface, sw: 1.5 });
+      s += box(1090, 192, 310, 52, '模型服务', 'Claude 订阅 · Anthropic API · 云厂商');
+      s += box(1090, 258, 310, 52, 'MCP 服务器', 'stdio · HTTP · SSE（另有 SDK 进程内）');
+      s += box(1090, 336, 150, 60, '~/.claude', ['会话记录 · 设置', '登录凭据 · 技能'], { fill: C.surface2 });
+      s += box(1250, 336, 150, 60, '~/.code-agent', ['SQLite · 配置方案', '密钥 · 费用账本'], { fill: C.surface2 });
 
       s += arrow(372, 196, 448, 196);
       s += arrow(448, 222, 372, 222);
@@ -58,21 +55,19 @@
       s += t(1040, 118, 'stdio', { s: 11, a: 'middle', c: C.ink2 });
       s += arrow(1245, 172, 1245, 190);
       s += path('M1402 120 H1420 V284 H1404', { c: C.ink2, sw: 1.4, arrow: true });
-
       s += mk(368, 70, 1) + mk(1008, 70, 2) + mk(988, 116, 3) + mk(1398, 70, 4) + mk(1398, 340, 5);
 
-      // Navigation map
-      s += t(40, 452, 'Navigation map', { s: 18, w: 700 });
-      s += box(560, 468, 320, 46, 'App shell', 'top bar · nav rail · approvals inbox', { fill: C.ink, ink: '#fff', stroke: C.ink, subInk: '#c3c8d2' });
+      s += t(40, 452, '导航地图', { s: 18, w: 700 });
+      s += box(560, 468, 320, 46, '应用框架', '顶栏 · 导航栏 · 审批收件箱', { fill: C.ink, ink: '#fff', stroke: C.ink, subInk: '#c3c8d2' });
       const nav = [
-        ['Sessions', ['P02 Home', 'P03 New session', 'P04 Live session', 'P12 History & fork']],
-        ['Agents', ['P15 Agents']],
-        ['MCP', ['P13 MCP servers', 'P14 Elicitation']],
-        ['Skills', ['P16 Skills & plugins']],
-        ['Hooks', ['P17 Hooks']],
-        ['Jobs', ['P18 Structured jobs']],
-        ['Usage', ['P19 Usage']],
-        ['Settings', ['P20 Profiles', 'P21 Rules & sandbox', 'P22 Provider & env']],
+        ['会话', ['P02 首页', 'P03 新建会话', 'P04 运行中的会话', 'P12 历史与分叉']],
+        ['代理', ['P15 代理']],
+        ['MCP', ['P13 MCP 服务器', 'P14 信息征询']],
+        ['技能', ['P16 技能与插件']],
+        ['钩子', ['P17 钩子']],
+        ['作业', ['P18 结构化作业']],
+        ['用量', ['P19 用量']],
+        ['设置', ['P20 配置方案', 'P21 规则与沙箱', 'P22 模型服务与环境', 'P25 语言与地区']],
       ];
       nav.forEach(([name, kids], i) => {
         const x = 40 + i * 170;
@@ -86,12 +81,12 @@
         });
       });
       s += rect(40, 660, 158, 26, { r: 6, fill: C.accentSoft, stroke: C.accentLine });
-      s += t(50, 677.5, 'P04 Live session', { s: 12, w: 600, c: C.accent });
+      s += t(50, 677.5, 'P04 运行中的会话', { s: 12, w: 600, c: C.accent });
       s += path('M119 718 V748', { c: C.accent, sw: 1.4, arrow: true });
       s += rect(40, 752, 1348, 120, { r: 10, fill: C.surface, stroke: C.accentLine, dash: '5 4' });
-      s += t(60, 778, 'Inside a live session (P04): docked panels and inspector tabs', { s: 13, w: 700, c: C.accent });
-      const docked = ['P05 Composer, palette & queue', 'P06 Tool approval', 'P07 Clarifying questions', 'P08 Plan review', 'P09 Subagents & background',
-        'P10 Checkpoints & rewind', 'P11 Context & cost', 'P14 MCP elicitation', 'P23 Event inspector', 'P24 Session states'];
+      s += t(60, 778, '运行中的会话内部（P04）：停靠面板与检查器标签页', { s: 13, w: 700, c: C.accent });
+      const docked = ['P05 输入框、命令面板与排队', 'P06 工具审批', 'P07 澄清提问', 'P08 计划审阅', 'P09 子代理与后台任务',
+        'P10 检查点与回退', 'P11 上下文与费用', 'P14 MCP 信息征询', 'P23 事件检查器', 'P24 会话状态'];
       docked.forEach((d, i) => {
         const x = 60 + (i % 5) * 264;
         const y = 792 + Math.floor(i / 5) * 36;
@@ -102,36 +97,36 @@
       return s;
     },
     notes: [
-      ['Browser app', 'Renders every screen from normalized SDK events. Keeps one store per live session and reconnects automatically, replaying events after the last sequence number it saw.', 'None directly — the browser never imports the SDK and never sees an API key (NFR-04).'],
-      ['Node server', 'One local process bound to 127.0.0.1, protected by an access token shown at first start. REST serves history and registries; the WebSocket carries live session events and commands.', '`listSessions`, `getSessionMessages`, `forkSession`, `renameSession`, `tagSession`, `deleteSession`, `resolveSettings` behind REST.'],
-      ['LiveSession', 'One per running session. Owns the `Query`, an input queue that feeds streaming input, the pending approvals / questions / elicitations keyed by `requestId`, and a ring buffer of events for replay.', '`query({ prompt: AsyncIterable<SDKUserMessage>, options })`, `canUseTool`, `hooks`, `onElicitation`, `interrupt()`, `setModel()`, `setPermissionMode()`…'],
-      ['Claude Code process', 'The SDK spawns the bundled binary per live session (~250 MB each), so the server caps live sessions and can close idle ones; they resume on demand.', '`pathToClaudeCodeExecutable`, `startup()`, `prewarm()`, `spawnClaudeCodeProcess`, `close()`'],
-      ['Data locations', 'SDK-owned data (transcripts, settings files, CLAUDE.md, skills) stays where Claude Code keeps it. Code Agent stores only its own data in ~/.code-agent.', '`persistSession`; optional `sessionStore` mirror (FR-SES-16)'],
-      ['App shell', 'The nav rail sections map one-to-one to the boxes below. The top bar holds the workspace switcher, Ctrl K search, warm-pool status, the approvals inbox and the account menu.', '—'],
-      ['Live session panels', 'These appear inside P04 when the SDK asks for something (approval, question, plan, elicitation) or when the user opens an inspector tab.', '`canUseTool` (incl. `AskUserQuestion`, `ExitPlanMode`), `onElicitation`, inspector queries'],
+      ['浏览器应用', '所有页面都由标准化后的 SDK 事件渲染。每个运行中的会话一份状态；断线后自动重连，并从最后收到的序号之后重放事件。', '不直接使用 SDK —— 浏览器不引入 SDK，也接触不到任何凭据（NFR-04）。'],
+      ['Node 服务', '本机单进程，只监听 127.0.0.1，首次启动时生成访问令牌。REST 提供历史与各类注册表；WebSocket 承载会话事件和命令。', 'REST 背后是 `listSessions`、`getSessionMessages`、`forkSession`、`renameSession`、`tagSession`、`deleteSession`、`resolveSettings`'],
+      ['LiveSession', '每个运行中的会话一个：持有 `Query`、为流式输入供数的输入队列、按 `requestId` 索引的待处理审批/提问/征询，以及用于重放的事件环形缓冲。', '`query({ prompt: AsyncIterable<SDKUserMessage>, options })`、`canUseTool`、`hooks`、`onElicitation`、`interrupt()`、`setModel()`、`setPermissionMode()`…'],
+      ['Claude Code 进程', 'SDK 为每个会话启动一个未修改的官方 Claude Code 二进制（约 250 MB），所以服务端限制同时运行的会话数，空闲会话可关闭、按需恢复。', '`pathToClaudeCodeExecutable`、`startup()`、`prewarm()`、`spawnClaudeCodeProcess`、`close()`'],
+      ['数据位置', 'SDK 自有的数据（会话记录、设置文件、CLAUDE.md、技能、登录凭据）留在 Claude Code 的目录；Code Agent 只在 ~/.code-agent 保存自己的数据，从不读取 Claude 登录凭据。', '`persistSession`；可选的 `sessionStore` 镜像（FR-SES-16）；FR-AUTH-04'],
+      ['应用框架', '导航栏各项与下方方框一一对应。顶栏有工作区切换、Ctrl K 搜索、预热池状态、界面语言切换、审批收件箱和账号菜单。', '—'],
+      ['会话内的面板', '当 SDK 需要用户参与（审批、提问、计划、征询），或用户打开检查器标签页时，这些面板出现在 P04 内。', '`canUseTool`（含 `AskUserQuestion`、`ExitPlanMode`）、`onElicitation`、检查器查询'],
     ],
   });
 
   // ------------------------------------------------------------------ P02
   window.SCREENS.push({
     id: 'P02',
-    group: 'Sessions',
-    title: 'Home — workspaces',
-    summary: 'Landing page. Workspaces are folders the agent works in; each card shows its sessions and live activity. Recent sessions span all workspaces. The right column surfaces anything waiting for the user, the account, and the warm pool.',
-    frs: ['FR-WS-01', 'FR-WS-05', 'FR-SES-05', 'FR-SES-07', 'FR-SES-04', 'FR-AUTH-02', 'FR-PERM-06'],
+    group: '会话',
+    title: '首页 — 工作区',
+    summary: '落地页。工作区就是 Agent 工作的文件夹，每张卡片显示其会话和运行情况。最近会话横跨所有工作区。右栏集中显示等你处理的事项、账号状态和预热池。',
+    frs: ['FR-WS-01', 'FR-WS-05', 'FR-SES-05', 'FR-SES-07', 'FR-SES-04', 'FR-AUTH-02', 'FR-AUTH-04', 'FR-PERM-06'],
     draw() {
       let s = K.shell({ nav: 'sessions', approvals: 2 });
-      s += t(96, 100, 'Workspaces', { s: 22, w: 700 });
-      s += t(96, 124, 'Pick a folder to work in. Sessions are grouped by workspace.', { s: 13, c: C.ink2 });
-      s += btn(800, 86, 'Open folder…', { icon: 'folder', w: 130 });
-      s += btn(940, 86, 'New session', { v: 'primary', icon: 'plus', w: 120 });
+      s += t(96, 100, '工作区', { s: 22, w: 700 });
+      s += t(96, 124, '选择一个文件夹作为 Agent 的工作目录。会话按工作区归类。', { s: 13, c: C.ink2 });
+      s += btn(820, 86, '打开文件夹…', { icon: 'folder', w: 124 });
+      s += btn(954, 86, '新建会话', { v: 'primary', icon: 'plus', w: 106 });
 
       const ws = [
-        ['shop-api', 'D:\\src\\shop-api', 'main', 24, 2, '2 min ago', true],
-        ['shop-web', 'D:\\src\\shop-web', 'feat/checkout', 9, 1, '14 min ago', false],
-        ['infra', 'D:\\src\\infra', 'main', 5, 0, 'Yesterday', false],
-        ['notes', 'D:\\notes', null, 12, 0, 'Yesterday', false],
-        ['data-pipeline', 'D:\\work\\data-pipeline', 'dev', 3, 0, 'Mon', false],
+        ['shop-api', 'D:\\src\\shop-api', 'main', 24, 2, '2 分钟前', true],
+        ['shop-web', 'D:\\src\\shop-web', 'feat/checkout', 9, 1, '14 分钟前', false],
+        ['infra', 'D:\\src\\infra', 'main', 5, 0, '昨天', false],
+        ['笔记', 'D:\\笔记', null, 12, 0, '昨天', false],
+        ['data-pipeline', 'D:\\work\\data-pipeline', 'dev', 3, 0, '周一', false],
       ];
       ws.forEach(([name, p, branch, n, live, when, pinned], i) => {
         const x = 96 + (i % 3) * 327;
@@ -143,165 +138,158 @@
         s += t(x + 64, y + 49, p, { s: 11.5, c: C.muted, m: true });
         if (pinned) s += ic('pin', x + 282, y + 16, 14, C.ink2);
         let cx = x + 16;
-        if (branch) {
-          s += chip(cx, y + 66, branch, { icon: 'branch' });
-          cx += chip.w(branch, { icon: 1 }) + 6;
-        } else {
-          s += chip(cx, y + 66, 'not a git repo');
-          cx += chip.w('not a git repo') + 6;
-        }
-        s += chip(cx, y + 66, `${n} sessions`);
-        cx += chip.w(`${n} sessions`) + 6;
-        if (live) s += chip(cx, y + 66, i === 0 ? '2 live · 1 needs you' : `${live} live`, { dot: i === 0 ? C.warn : C.accent, bg: i === 0 ? C.warnSoft : C.accentSoft, c: i === 0 ? C.warnInk : C.accent });
-        s += t(x + 16, y + 131, `Active ${when}`, { s: 12, c: C.muted });
-        s += btn(x + 128, y + 112, 'Continue', { h: 28, s: 12, w: 76 });
-        s += btn(x + 210, y + 112, 'New session', { v: 'soft', h: 28, s: 12, w: 86 });
+        const br = branch ?? '非 Git 仓库';
+        s += chip(cx, y + 66, br, branch ? { icon: 'branch' } : {});
+        cx += chip.w(br, branch ? { icon: 1 } : {}) + 6;
+        s += chip(cx, y + 66, `${n} 个会话`);
+        cx += chip.w(`${n} 个会话`) + 6;
+        if (live) s += chip(cx, y + 66, i === 0 ? '2 个运行中 · 1 个等你' : `${live} 个运行中`, { dot: i === 0 ? C.warn : C.accent, bg: i === 0 ? C.warnSoft : C.accentSoft, c: i === 0 ? C.warnInk : C.accent });
+        s += t(x + 16, y + 131, `活动于 ${when}`, { s: 12, c: C.muted });
+        s += btn(x + 142, y + 112, '继续上次', { h: 28, s: 12, w: 74 });
+        s += btn(x + 222, y + 112, '新建会话', { v: 'soft', h: 28, s: 12, w: 74 });
       });
-      // add card
       s += rect(750, 318, 310, 154, { r: 10, fill: 'none', stroke: C.borderStrong, dash: '6 4' });
       s += ic('plus', 893, 366, 24, C.ink2);
-      s += t(905, 412, 'Add workspace', { s: 13, w: 600, c: C.ink2, a: 'middle' });
-      s += t(905, 430, 'or drop a folder path here', { s: 12, c: C.muted, a: 'middle' });
+      s += t(905, 412, '添加工作区', { s: 13, w: 600, c: C.ink2, a: 'middle' });
+      s += t(905, 430, '或直接粘贴文件夹路径', { s: 12, c: C.muted, a: 'middle' });
 
-      // recent sessions
-      s += t(96, 516, 'Recent sessions', { s: 16, w: 700 });
-      s += t(232, 516, 'across all workspaces', { s: 12, c: C.muted });
-      s += t(1060, 516, 'View all →', { s: 12.5, w: 500, c: C.accent, a: 'end' });
+      s += t(96, 516, '最近会话', { s: 16, w: 700 });
+      s += t(170, 516, '所有工作区', { s: 12, c: C.muted });
+      s += t(1060, 516, '查看全部 →', { s: 12.5, w: 500, c: C.accent, a: 'end' });
       s += rect(96, 530, 964, 352, { r: 10, fill: C.surface, stroke: C.border });
-      const cols = [[112, 'TITLE'], [470, 'WORKSPACE'], [600, 'STATE'], [760, 'LAST ACTIVE'], [870, 'TAG'], [1040, 'COST']];
-      cols.forEach(([x, h], i) => (s += t(x, 552, h, { s: 10.5, w: 600, c: C.muted, ls: 0.4, a: i === 5 ? 'end' : undefined })));
+      const cols = [[112, '标题'], [470, '工作区'], [600, '状态'], [760, '最近活动'], [870, '标签'], [1040, '费用']];
+      cols.forEach(([x, h], i) => (s += t(x, 552, h, { s: 11, w: 600, c: C.muted, a: i === 5 ? 'end' : undefined })));
       s += hline(96, 562, 964);
       const rows = [
-        ['Fix flaky checkout tests', 'shop-api', 'req', '2 min ago', 'ci', '$0.42'],
-        ['Refactor auth middleware', 'shop-api', 'run', 'now', null, '$1.08'],
-        ['Docs: API reference', 'shop-web', 'idle', '14 min ago', 'docs', '$0.31'],
-        ['Add rate limiting to /orders', 'shop-api', 'saved', '2 h ago', 'perf', '$2.40'],
-        ['Investigate memory leak', 'infra', 'saved', 'Yesterday', null, '$3.12'],
-        ['Weekly notes digest', 'notes', 'saved', 'Yesterday', 'job', '$0.08'],
-        ['Migrate to Postgres 17', 'data-pipeline', 'saved', 'Mon', 'db', '$5.77'],
+        ['修复结账测试偶发失败', 'shop-api', 'req', '2 分钟前', 'ci', '$0.42'],
+        ['重构鉴权中间件', 'shop-api', 'run', '刚刚', null, '$1.08'],
+        ['文档：API 参考', 'shop-web', 'idle', '14 分钟前', 'docs', '$0.31'],
+        ['为 /orders 添加限流', 'shop-api', 'saved', '2 小时前', 'perf', '$2.40'],
+        ['排查内存泄漏', 'infra', 'saved', '昨天', null, '$3.12'],
+        ['每周笔记摘要', '笔记', 'saved', '昨天', 'job', '$0.08'],
+        ['迁移到 Postgres 17', 'data-pipeline', 'saved', '周一', 'db', '$5.77'],
       ];
       rows.forEach(([title, w, st, when, tag, cost], i) => {
         const y = 563 + i * 45;
         if (i === 3) s += rect(97, y, 962, 45, { fill: C.surface2 });
         s += t(112, y + 28, title, { s: 13, w: 500 });
         s += t(470, y + 28, w, { s: 12.5, c: C.ink2 });
-        if (st === 'req') s += status(600, y + 13, 'warn', 'Needs approval');
-        else if (st === 'run') s += status(600, y + 13, 'info', 'Running');
-        else if (st === 'idle') s += status(600, y + 13, 'idle', 'Idle · live');
-        else s += t(600, y + 28, 'Saved', { s: 12.5, c: C.muted });
+        if (st === 'req') s += status(600, y + 13, 'warn', '待审批');
+        else if (st === 'run') s += status(600, y + 13, 'info', '运行中');
+        else if (st === 'idle') s += status(600, y + 13, 'idle', '空闲 · 进程在线');
+        else s += t(600, y + 28, '已保存', { s: 12.5, c: C.muted });
         s += t(760, y + 28, when, { s: 12.5, c: C.ink2 });
         if (tag) s += chip(870, y + 14, tag, { icon: 'tag' });
         if (i === 3) {
-          s += btn(930, y + 9, 'Resume', { h: 27, s: 12, w: 64 });
-          s += btn(998, y + 9, '', { h: 27, icon: 'branch', w: 28 });
+          s += btn(936, y + 9, '恢复', { h: 27, s: 12, w: 54 });
+          s += btn(996, y + 9, '', { h: 27, icon: 'branch', w: 28 });
           s += btn(1030, y + 9, '', { h: 27, icon: 'dots', w: 28 });
         } else s += t(1040, y + 28, cost, { s: 12.5, a: 'end' });
         if (i < rows.length - 1) s += hline(112, y + 45, 932, '#eef0f4');
       });
 
-      // right column
       const rx = 1090;
-      s += panel(rx, 86, 320, 146, { title: 'Provider & account' });
-      s += kv(rx + 14, 146, 'Provider', 'Anthropic API', { kw: 104 });
-      s += kv(rx + 14, 168, 'Key source', 'ANTHROPIC_API_KEY', { kw: 104, m: true });
-      s += kv(rx + 14, 190, 'Organization', 'Personal', { kw: 104 });
-      s += status(rx + 14, 202, 'good', 'Connected');
-      s += t(rx + 306, 216, 'Settings →', { s: 12, c: C.accent, a: 'end' });
+      s += panel(rx, 86, 320, 146, { title: '模型服务与账号' });
+      s += kv(rx + 14, 146, '认证方式', 'Claude 订阅（Max）', { kw: 80 });
+      s += kv(rx + 14, 168, '凭据来源', 'Claude Code 登录', { kw: 80 });
+      s += kv(rx + 14, 190, '配置目录', '%USERPROFILE%\\.claude', { kw: 80, m: true });
+      s += status(rx + 14, 202, 'good', '已登录');
+      s += t(rx + 306, 216, '设置 →', { s: 12, c: C.accent, a: 'end' });
 
-      s += panel(rx, 246, 320, 132, { title: 'Warm pool' });
-      s += toggle(rx + 14, 298, true, 'Keep 1 process ready');
-      s += kv(rx + 14, 340, 'Profile', 'Default', { kw: 70 });
-      s += status(rx + 14, 350, 'good', 'Ready · 238 MB');
-      s += t(rx + 306, 364, '0.4 s to first request', { s: 11.5, c: C.muted, a: 'end' });
+      s += panel(rx, 246, 320, 132, { title: '预热池' });
+      s += toggle(rx + 14, 298, true, '保持 1 个进程就绪');
+      s += kv(rx + 14, 340, '配置方案', '默认', { kw: 70 });
+      s += status(rx + 14, 350, 'good', '就绪 · 238 MB');
+      s += t(rx + 306, 364, '首个请求 0.4 秒', { s: 11.5, c: C.muted, a: 'end' });
 
-      s += panel(rx, 392, 320, 200, { title: 'Needs your input', sub: '2' });
+      s += panel(rx, 392, 320, 200, { title: '等你处理', sub: '2' });
       s += rect(rx + 12, 442, 296, 66, { r: 8, fill: C.warnSoft });
       s += ic('shield', rx + 22, 452, 16, C.warnInk);
-      s += t(rx + 46, 465, 'Fix flaky checkout tests', { s: 13, w: 600 });
+      s += t(rx + 46, 465, '修复结账测试偶发失败', { s: 13, w: 600 });
       s += t(rx + 46, 484, 'Bash · rm -rf …/.cache', { s: 11.5, c: C.ink2, m: true });
-      s += t(rx + 46, 500, 'waiting 0:12', { s: 11, c: C.warnInk });
-      s += btn(rx + 236, 460, 'Review', { h: 28, s: 12, w: 64 });
+      s += t(rx + 46, 500, '已等待 0:12', { s: 11, c: C.warnInk });
+      s += btn(rx + 244, 460, '审批', { h: 28, s: 12, w: 56 });
       s += rect(rx + 12, 516, 296, 62, { r: 8, fill: C.surface2 });
       s += ic('chat', rx + 22, 526, 16, C.ink2);
-      s += t(rx + 46, 539, 'Docs: API reference', { s: 13, w: 600 });
-      s += t(rx + 46, 558, '2 questions from Claude', { s: 11.5, c: C.ink2 });
-      s += btn(rx + 236, 532, 'Answer', { h: 28, s: 12, w: 64 });
+      s += t(rx + 46, 539, '文档：API 参考', { s: 13, w: 600 });
+      s += t(rx + 46, 558, 'Claude 提了 2 个问题', { s: 11.5, c: C.ink2 });
+      s += btn(rx + 244, 532, '回答', { h: 28, s: 12, w: 56 });
 
-      s += panel(rx, 606, 320, 150, { title: 'Default profile' });
-      s += kv(rx + 14, 666, 'Model', 'Opus 5.5 · effort high', { kw: 90 });
-      s += kv(rx + 14, 688, 'Mode', 'Ask before edits', { kw: 90 });
-      s += kv(rx + 14, 710, 'Limits', '50 turns · $5.00', { kw: 90 });
-      s += kv(rx + 14, 732, 'Checkpoints', 'On', { kw: 90 });
-      s += t(rx + 306, 626, 'Edit →', { s: 12, c: C.accent, a: 'end' });
+      s += panel(rx, 606, 320, 150, { title: '默认配置方案' });
+      s += kv(rx + 14, 666, '模型', 'Opus 5.5 · 推理强度高', { kw: 80 });
+      s += kv(rx + 14, 688, '权限模式', '编辑前询问', { kw: 80 });
+      s += kv(rx + 14, 710, '限制', '50 轮 · $5.00', { kw: 80 });
+      s += kv(rx + 14, 732, '检查点', '开启', { kw: 80 });
+      s += t(rx + 306, 626, '编辑 →', { s: 12, c: C.accent, a: 'end' });
 
-      s += panel(rx, 770, 320, 112, { title: 'This month' });
+      s += panel(rx, 770, 320, 112, { title: '本月' });
       s += t(rx + 14, 840, '$48.20', { s: 26, w: 700 });
-      s += t(rx + 14, 864, 'spend · 126 sessions', { s: 12, c: C.muted });
-      s += t(rx + 306, 864, 'Usage →', { s: 12, c: C.accent, a: 'end' });
+      s += t(rx + 14, 864, '费用 · 126 个会话', { s: 12, c: C.muted });
+      s += t(rx + 306, 864, '用量 →', { s: 12, c: C.accent, a: 'end' });
 
-      s += mk(800, 84, 1) + mk(1060, 84, 2) + mk(222, 258, 3) + mk(390, 214, 4) + mk(1052, 324, 5) + mk(926, 698, 6);
+      s += mk(818, 84, 1) + mk(1060, 84, 2) + mk(236, 258, 3) + mk(398, 214, 4) + mk(1052, 324, 5) + mk(932, 698, 6);
       s += mk(1408, 90, 7) + mk(1408, 250, 8) + mk(1408, 396, 9) + mk(1408, 610, 10);
       return s;
     },
     notes: [
-      ['Open folder…', 'Opens a folder browser served by the Node server (a web page cannot read local paths). Pinned and recent folders come first. Choosing a folder adds a workspace card.', 'Server `GET /api/fs/browse`; the folder becomes `Options.cwd` (FR-WS-01)'],
-      ['New session', 'Opens P03 with the current workspace and the default profile preselected. Also Ctrl N from anywhere.', '→ P03'],
-      ['Card actions', '"New session" opens P03 for that folder. "Continue" resumes the most recent session in the folder without picking one; disabled when the folder has none.', '`query({ options: { cwd, continue: true } })` (FR-SES-07)'],
-      ['Session count and live badge', 'Counts come from the folder\'s session list (worktrees included). The live badge counts sessions with a running process and turns amber when one needs input; clicking it opens that session.', '`listSessions({ dir, includeWorktrees: true })`, `session_state_changed`'],
-      ['Add workspace', 'Same as Open folder; also accepts a pasted path. Card menu: pin, rename (display only), remove (sessions stay on disk).', 'App data only'],
-      ['Recent sessions row', 'Click opens the session: live ones attach, saved ones open read-only with a Resume bar. Hover reveals Resume, Fork and a menu (rename, tag, export, delete).', '`getSessionMessages`, `resume`, `forkSession`, `renameSession`, `tagSession`, `deleteSession`'],
-      ['Provider & account', 'Shows how sessions authenticate. Turns red with the SDK reason when a session failed to start for auth reasons. "Settings →" opens P22.', '`accountInfo()`, init `apiKeySource`, `auth_status`, `startup_failure_reason`'],
-      ['Warm pool', 'Keeps one initialized Claude Code process per selected profile so a new session answers at once. Shows memory held; switching it off frees the process.', '`prewarm()` + `SpareProcess.claim()`; `startup()` when the folder is known (FR-SES-04)'],
-      ['Needs your input', 'Every pending approval, question, plan review or MCP elicitation across live sessions, oldest first. Review / Answer opens the session with the request focused.', 'Pending `canUseTool` requests, `requires_action` (FR-PERM-06)'],
-      ['Default profile', 'Summary of what new sessions use. Edit opens the profile in P20.', 'Profile → `Options`'],
+      ['打开文件夹…', '打开由 Node 服务提供的文件夹浏览器（网页本身读不到本地路径），置顶和最近使用的排在前面。选中后新增一张工作区卡片。支持中文等非 ASCII 路径。', '服务端 `GET /api/fs/browse`；所选文件夹即 `Options.cwd`（FR-WS-01、FR-I18N-08）'],
+      ['新建会话', '打开 P03，预选当前工作区和默认配置方案。任何页面都可按 Ctrl N。', '→ P03'],
+      ['卡片操作', '「新建会话」为该文件夹打开 P03。「继续上次」直接恢复该文件夹最近的会话，无需挑选；文件夹没有会话时禁用。', '`query({ options: { cwd, continue: true } })`（FR-SES-07）'],
+      ['会话数与运行标记', '会话数来自该文件夹的会话列表（含 worktree）。运行标记统计有进程在跑的会话，有会话等你处理时变为琥珀色；点击直接打开那个会话。', '`listSessions({ dir, includeWorktrees: true })`、`session_state_changed`'],
+      ['添加工作区', '同「打开文件夹」，也可粘贴路径。卡片菜单：置顶、改显示名、移除（不删除会话）。', '仅应用自身数据'],
+      ['最近会话行', '点击打开会话：运行中的直接接入，已保存的以只读方式打开并显示「恢复」栏。悬停出现恢复、分叉和更多菜单（重命名、打标签、导出、删除）。时间按界面语言本地化显示。', '`getSessionMessages`、`resume`、`forkSession`、`renameSession`、`tagSession`、`deleteSession`；FR-I18N-04'],
+      ['模型服务与账号', '显示会话如何认证。默认使用你在官方 Claude Code 里登录的 Claude 订阅；Code Agent 只指定配置目录，不读取凭据。若会话因认证失败无法启动，这里变红并显示原因。「设置 →」打开 P22。', '`accountInfo()`、init 中的 `apiKeySource`、`auth_status`、`startup_failure_reason`（FR-AUTH-02/04）'],
+      ['预热池', '为选定的配置方案预先启动并初始化一个 Claude Code 进程，新会话可立即响应。显示占用内存；关闭即释放进程。', '`prewarm()` + `SpareProcess.claim()`；已知文件夹时用 `startup()`（FR-SES-04）'],
+      ['等你处理', '所有运行中会话里待处理的审批、提问、计划审阅或 MCP 征询，按等待时间排序。「审批 / 回答」会打开对应会话并定位到该请求。', '待处理的 `canUseTool` 请求、`requires_action`（FR-PERM-06）'],
+      ['默认配置方案', '新会话使用的选项摘要。「编辑」打开 P20。', '配置方案 → `Options`'],
     ],
   });
 
   // ------------------------------------------------------------------ P03
   window.SCREENS.push({
     id: 'P03',
-    group: 'Sessions',
-    title: 'New session dialog',
-    summary: 'Starts a live session. A profile fills every field; anything changed here is a one-off override. The dialog covers the options a user commonly changes per session; everything else sits under "Advanced overrides".',
+    group: '会话',
+    title: '新建会话对话框',
+    summary: '启动一个运行中的会话。选择配置方案会填好所有字段；在这里修改的内容只对本次会话生效。对话框只放常改的选项，其余都在「高级覆盖项」里。',
     frs: ['FR-SES-01..04', 'FR-WS-01/02', 'FR-MOD-01/03/04', 'FR-PERM-01/02', 'FR-COST-01', 'FR-CKPT-01', 'FR-CFG-01'],
     draw() {
       let s = K.shell({ nav: 'sessions', approvals: 2 });
-      s += t(96, 100, 'Workspaces', { s: 22, w: 700 });
+      s += t(96, 100, '工作区', { s: 22, w: 700 });
       for (let i = 0; i < 3; i++) s += rect(96 + i * 327, 148, 310, 154, { r: 10, fill: C.surface, stroke: C.border });
       s += overlay();
       const x = 330;
       const y = 66;
       s += rect(x, y, 780, 806, { r: 12, fill: C.surface, shadow: true });
-      s += t(x + 24, y + 38, 'New session', { s: 18, w: 700 });
+      s += t(x + 24, y + 38, '新建会话', { s: 18, w: 700 });
       s += ic('x', x + 744, y + 22, 18, C.ink2);
       s += hline(x, y + 58, 780);
       const X = x + 24;
 
-      s += select(X, y + 94, 540, 'D:\\src\\shop-api', { label: 'Workspace', icon: 'folder' });
-      s += btn(X + 552, y + 94, 'Add directory', { icon: 'plus', h: 32, w: 180 });
+      s += select(X, y + 94, 540, 'D:\\src\\shop-api', { label: '工作区', icon: 'folder' });
+      s += btn(X + 552, y + 94, '添加目录', { icon: 'plus', h: 32, w: 180 });
       s += chip(X, y + 136, 'D:\\src\\shared-lib', { icon: 'folder', h: 22, m: true });
-      s += ic('x', X + chip.w('D:\\src\\shared-lib', { icon: 1 }) + 4, y + 140, 14, C.muted);
-      s += t(X + 200, y + 151, 'extra access · its .claude skills and agents load too', { s: 11.5, c: C.muted });
+      s += ic('x', X + chip.w('D:\\src\\shared-lib', { icon: 1, m: true }) + 4, y + 140, 14, C.muted);
+      s += t(X + 210, y + 151, '额外可访问的目录 · 其中的 .claude 技能和代理也会加载', { s: 11.5, c: C.muted });
 
-      s += select(X, y + 194, 300, 'Default', { label: 'Profile', icon: 'layers' });
+      s += select(X, y + 194, 300, '默认', { label: '配置方案', icon: 'layers' });
       s += circle(X + 268, y + 210, 4, { fill: C.warn });
-      s += t(X + 312, y + 215, 'Edit', { s: 12.5, c: C.accent });
-      s += input(X + 360, y + 194, 372, { label: 'Title (optional)', ph: 'Claude names the session otherwise' });
+      s += t(X + 312, y + 215, '编辑', { s: 12.5, c: C.accent });
+      s += input(X + 360, y + 194, 372, { label: '标题（可选）', ph: '不填则由 Claude 自动命名' });
 
-      s += select(X, y + 270, 220, 'Opus 5.5', { label: 'Model', icon: 'cpu' });
-      s += t(X, y + 318, 'adaptive thinking · fast mode · auto mode', { s: 11, c: C.muted });
-      s += t(X + 236, y + 263, 'Effort', { s: 12, w: 500, c: C.ink2 });
-      s += seg(X + 236, y + 270, ['low', 'medium', 'high', 'xhigh', 'max'], 2, { h: 32 });
-      s += select(X + 532, y + 270, 200, 'Adaptive · summarized', { label: 'Thinking' });
+      s += select(X, y + 270, 220, 'Opus 5.5', { label: '模型', icon: 'cpu' });
+      s += t(X, y + 318, '自适应思考 · 快速模式 · 自动模式', { s: 11, c: C.muted });
+      s += t(X + 236, y + 263, '推理强度', { s: 12, w: 500, c: C.ink2 });
+      s += seg(X + 236, y + 270, ['低', '中', '高', '超高', '最高'], 2, { h: 32 });
+      s += select(X + 532, y + 270, 200, '自适应 · 显示摘要', { label: '思考' });
 
-      s += t(X, y + 360, 'Permission mode', { s: 12, w: 500, c: C.ink2 });
+      s += t(X, y + 360, '权限模式', { s: 12, w: 500, c: C.ink2 });
       const modes = [
-        ['shield', 'Ask before edits', 'Prompt for anything not allowed', true],
-        ['pencil', 'Accept edits', 'File edits run without asking'],
-        ['list', 'Plan', 'Explore and plan, no edits'],
-        ['spark', 'Auto', 'A classifier reviews actions'],
-        ['lock', "Don't ask", 'Deny anything not pre-approved'],
-        ['warning', 'Bypass', 'Everything runs · needs confirm', false, true],
+        ['shield', '编辑前询问', '未授权的操作都先问我', true],
+        ['pencil', '自动接受编辑', '工作区内的文件编辑直接执行'],
+        ['list', '规划模式', '只探索和出计划，不改文件'],
+        ['spark', '自动', '由分类模型审查每个操作'],
+        ['lock', '不询问', '未预先授权的一律拒绝'],
+        ['warning', '跳过权限检查', '全部直接执行 · 需二次确认', false, true],
       ];
       modes.forEach(([icn, title, desc, on, danger], i) => {
         const mx = X + (i % 3) * 248;
@@ -313,78 +301,78 @@
         s += t(mx + 34, my + 44, desc, { s: 11.5, c: C.ink2 });
       });
 
-      s += input(X, y + 524, 150, { label: 'Max turns', val: '50' });
-      s += input(X + 166, y + 524, 150, { label: 'Max budget (USD)', val: '5.00', right: 'USD' });
-      s += t(X + 334, y + 545, 'Empty = no limit. Budget is a client-side estimate; keep headroom.', { s: 11.5, c: C.muted });
+      s += input(X, y + 524, 150, { label: '最大轮数', val: '50' });
+      s += input(X + 166, y + 524, 150, { label: '预算上限', val: '5.00', right: 'USD' });
+      s += t(X + 334, y + 545, '留空表示不限。预算是客户端估算，请留出余量。', { s: 11.5, c: C.muted });
 
-      s += toggle(X, y + 580, true, 'File checkpointing', { hint: 'rewind edits later' });
-      s += toggle(X + 290, y + 580, false, 'Ephemeral', { hint: 'never saved' });
-      s += toggle(X + 500, y + 580, true, 'Prompt suggestions');
+      s += toggle(X, y + 580, true, '文件检查点', { hint: '之后可回退编辑' });
+      s += toggle(X + 260, y + 580, false, '临时会话', { hint: '不写入磁盘' });
+      s += toggle(X + 470, y + 580, true, '下一步提示建议');
 
-      s += textarea(X, y + 638, 732, 76, ['Fix the flaky checkout tests. CI log attached.'], { label: 'First message (optional)' });
+      s += textarea(X, y + 638, 732, 76, ['修复结账测试的偶发失败，CI 日志见附件。'], { label: '首条消息（可选）' });
       s += chip(X + 10, y + 680, 'ci-log.png', { icon: 'image', h: 22 });
       s += btn(X + 662, y + 680, '', { v: 'ghost', icon: 'clip', w: 30, h: 26 });
       s += btn(X + 694, y + 680, '', { v: 'ghost', icon: 'image', w: 30, h: 26 });
 
       s += ic('chevRight', X, y + 728, 16, C.ink2);
-      s += t(X + 20, y + 741, 'Advanced overrides', { s: 13, w: 600 });
-      s += t(X + 160, y + 741, 'system prompt · setting sources · tools · MCP · agents · skills · hooks · sandbox · env', { s: 12, c: C.muted });
+      s += t(X + 20, y + 741, '高级覆盖项', { s: 13, w: 600 });
+      s += t(X + 110, y + 741, '系统提示词 · 配置来源 · 工具 · MCP · 代理 · 技能 · 钩子 · 沙箱 · 环境变量 · 回复语言', { s: 12, c: C.muted });
       s += hline(x, y + 758, 780);
-      s += t(X, y + 787, 'Ctrl Enter to start', { s: 12, c: C.muted });
-      s += btn(x + 556, y + 768, 'Cancel', { w: 80 });
-      s += btn(x + 646, y + 768, 'Start session', { v: 'primary', w: 110 });
+      s += t(X, y + 787, 'Ctrl Enter 开始', { s: 12, c: C.muted });
+      s += btn(x + 566, y + 768, '取消', { w: 70 });
+      s += btn(x + 646, y + 768, '开始会话', { v: 'primary', w: 110 });
 
       s += mk(X - 12, y + 86, 1) + mk(X - 12, y + 186, 2) + mk(X - 12, y + 262, 3) + mk(X - 12, y + 354, 4) + mk(X + 734, y + 442, 5);
       s += mk(X - 12, y + 516, 6) + mk(X - 12, y + 588, 7) + mk(X - 12, y + 630, 8) + mk(X - 12, y + 734, 9) + mk(x + 760, y + 768, 10);
       return s;
     },
     notes: [
-      ['Workspace and directories', 'Defaults to the workspace the dialog was opened from. "Add directory" grants access to another folder; with project settings on, its skills, commands and agents load as well. Chips can be removed.', '`cwd`, `additionalDirectories` (FR-WS-01/02)'],
-      ['Profile and title', 'Choosing a profile fills every field. Changing a field here marks the profile select with an amber "overridden" dot; overrides apply to this session only. Title is optional.', 'Profile → `Options`; `title` (FR-CFG-01, FR-SES-02)'],
-      ['Model, effort, thinking', 'Models come from the warm process (or the last cached list); the caption lists the selected model\'s capabilities. Effort levels the model does not support are disabled.', '`supportedModels()` → `ModelInfo`; `effort`; `thinking` (FR-MOD-01/03/04)'],
-      ['Permission mode', 'Single choice, each tile states its effect in plain words. "Auto" is hidden when the model lacks auto-mode support.', '`permissionMode` (FR-PERM-01)'],
-      ['Bypass', 'Selecting it opens a confirmation: every tool runs without approval; deny rules and hooks still apply. Disabled (with a link) unless the profile enables "allow dangerous skip".', '`allowDangerouslySkipPermissions` (FR-PERM-02)'],
-      ['Limits', 'Reaching a limit ends the turn with a banner and a "continue with a higher limit" action (P24).', '`maxTurns`, `maxBudgetUsd` (FR-COST-01)'],
-      ['Session toggles', 'Checkpointing makes every message a rewind point (P10). Ephemeral sessions are never written to disk and cannot be resumed. Prompt suggestions show a predicted next prompt.', '`enableFileCheckpointing` + `replay-user-messages`; `persistSession: false`; `promptSuggestions`'],
-      ['First message', 'Optional; supports images, @ mentions and / commands like the composer. Empty starts an idle live session.', 'First `SDKUserMessage` on the input queue'],
-      ['Advanced overrides', 'Expands the profile editor sections (P20) for this session only.', 'Remaining `Options`'],
-      ['Start session', 'Claims a warm process when one matches, otherwise starts one; opens P04 and sends the first message. Start-up errors show inline with the SDK reason (e.g. folder missing).', '`query()` / `SpareProcess.claim()`; `startup_failure_reason`'],
+      ['工作区与目录', '默认是打开对话框时所在的工作区。「添加目录」授权访问另一个文件夹；开启项目级配置时，该目录的技能、命令和代理也会加载。目录标签可移除。', '`cwd`、`additionalDirectories`（FR-WS-01/02）'],
+      ['配置方案与标题', '选择配置方案即填好所有字段。在此修改任一字段后，配置方案选择框上出现琥珀色「已覆盖」圆点，覆盖只对本次会话生效。标题可选。', '配置方案 → `Options`；`title`（FR-CFG-01、FR-SES-02）'],
+      ['模型、推理强度、思考', '模型列表来自预热进程（或上次缓存的列表），下方说明所选模型的能力。模型不支持的推理强度档位会被禁用。档位名称本地化显示，传给 SDK 的仍是 low…max。', '`supportedModels()` → `ModelInfo`；`effort`；`thinking`（FR-MOD-01/03/04）'],
+      ['权限模式', '单选，每个选项用一句话说明效果。模型不支持自动模式时隐藏「自动」。', '`permissionMode`（FR-PERM-01）'],
+      ['跳过权限检查', '选中时弹出确认：所有工具不经审批直接执行（拒绝规则和钩子仍然生效）。只有配置方案开启了「允许跳过权限检查」时才可选，否则禁用并给出跳转链接。', '`allowDangerouslySkipPermissions`（FR-PERM-02）'],
+      ['限制', '达到上限时本轮以横幅结束，并提供「提高上限后继续」操作（P24）。金额统一按美元显示。', '`maxTurns`、`maxBudgetUsd`（FR-COST-01）'],
+      ['会话开关', '文件检查点让每条消息都成为回退点（P10）。临时会话不写入磁盘，之后无法恢复。下一步提示建议会预测你的下一条输入。', '`enableFileCheckpointing` + `replay-user-messages`；`persistSession: false`；`promptSuggestions`'],
+      ['首条消息', '可选；和输入框一样支持图片、@ 引用和 / 命令，也支持输入法组字。留空则启动一个空闲会话。', '输入队列上的第一条 `SDKUserMessage`'],
+      ['高级覆盖项', '展开配置方案编辑器（P20）中的各部分，仅对本次会话生效，包括 Claude 的回复语言。', '其余 `Options`；`settings.language`（FR-I18N-05）'],
+      ['开始会话', '有匹配的预热进程就直接领用，否则新启动一个；打开 P04 并发送首条消息。启动失败（如文件夹不存在）就地显示本地化的原因，并可展开 SDK 原文。', '`query()` / `SpareProcess.claim()`；`startup_failure_reason`（FR-I18N-06）'],
     ],
   });
 
   // ------------------------------------------------------------------ P04
   window.SCREENS.push({
     id: 'P04',
-    group: 'Live session',
-    title: 'Live session — streaming transcript',
-    summary: 'The main working view: live sessions on the left, the transcript in the middle with streaming text, thinking and one card per tool call, and the inspector on the right (here: the agent\'s task list).',
+    group: '运行中的会话',
+    title: '运行中的会话 — 流式对话',
+    summary: '主要工作界面：左侧是运行中的会话，中间是对话记录（流式文本、思考过程、每次工具调用一张卡片），右侧是检查器（此处显示 Agent 的任务清单）。',
     frs: ['FR-SES-12/13/17', 'FR-OUT-01..06', 'FR-TOOL-01..05', 'FR-TODO-01', 'FR-PERM-01', 'FR-CTX-01', 'FR-COST-02'],
     draw() {
       let s = K.shell({ nav: 'sessions', approvals: 1 });
       s += K.sessionColumn({ active: 0, live: [
-        ['Fix flaky checkout tests', 'running', 'shop-api'],
-        ['Refactor auth middleware', 'requires_action', 'shop-api'],
-        ['Docs: API reference', 'idle', 'shop-web'],
+        ['修复结账测试偶发失败', 'running', 'shop-api'],
+        ['重构鉴权中间件', 'requires_action', 'shop-api'],
+        ['文档：API 参考', 'idle', 'shop-web'],
       ] });
       s += rect(L.MX, 49, L.MW, 851, { fill: C.page });
       s += K.sessionHeader(L.MX, 49, L.MW, { state: 'running' });
       const X = L.TX;
       const W = L.TW;
       s += rect(X, 118, W, 26, { r: 6, fill: C.surface2 });
-      s += t(X + 12, 135, 'Turn 1 · 1m 12s · 14 tool calls · $0.21 · stop: end_turn', { s: 11.5, c: C.muted });
+      s += t(X + 12, 135, '第 1 轮 · 1分12秒 · 14 次工具调用 · $0.21 · 停止原因 end_turn', { s: 11.5, c: C.muted });
       s += ic('chevDown', X + W - 26, 123, 16, C.muted);
 
-      s += K.userMsg(X, 156, W, 'The checkout tests fail randomly on CI. Find the cause and fix it — the CI log is attached.', { attach: 'ci-log.png · 182 KB' });
-      s += K.thinking(X, 268, W, { dur: '6s', preview: 'The log shows a timeout in cart.timer — likely a timer leaking across tests…' });
-      s += t(X, 326, "I'll check the checkout suite and the timer utilities first.", { s: 14 });
-      s += rect(X, 340, W, 30, { r: 6, fill: C.surface, stroke: C.border });
-      s += ic('list', X + 10, 347, 16, C.ink2);
-      s += t(X + 34, 359.5, 'Read 4 files · searched 2 patterns · 1.8 s', { s: 12.5, c: C.ink2 });
-      s += ic('chevRight', X + W - 26, 347, 16, C.muted);
+      s += K.userMsg(X, 156, W, 'CI 上结账测试偶尔失败，帮我找到原因并修复——CI 日志在附件里。', { attach: 'ci-log.png · 182 KB' });
+      s += K.thinking(X, 246, W, { dur: '6 秒', preview: '日志显示 cart.timer 超时——可能有计时器在测试之间泄漏…' });
+      s += t(X, 304, '我先看看结账测试套件和计时器相关的代码。', { s: 14 });
+      s += rect(X, 318, W, 30, { r: 6, fill: C.surface, stroke: C.border });
+      s += ic('list', X + 10, 325, 16, C.ink2);
+      s += t(X + 34, 337.5, '读取 4 个文件 · 搜索 2 个模式 · 1.8 秒', { s: 12.5, c: C.ink2 });
+      s += ic('chevRight', X + W - 26, 325, 16, C.muted);
 
-      s += K.toolCard(X, 382, W, {
-        icon: 'pencil', name: 'Edit', detail: 'src/cart/timer.ts', right: '+2 −1', st: 'ok', prov: 'Approved by you', bodyH: 112,
-        body: K.diff(X + 12, 428, W - 24, [
+      s += K.toolCard(X, 362, W, {
+        icon: 'pencil', name: 'Edit', detail: 'src/cart/timer.ts', right: '+2 −1', st: 'ok', prov: '已由你批准', bodyH: 112,
+        body: K.diff(X + 12, 408, W - 24, [
           '@@ -41,6 +41,7 @@ export function startTimer(cart: Cart) {',
           '   const ttl = cart.ttlMs ?? DEFAULT_TTL;',
           '-  const id = setTimeout(() => expire(cart), ttl);',
@@ -392,30 +380,30 @@
           '+  cart.onDispose(() => timers.clearTimeout(id));',
         ]),
       });
-      s += K.toolCard(X, 544, W, {
-        icon: 'terminal', name: 'Bash', detail: 'npm test -- checkout --randomize', right: '12.4 s', st: 'ok', prov: 'Rule Bash(npm test *)', bodyH: 84,
-        body: code(X + 12, 590, W - 24, [
+      s += K.toolCard(X, 524, W, {
+        icon: 'terminal', name: 'Bash', detail: 'npm test -- checkout --randomize', right: '12.4 秒', st: 'ok', prov: '规则 Bash(npm test *)', bodyH: 84,
+        body: code(X + 12, 570, W - 24, [
           [['PASS', C.goodInk, 700], ['  tests/checkout/cart.test.ts (8.2 s)']],
           [['PASS', C.goodInk, 700], ['  tests/checkout/timer.test.ts (2.1 s)']],
-          'Tests: 41 passed, 41 total · ran 20× in random order',
+          'Tests:       41 passed, 41 total',
         ]),
       });
-      s += t(X, 700, 'Two tests shared a module-level timer that was never cleared, so a later test saw a stale', { s: 14 });
-      s += t(X, 722, 'expiry. The timer now uses the injected clock and is disposed with the cart. The suite', { s: 14 });
-      s += rect(X + tw('expiry. The timer now uses the injected clock and is disposed with the cart. The suite', 14) + 3, 710, 8, 16, { fill: C.accent });
+      s += t(X, 686, '两个测试共用了一个从未清理的模块级计时器，导致后一个测试读到过期的时间。', { s: 14 });
+      const last = '现在计时器改用注入的时钟，并随购物车一起释放。测试套件';
+      s += t(X, 710, last, { s: 14 });
+      s += rect(X + tw(last, 14) + 3, 698, 8, 16, { fill: C.accent });
       s += K.composer(X, 776, W, { running: true, h: 108 });
 
-      // inspector: tasks
       s += K.inspector(0);
       const IX = L.IX + 16;
-      s += t(IX, 152, 'Task list', { s: 13, w: 600 });
-      s += t(L.IX + L.IW - 16, 152, '1 of 4 done', { s: 12, c: C.muted, a: 'end' });
+      s += t(IX, 152, '任务清单', { s: 13, w: 600 });
+      s += t(L.IX + L.IW - 16, 152, '已完成 1/4', { s: 12, c: C.muted, a: 'end' });
       s += progress(IX, 162, 307, 25);
       const tasks = [
-        ['done', 'Reproduce the failure locally'],
-        ['doing', 'Identify the race in the cart timer', 'Identifying the race in the cart timer…'],
-        ['todo', 'Fix and add a regression test', 'blocked by #2'],
-        ['todo', 'Run the checkout suite 20×'],
+        ['done', '在本地复现失败'],
+        ['doing', '定位购物车计时器的竞态', '正在定位购物车计时器的竞态…'],
+        ['todo', '修复并添加回归测试', '被 #2 阻塞'],
+        ['todo', '把结账测试连续跑 20 次'],
       ];
       tasks.forEach(([st, title, sub], i) => {
         const y = 188 + i * 46;
@@ -426,37 +414,37 @@
         if (sub) s += st === 'doing' ? t(IX + 26, y + 30, sub, { s: 11.5, i: true, c: C.accent }) : chip(IX + 26, y + 19, sub, { h: 17, s: 10.5 });
       });
       s += hline(L.IX, 384, L.IW);
-      s += t(IX, 410, 'Session', { s: 13, w: 600 });
+      s += t(IX, 410, '会话', { s: 13, w: 600 });
       const info = [
-        ['Model', 'claude-opus-5-5'], ['Mode', 'default'], ['Workspace', 'D:\\src\\shop-api'], ['Claude Code', '2.1.302'],
-        ['Tools', '23 built-in · 41 MCP'], ['MCP', 'github ●  postgres ●'], ['Skills', '6 · plugins 1'],
+        ['模型', 'claude-opus-5-5'], ['权限模式', 'default'], ['工作区', 'D:\\src\\shop-api'], ['Claude Code', '2.1.302'],
+        ['工具', '内置 23 · MCP 41'], ['MCP', 'github ●  postgres ●'], ['技能', '6 · 插件 1'],
       ];
       info.forEach(([k, v], i) => (s += kv(IX, 436 + i * 22, k, v, { kw: 92 })));
-      s += t(IX, 600, 'Session info and events →', { s: 12, c: C.accent });
+      s += t(IX, 600, '会话信息与事件 →', { s: 12, c: C.accent });
       s += hline(L.IX, 620, L.IW);
-      s += t(IX, 646, 'Background', { s: 13, w: 600 });
-      s += chip(IX + 84, 633, '1 running', { h: 18, bg: C.accentSoft, c: C.accent });
+      s += t(IX, 646, '后台', { s: 13, w: 600 });
+      s += chip(IX + 40, 633, '1 个运行中', { h: 18, bg: C.accentSoft, c: C.accent });
       s += rect(IX, 658, 307, 52, { r: 8, fill: C.surface2, stroke: C.border });
       s += ic('terminal', IX + 10, 668, 16, C.ink2);
       s += t(IX + 34, 680, 'npm run e2e', { s: 12.5, m: true });
-      s += t(IX + 34, 698, 'running · 3m 12s', { s: 11.5, c: C.muted });
-      s += btn(IX + 245, 668, 'Stop', { h: 26, s: 12, w: 52 });
+      s += t(IX + 34, 698, '运行中 · 3分12秒', { s: 11.5, c: C.muted });
+      s += btn(IX + 245, 668, '停止', { h: 26, s: 12, w: 52 });
 
-      s += mk(78, 136, 1) + mk(544, 62, 2) + mk(L.TX + L.TW - 6, 160, 3) + mk(L.TX - 13, 284, 4) + mk(L.TX - 13, 355, 5);
-      s += mk(L.TX - 13, 400, 6) + mk(L.TX - 13, 562, 7) + mk(L.TX - 13, 696, 8) + mk(L.IX + 92, 71, 9) + mk(L.TX - 13, 794, 10);
+      s += mk(78, 136, 1) + mk(544, 62, 2) + mk(L.TX + L.TW - 6, 160, 3) + mk(L.TX - 13, 262, 4) + mk(L.TX - 13, 333, 5);
+      s += mk(L.TX - 13, 380, 6) + mk(L.TX - 13, 542, 7) + mk(L.TX - 13, 682, 8) + mk(L.IX + 70, 71, 9) + mk(L.TX - 13, 794, 10);
       return s;
     },
     notes: [
-      ['Live sessions', 'Every running session with its state: blue ring = running, amber = needs input, grey = idle. Clicking switches the middle and right columns; the process keeps running in the background. Alt ↑/↓ switches.', '`session_state_changed` (FR-SES-12/13)'],
-      ['Session header', 'Title (click to rename) and state. Controls: model + effort menu (switches mid-turn), permission mode menu (Shift Tab cycles), context meter (opens P11), cost against the budget cap, and Stop (ends the process after confirmation).', '`setModel()`, `applyFlagSettings({ effortLevel })`, `setPermissionMode()`, `getContextUsage()`, `total_cost_usd`, `close()`'],
-      ['User message', 'Shows text, image thumbnails and pasted-content chips. Hover reveals "Rewind" and "Branch" (P10).', '`SDKUserMessage` (uuid = checkpoint)'],
-      ['Thinking', 'Collapsed by default with a one-line preview and duration; expands to the streamed (summarized) thinking text.', '`thinking` blocks, `thinking.display: "summarized"`'],
-      ['Tool summary', 'Consecutive read-only calls collapse into one line; expanding shows each call as a compact card.', '`tool_use_summary` message'],
-      ['Edit card', 'File path, +/− counts and a diff of the change; click the path to open the full file; split / unified toggle in the card menu. The shield chip says why the call ran (rule, mode, or the user\'s approval).', '`Edit` input/output, `permission` decision source'],
-      ['Bash card', 'Command, live output while running (then the tail), exit status and duration. While running it also offers "Send to background" (P09).', '`Bash` input, `tool_progress`, `tool_use_result`'],
-      ['Streaming text', 'Text renders token by token with a caret; Markdown and code blocks format as they complete. A cut-off message keeps an "interrupted" marker.', '`includePartialMessages`, `stream_event` deltas, `aborted`'],
-      ['Inspector: Tasks', 'The agent\'s own task list, updated live: done, in progress (with its active wording), pending, and dependencies. Below: session facts and running background work.', '`TaskCreate` / `TaskUpdate` / `TodoWrite`, init message, `task_*` messages'],
-      ['Composer while running', 'Typing while the agent works queues the message (P05); Interrupt (or Esc on an empty composer) stops the turn.', '`priority`, `interrupt()`'],
+      ['运行中的会话', '每个运行中的会话及其状态：蓝色圆环 = 运行中，琥珀色 = 等你处理，灰色 = 空闲。点击切换中间和右侧内容，进程在后台继续运行。Alt ↑/↓ 切换。', '`session_state_changed`（FR-SES-12/13）'],
+      ['会话标题栏', '标题（点击重命名）与状态。右侧依次为：模型 + 推理强度菜单（本轮内即可切换）、权限模式菜单（Shift Tab 循环）、上下文用量（打开 P11）、相对预算的费用、停止（确认后结束进程）。', '`setModel()`、`applyFlagSettings({ effortLevel })`、`setPermissionMode()`、`getContextUsage()`、`total_cost_usd`、`close()`'],
+      ['用户消息', '显示文字、图片缩略图和「粘贴内容」标签。悬停出现「回退文件」和「分叉」（P10）。', '`SDKUserMessage`（uuid 即检查点）'],
+      ['思考过程', '默认折叠，显示一行预览和耗时；展开后是流式输出的思考摘要。', '`thinking` 块，`thinking.display: "summarized"`'],
+      ['工具调用摘要', '连续的只读调用合并为一行；展开后每次调用显示为紧凑卡片。', '`tool_use_summary` 消息'],
+      ['Edit 卡片', '文件路径、增删行数和改动 diff；点击路径打开完整文件；卡片菜单可切换并排/统一视图。盾牌标签说明这次调用为何被执行（某条规则、权限模式，或你的批准）。工具名保持英文原名。', '`Edit` 的输入/输出、权限决策来源'],
+      ['Bash 卡片', '命令、运行中的实时输出（结束后显示末尾）、退出状态和耗时。运行中还提供「转入后台」（P09）。命令输出原样显示，不做翻译。', '`Bash` 输入、`tool_progress`、`tool_use_result`'],
+      ['流式文本', '文字逐 token 出现并带光标；Markdown 和代码块在完整后排版。被中断的消息保留「已中断」标记。', '`includePartialMessages`、`stream_event` 增量、`aborted`'],
+      ['检查器：任务', 'Agent 自己的任务清单，实时更新：已完成、进行中（显示进行时描述）、待办及依赖关系。下方是会话信息和正在运行的后台工作。', '`TaskCreate` / `TaskUpdate` / `TodoWrite`、init 消息、`task_*` 消息'],
+      ['运行中的输入框', 'Agent 工作时输入的消息会进入队列（P05）；「中断」（或输入框为空时按 Esc）停止本轮。输入法正在组字时按回车只确认候选词，不会发送。', '`priority`、`interrupt()`（FR-I18N-07）'],
     ],
   });
 
@@ -479,35 +467,34 @@
   // ------------------------------------------------------------------ P05
   window.SCREENS.push({
     id: 'P05',
-    group: 'Live session',
-    title: 'Composer — commands, mentions, attachments and the queue',
-    summary: 'Close-ups of the composer in four situations: (A) the slash command palette, (B) mentions, images and pasted text, (C) sending while the agent is still working, (D) smaller states — prompt suggestions, the interrupt receipt and the send options menu.',
-    frs: ['FR-IN-01..10', 'FR-SKILL-04'],
+    group: '运行中的会话',
+    title: '输入框 — 命令、引用、附件与排队',
+    summary: '输入框在四种情况下的特写：(A) 斜杠命令面板；(B) @ 引用、图片和粘贴文本；(C) Agent 仍在工作时发送消息；(D) 几个小状态——下一步提示建议、中断回执和发送选项菜单。',
+    frs: ['FR-IN-01..10', 'FR-SKILL-04', 'FR-I18N-06/07'],
     draw() {
       let s = rect(0, 0, 1440, 900, { fill: C.page });
       const cols = [30, 500, 970];
-      const caps = ['A · Slash command palette', 'B · Mentions, images and pastes', 'C · Sending while Claude works'];
+      const caps = ['A · 斜杠命令面板', 'B · 引用、图片与粘贴', 'C · Claude 工作时发送消息'];
       cols.forEach((x, i) => {
         s += t(x, 50, caps[i], { s: 15, w: 700 });
         s += rect(x, 66, 440, 560, { r: 12, fill: C.page, stroke: C.border });
         s += ghostLines(x + 20, 86, 400, 4);
       });
 
-      // A — palette
       let x = 30;
       s += miniComposer(x + 16, 498, 408, 112, { focus: true });
       s += t(x + 32, 526, '/co', { s: 14, m: true });
       s += line(x + 32 + tw('/co', 14, true) + 2, 513, x + 32 + tw('/co', 14, true) + 2, 531, { c: C.ink, sw: 1.3 });
-      s += btn(x + 344, 572, 'Send', { v: 'primary', icon: 'send', w: 72 });
+      s += btn(x + 344, 572, '发送', { v: 'primary', icon: 'send', w: 72 });
       s += rect(x + 16, 186, 408, 302, { r: 10, fill: C.surface, stroke: C.border, shadow: true });
-      s += t(x + 30, 210, 'Commands', { s: 12, w: 600, c: C.muted });
-      s += t(x + 410, 210, '5 match “co”', { s: 11.5, c: C.muted, a: 'end' });
+      s += t(x + 30, 210, '命令', { s: 12, w: 600, c: C.muted });
+      s += t(x + 410, 210, '匹配 “co” 的 5 项', { s: 11.5, c: C.muted, a: 'end' });
       const cmds = [
-        ['slash', '/compact', 'Summarize history', 'built-in', true],
-        ['slash', '/context', 'Show context usage', 'built-in'],
-        ['spark', '/code-review', '[low|medium|high]', 'skill · bundled'],
-        ['box', '/commit', 'Commit staged changes', 'plugin · git-tools'],
-        ['file', '/cost-report', 'Weekly spend summary', 'project'],
+        ['slash', '/compact', '压缩历史记录', '内置', true],
+        ['slash', '/context', '查看上下文占用', '内置'],
+        ['spark', '/code-review', '[low|medium|high]', '技能 · 内置包'],
+        ['box', '/commit', 'Commit staged changes', '插件 · git-tools'],
+        ['file', '/cost-report', '每周费用汇总', '项目命令'],
       ];
       cmds.forEach(([icn, name, hint, origin, on], i) => {
         const y = 222 + i * 40;
@@ -518,23 +505,22 @@
         s += chip(x + 410 - chip.w(origin, { s: 10.5 }), y + 9, origin, { s: 10.5, h: 18 });
       });
       s += hline(x + 16, 428, 408);
-      s += t(x + 30, 450, '↑↓ move · Tab complete · Enter run', { s: 11.5, c: C.muted });
-      s += t(x + 30, 468, 'Arguments are typed after the name.', { s: 11.5, c: C.muted });
+      s += t(x + 30, 450, '↑↓ 选择 · Tab 补全 · Enter 执行', { s: 11.5, c: C.muted });
+      s += t(x + 30, 468, '参数写在命令名之后。插件自带的英文说明按原文显示。', { s: 11.5, c: C.muted });
 
-      // B — mentions / attachments
       x = 500;
       s += rect(x + 16, 96, 408, 104, { r: 10, fill: C.accentSoft, stroke: C.accent, dash: '6 4' });
-      s += ic('upload', x + 196, 112, 24, C.accent);
-      s += t(x + 220, 160, 'Drop images or files to attach', { s: 13, w: 600, c: C.accent, a: 'middle' });
-      s += t(x + 220, 178, 'drag-over state', { s: 11, c: C.accent, a: 'middle' });
+      s += ic('upload', x + 208, 112, 24, C.accent);
+      s += t(x + 220, 160, '拖放图片或文件以附加', { s: 13, w: 600, c: C.accent, a: 'middle' });
+      s += t(x + 220, 178, '拖入时的状态', { s: 11, c: C.accent, a: 'middle' });
       s += rect(x + 16, 214, 408, 228, { r: 10, fill: C.surface, stroke: C.border, shadow: true });
-      s += t(x + 30, 238, 'Files and resources', { s: 12, w: 600, c: C.muted });
+      s += t(x + 30, 238, '文件与资源', { s: 12, w: 600, c: C.muted });
       const ments = [
-        ['file', 'src/cart/timer.ts', 'edited this session', true],
+        ['file', 'src/cart/timer.ts', '本会话已编辑', true],
         ['file', 'src/cart/timer.test.ts', ''],
-        ['file', 'src/cart/types.ts', ''],
-        ['plug', 'github:issue/482', 'MCP resource'],
-        ['plug', 'postgres:schema/orders', 'MCP resource'],
+        ['file', 'docs/设计说明.md', ''],
+        ['plug', 'github:issue/482', 'MCP 资源'],
+        ['plug', 'postgres:schema/orders', 'MCP 资源'],
       ];
       ments.forEach(([icn, name, right, on], i) => {
         const y = 250 + i * 36;
@@ -551,21 +537,20 @@
       s += ic('x', x + 150, 466, 14, C.muted);
       s += rect(x + 178, 464, 170, 36, { r: 6, fill: C.surface3, stroke: C.border });
       s += ic('copy', x + 188, 474, 16, C.ink2);
-      s += t(x + 212, 478, 'Pasted text', { s: 12, w: 500 });
-      s += t(x + 212, 494, '214 lines · click to view', { s: 11, c: C.muted });
+      s += t(x + 212, 478, '粘贴的文本', { s: 12, w: 500 });
+      s += t(x + 212, 494, '214 行 · 点击查看', { s: 11, c: C.muted });
       s += ic('x', x + 328, 466, 14, C.muted);
-      s += runs(x + 30, 530, [['Compare with '], ['@src/cart/ti', C.accent, 600]], { s: 14 });
-      s += line(x + 30 + tw('Compare with @src/cart/ti', 14) + 6, 516, x + 30 + tw('Compare with @src/cart/ti', 14) + 6, 534, { c: C.ink, sw: 1.3 });
-      s += btn(x + 344, 572, 'Send', { v: 'primary', icon: 'send', w: 72 });
+      s += runs(x + 30, 530, [['对比 '], ['@src/cart/ti', C.accent, 600]], { s: 14 });
+      s += line(x + 30 + tw('对比 @src/cart/ti', 14) + 6, 516, x + 30 + tw('对比 @src/cart/ti', 14) + 6, 534, { c: C.ink, sw: 1.3 });
+      s += btn(x + 344, 572, '发送', { v: 'primary', icon: 'send', w: 72 });
 
-      // C — queue
       x = 970;
       s += rect(x + 16, 140, 408, 38, { r: 8, fill: C.surface, stroke: C.accentLine });
       s += circle(x + 34, 159, 7, { stroke: C.accent, sw: 2.5 });
-      s += t(x + 50, 163.5, 'Working · Bash npm test · 0:42', { s: 12.5, w: 500, c: C.accent });
-      s += t(x + 410, 163.5, 'Esc interrupts', { s: 11.5, c: C.muted, a: 'end' });
-      s += t(x + 16, 206, 'QUEUED · 2', { s: 11, w: 700, c: C.muted, ls: 0.5 });
-      const q = [['Also check the Redis mock', 'Next'], ['Then update the changelog', 'Later']];
+      s += t(x + 50, 163.5, '工作中 · Bash npm test · 0:42', { s: 12.5, w: 500, c: C.accent });
+      s += t(x + 410, 163.5, 'Esc 中断', { s: 11.5, c: C.muted, a: 'end' });
+      s += t(x + 16, 206, '排队中 · 2', { s: 11, w: 700, c: C.muted, ls: 0.5 });
+      const q = [['再检查一下 Redis 的 mock', '工具后'], ['然后更新 CHANGELOG', '下一轮']];
       q.forEach(([msg, pr], i) => {
         const y = 216 + i * 48;
         s += rect(x + 16, y, 408, 40, { r: 8, fill: C.surface, stroke: C.border, dash: '4 3' });
@@ -577,50 +562,48 @@
       });
       s += rect(x + 150, 252, 270, 218, { r: 10, fill: C.surface, stroke: C.border, shadow: true });
       const pri = [
-        ['Steer now', 'Claude reads it right away;', 'running work moves to the background'],
-        ['Next', 'After the current tool calls', '(default)'],
-        ['Later', 'Starts a new turn when this', 'one ends'],
+        ['立即插入', 'Claude 马上读到这条消息；', '正在运行的工作转入后台'],
+        ['工具后', '当前这批工具调用结束后读取', '（默认）'],
+        ['下一轮', '本轮结束后作为新一轮发送', ''],
       ];
       pri.forEach(([label, a, b], i) => {
         const y = 262 + i * 52;
         if (i === 1) s += rect(x + 156, y - 4, 258, 50, { r: 6, fill: C.accentSoft });
         s += t(x + 168, y + 12, label, { s: 13, w: 600, c: i === 1 ? C.accent : C.ink });
         s += t(x + 168, y + 28, a, { s: 11.5, c: C.ink2 });
-        s += t(x + 168, y + 42, b, { s: 11.5, c: C.ink2 });
+        if (b) s += t(x + 168, y + 42, b, { s: 11.5, c: C.ink2 });
         if (i === 1) s += ic('check', x + 392, y + 4, 16, C.accent);
       });
       s += hline(x + 150, 418, 270);
-      s += t(x + 168, 440, 'Edit message', { s: 12.5 });
-      s += t(x + 168, 460, 'Remove from queue', { s: 12.5, c: C.crit });
+      s += t(x + 168, 440, '编辑消息', { s: 12.5 });
+      s += t(x + 168, 460, '移出队列', { s: 12.5, c: C.crit });
       s += miniComposer(x + 16, 498, 408, 112, { focus: true });
-      s += t(x + 32, 526, 'Skip the integration tests', { s: 14 });
-      s += btn(x + 214, 572, 'Interrupt', { v: 'dangerOutline', icon: 'stop', w: 96 });
-      s += btn(x + 316, 572, 'Steer now', { v: 'primary', w: 100 });
+      s += t(x + 32, 526, '跳过集成测试', { s: 14 });
+      s += btn(x + 228, 572, '中断', { v: 'dangerOutline', icon: 'stop', w: 82 });
+      s += btn(x + 316, 572, '立即插入', { v: 'primary', w: 100 });
 
-      // D — small states
-      s += t(30, 660, 'D · Prompt suggestion', { s: 15, w: 700 });
-      s += t(500, 660, 'D · Interrupt receipt', { s: 15, w: 700 });
-      s += t(970, 660, 'D · Send options', { s: 15, w: 700 });
+      s += t(30, 660, 'D · 下一步提示建议', { s: 15, w: 700 });
+      s += t(500, 660, 'D · 中断回执', { s: 15, w: 700 });
+      s += t(970, 660, 'D · 发送选项', { s: 15, w: 700 });
       s += miniComposer(46, 680, 408, 100);
-      s += t(62, 708, 'Run the full test suite to confirm the fix', { s: 14, c: C.muted });
+      s += t(62, 708, '运行完整测试套件，确认修复有效', { s: 14, c: C.muted });
       s += kbd(62, 718, 'Tab');
-      s += t(92, 731, 'to accept · keep typing to ignore', { s: 11.5, c: C.muted });
-      s += btn(370, 742, 'Send', { v: 'primary', icon: 'send', w: 76, h: 28 });
+      s += t(92, 731, '接受 · 继续输入则忽略', { s: 11.5, c: C.muted });
+      s += btn(370, 742, '发送', { v: 'primary', icon: 'send', w: 76, h: 28 });
 
       s += rect(516, 680, 408, 110, { r: 10, fill: C.warnSoft, stroke: '#f1d38a' });
       s += ic('warning', 532, 696, 18, C.warnInk);
-      s += t(560, 710, 'Turn interrupted', { s: 13.5, w: 700 });
-      s += t(560, 730, '2 queued messages were not cancelled and will', { s: 12.5, c: C.ink2 });
-      s += t(560, 747, 'run next.', { s: 12.5, c: C.ink2 });
-      s += btn(724, 752, 'Keep', { h: 28, s: 12, w: 62 });
-      s += btn(792, 752, 'Cancel queued', { v: 'dangerOutline', h: 28, s: 12, w: 120 });
+      s += t(560, 710, '本轮已中断', { s: 13.5, w: 700 });
+      s += t(560, 730, '有 2 条排队消息没有取消，会在接下来执行。', { s: 12.5, c: C.ink2 });
+      s += btn(724, 752, '保留', { h: 28, s: 12, w: 62 });
+      s += btn(792, 752, '取消排队消息', { v: 'dangerOutline', h: 28, s: 12, w: 120 });
 
       s += rect(986, 680, 408, 196, { r: 10, fill: C.surface, stroke: C.border, shadow: true });
       const opts = [
-        ['send', 'Send', 'Enter', true],
-        ['bolt', 'Steer now', 'Ctrl Enter'],
-        ['clip', 'Add as context only — no reply', ''],
-        ['lock', 'Send verbatim — no @ or / expansion', ''],
+        ['send', '发送', 'Enter', true],
+        ['bolt', '立即插入', 'Ctrl Enter'],
+        ['clip', '仅作为上下文 —— 不触发回复', ''],
+        ['lock', '原样发送 —— 不解析 @ 和 /', ''],
       ];
       opts.forEach(([icn, label, key, on], i) => {
         const y = 690 + i * 42;
@@ -629,33 +612,33 @@
         s += t(1030, y + 22.5, label, { s: 13, w: on ? 600 : 400, c: on ? C.accent : C.ink });
         if (key) s += kbd(1384 - kbd.w(key), y + 9, key);
       });
-      s += t(1004, 864, 'Opened from the arrow next to Send.', { s: 11.5, c: C.muted });
+      s += t(1004, 864, '点击「发送」旁的箭头打开。', { s: 11.5, c: C.muted });
 
       s += mk(40, 230, 1) + mk(430, 268, 2) + mk(512, 100, 3) + mk(512, 470, 4) + mk(512, 230, 5);
       s += mk(982, 222, 6) + mk(1424, 262, 7) + mk(1424, 578, 8) + mk(42, 690, 9) + mk(512, 690, 10) + mk(982, 690, 11);
       return s;
     },
     notes: [
-      ['Slash palette', 'Typing / at the start opens the palette, filtered as you type. Arrow keys move, Tab completes the name (then shows the argument hint as ghost text), Enter runs. The list updates live when skills or plugins change.', '`supportedCommands()` → `SlashCommand` (`name`, `description`, `argumentHint`, `aliases`); `commands_changed` (FR-IN-05)'],
-      ['Command origin', 'Each command shows where it comes from: built-in, bundled or project skill, plugin, project command file, MCP prompt. Built-ins with dedicated UI (/compact, /clear, /context, /usage) also have buttons elsewhere.', '`SlashCommand.builtin`; command dispatch = prompt text `/name args` (FR-SKILL-04)'],
-      ['Drag and drop', 'Dragging files over the transcript shows the drop zone. Images become image blocks; other files are attached as @ mentions of their workspace path (or uploaded to a temp folder when outside the workspace).', 'Image content blocks in `SDKUserMessage.message` (FR-IN-02)'],
-      ['Attachments', 'Image chips show a thumbnail and size. Pasting more than 20 lines turns the paste into a chip that can be opened and edited; it is sent as pasted content so Claude knows it was pasted.', '`pasted_content` / `inline_pastes` (FR-IN-04)'],
-      ['@ mentions', 'Typing @ lists workspace files (recently edited first) and MCP resources. Enter inserts the mention; Claude Code expands it when the message is sent.', 'Mention expansion; MCP resources via `@server:resource` (FR-IN-03)'],
-      ['Queued messages', 'Messages sent while Claude is working wait here in order, with their delivery choice. They can be edited, re-prioritised or removed until delivered; delivered ones move into the transcript.', 'Input queue → `SDKUserMessage` with `priority` and `uuid` (FR-IN-06)'],
-      ['Delivery choice', 'Steer now: Claude reads it immediately and running work moves to the background. Next: read once the current tool calls finish (default). Later: becomes a new turn.', '`priority: "now"` + `origin: { kind: "human" }`, `"next"`, `"later"`'],
-      ['Interrupt / Steer now', 'With text in the composer while Claude works, the primary button becomes "Steer now" and Interrupt stays available. Esc on an empty composer interrupts.', '`interrupt()`; `priority: "now"`'],
-      ['Prompt suggestion', 'After a turn, the predicted next prompt appears as ghost text. Tab accepts it; typing anything else dismisses it.', '`promptSuggestions`, `prompt_suggestion` message (FR-IN-10)'],
-      ['Interrupt receipt', 'After an interrupt, the SDK reports which queued messages are still pending. The toast offers to cancel them so they do not run.', '`interrupt()` → `SDKControlInterruptResponse.still_queued` (FR-IN-07)'],
-      ['Send options', 'Context only appends the message without starting a turn (e.g. a pasted log). Verbatim sends text exactly as typed, with no @ or / processing.', '`shouldQuery: false`; `client_composed: true` / `verbatimPrompts` (FR-IN-08/09)'],
+      ['斜杠命令面板', '在开头输入 / 打开面板，边输入边过滤。方向键选择，Tab 补全命令名（随后以灰字显示参数提示），Enter 执行。技能或插件变化时列表实时更新。', '`supportedCommands()` → `SlashCommand`（`name`、`description`、`argumentHint`、`aliases`）；`commands_changed`（FR-IN-05）'],
+      ['命令来源与说明语言', '每个命令标明来源：内置、内置技能包或项目技能、插件、项目命令文件、MCP 提示。内置命令的说明使用本地化文案；技能、插件、MCP 自带的说明按作者原文显示（如 /commit 的英文说明）。', '`SlashCommand.builtin`；命令调用即发送 `/name args` 文本（FR-SKILL-04、FR-I18N-06）'],
+      ['拖放', '把文件拖到对话区上方时显示投放区。图片成为图片块；其他文件以工作区路径的 @ 引用附加（工作区外的文件先复制到临时目录）。中文文件名同样支持。', '`SDKUserMessage.message` 中的图片内容块（FR-IN-02、FR-I18N-08）'],
+      ['附件', '图片标签显示缩略图和大小。粘贴超过 20 行时转为可打开、可编辑的「粘贴的文本」标签，以粘贴内容的形式发送，Claude 能区分这是粘贴的。', '`pasted_content` / `inline_pastes`（FR-IN-04）'],
+      ['@ 引用', '输入 @ 列出工作区文件（最近编辑的在前）和 MCP 资源，Enter 插入。发送时由 Claude Code 展开引用。', '引用展开；MCP 资源用 `@server:resource`（FR-IN-03）'],
+      ['排队的消息', 'Claude 工作时发出的消息按顺序在这里等待，并显示投递方式。投递前可编辑、调整方式或移出；投递后移入对话记录。', '输入队列 → 带 `priority` 和 `uuid` 的 `SDKUserMessage`（FR-IN-06）'],
+      ['投递方式', '立即插入：Claude 马上读到，正在运行的工作转入后台。工具后：当前这批工具调用结束后读取（默认）。下一轮：本轮结束后作为新一轮。', '`priority: "now"` + `origin: { kind: "human" }`、`"next"`、`"later"`'],
+      ['中断 / 立即插入', 'Claude 工作时输入框有内容，主按钮变成「立即插入」，「中断」仍可用。输入框为空时按 Esc 即中断。', '`interrupt()`；`priority: "now"`'],
+      ['下一步提示建议', '一轮结束后，以灰字显示预测的下一条输入。Tab 接受，输入其他内容则忽略。建议内容随 Claude 的回复语言。', '`promptSuggestions`、`prompt_suggestion` 消息（FR-IN-10）'],
+      ['中断回执', '中断后 SDK 会报告哪些排队消息仍待执行，提示条可一键取消它们，避免继续执行。', '`interrupt()` → `SDKControlInterruptResponse.still_queued`（FR-IN-07）'],
+      ['发送选项', '「仅作为上下文」只把消息追加到对话里，不开始新一轮（例如贴一段日志）。「原样发送」不处理 @ 和 /。', '`shouldQuery: false`；`client_composed: true` / `verbatimPrompts`（FR-IN-08/09）'],
     ],
   });
 
   // ------------------------------------------------------------------ P06
   window.SCREENS.push({
     id: 'P06',
-    group: 'Live session',
-    title: 'Tool approval',
-    summary: 'When a tool call needs permission, the request docks above the composer with everything needed to decide. The top-bar inbox lists requests from every live session. A high-risk variant is shown in the right column.',
+    group: '运行中的会话',
+    title: '工具审批',
+    summary: '工具调用需要授权时，请求停靠在输入框上方，附带做决定所需的全部信息。顶栏的收件箱汇总所有运行中会话的请求。右栏展示高风险请求的变体。',
     frs: ['FR-PERM-03..07', 'FR-PERM-06', 'FR-NTF-01'],
     draw() {
       let s = K.shell({ nav: 'sessions', approvals: 2 });
@@ -664,139 +647,137 @@
       s += K.sessionHeader(L.MX, 49, L.MW, { state: 'requires_action' });
       const X = L.TX;
       const W = L.TW;
-      s += K.userMsg(X, 122, W, 'The tests still fail on a clean checkout. Clean the caches and retry.');
-      s += t(X, 202, 'The jest cache holds a stale transform. I\'ll clear the cache and reinstall dependencies.', { s: 14 });
-      s += K.toolCard(X, 220, W, { icon: 'terminal', name: 'Bash', detail: 'rm -rf node_modules/.cache && npm ci', right: 'waiting 0:12', st: 'wait' });
+      s += K.userMsg(X, 122, W, '干净检出后测试还是失败。清理缓存再试一次。');
+      s += t(X, 202, 'jest 缓存里有过期的转换结果。我来清理缓存并重新安装依赖。', { s: 14 });
+      s += K.toolCard(X, 220, W, { icon: 'terminal', name: 'Bash', detail: 'rm -rf node_modules/.cache && npm ci', right: '已等待 0:12', st: 'wait' });
 
       const y = 276;
       s += rect(X, y, W, 484, { r: 10, fill: C.surface, stroke: C.warn, sw: 1.5, shadow: true });
       s += rect(X + 1, y + 1, W - 2, 50, { r: 9, fill: C.warnSoft });
       s += ic('shield', X + 16, y + 16, 20, C.warnInk);
-      s += t(X + 44, y + 32, 'Allow this command?', { s: 15, w: 700 });
-      s += chip(X + 222, y + 16, 'asked by subagent test-runner', { icon: 'agent', bg: C.surface });
-      s += t(X + W - 16, y + 31, 'Enter confirm · Esc deny', { s: 11.5, c: C.ink2, a: 'end' });
+      s += t(X + 44, y + 32, '允许执行这条命令？', { s: 15, w: 700 });
+      s += chip(X + 200, y + 16, '由子代理 test-runner 发起', { icon: 'agent', bg: C.surface });
+      s += t(X + W - 16, y + 31, 'Enter 确认 · Esc 拒绝', { s: 11.5, c: C.ink2, a: 'end' });
       s += ic('info', X + 16, y + 66, 16, C.ink2);
-      s += t(X + 40, y + 78.5, 'No allow rule matches this command. The session asks before anything not allowed.', { s: 12.5, c: C.ink2 });
+      s += t(X + 40, y + 78.5, '没有匹配这条命令的允许规则；当前会话对未授权的操作会先询问。', { s: 12.5, c: C.ink2 });
       s += code(X + 16, y + 94, W - 32, [[['$ ', C.muted], ['rm -rf node_modules/.cache && npm ci', C.ink, 600]]], { s: 13 });
-      s += t(X + 16, y + 146, 'Clear the build cache and reinstall dependencies', { s: 12, c: C.muted, i: true });
+      s += t(X + 16, y + 146, '清理构建缓存并重新安装依赖', { s: 12, c: C.muted, i: true });
 
       const oy = y + 164;
       const opts = [
-        ['Allow once', '1'],
-        ['Allow and don\'t ask again for', '2'],
-        ['Edit the command, then allow', '3'],
-        ['Deny and tell Claude what to do instead', '4'],
+        ['仅允许这一次', '1'],
+        ['允许，并且以后不再询问', '2'],
+        ['修改命令后允许', '3'],
+        ['拒绝，并告诉 Claude 该怎么做', '4'],
       ];
       opts.forEach(([label, key], i) => {
-        const ry = oy + i * 50 + (i === 3 ? 0 : 0);
+        const ry = oy + i * 50;
         const on = i === 1;
         s += rect(X + 16, ry, W - 32, i === 3 ? 82 : 42, { r: 8, fill: on ? C.accentSoft : C.surface, stroke: on ? C.accent : C.border, sw: on ? 1.5 : 1 });
         s += radio(X + 28, ry + 13, on, label, { w: on ? 600 : 400 });
         s += kbd(X + W - 44, ry + 12, key);
         if (i === 1) {
-          s += select(X + 270, ry + 6, 170, 'Bash(npm ci)', { h: 30, mono: true, s: 12 });
-          s += t(X + 450, ry + 26, 'in', { s: 12.5, c: C.ink2 });
-          s += select(X + 468, ry + 6, 222, 'This project · local settings', { h: 30, s: 12 });
+          s += select(X + 250, ry + 6, 170, 'Bash(npm ci)', { h: 30, mono: true, s: 12 });
+          s += t(X + 430, ry + 26, '保存到', { s: 12.5, c: C.ink2 });
+          s += select(X + 474, ry + 6, 216, '本项目 · 本地设置', { h: 30, s: 12 });
         }
-        if (i === 3) s += input(X + 52, ry + 40, W - 120, { h: 32, ph: 'e.g. Only clear the jest cache; don\'t reinstall', s: 12.5 });
+        if (i === 3) s += input(X + 52, ry + 40, W - 120, { h: 32, ph: '例如：只清理 jest 缓存，不要重新安装', s: 12.5 });
       });
       const fy = y + 432;
-      s += btn(X + 16, fy, 'Deny and stop the turn', { v: 'dangerOutline', icon: 'stop', w: 186 });
-      s += btn(X + W - 196, fy, 'Allow and remember', { v: 'primary', w: 180, focus: false });
-      s += K.composer(X, 776, W, { h: 108, ph: 'Type here to deny with instructions…', running: false });
+      s += btn(X + 16, fy, '拒绝并停止本轮', { v: 'dangerOutline', icon: 'stop', w: 150 });
+      s += btn(X + W - 156, fy, '允许并记住', { v: 'primary', w: 140 });
+      s += K.composer(X, 776, W, { h: 108, ph: '在这里输入即视为拒绝，内容会作为说明发给 Claude…' });
 
-      // inspector + inbox popover + variant
       s += K.inspector(0);
       const bx = 1084;
       s += rect(bx, 52, 346, 260, { r: 10, fill: C.surface, stroke: C.border, shadow: true });
-      s += t(bx + 16, 78, 'Waiting for you', { s: 14, w: 700 });
-      s += chip(bx + 136, 64, '2', { h: 18, bg: C.critSoft, c: C.crit });
+      s += t(bx + 16, 78, '等你处理', { s: 14, w: 700 });
+      s += chip(bx + 84, 64, '2', { h: 18, bg: C.critSoft, c: C.crit });
       s += rect(bx + 8, 92, 330, 72, { r: 8, fill: C.accentSoft });
       s += ic('terminal', bx + 20, 104, 16, C.accent);
-      s += t(bx + 44, 116, 'Fix flaky checkout tests', { s: 13, w: 600 });
+      s += t(bx + 44, 116, '修复结账测试偶发失败', { s: 13, w: 600 });
       s += t(bx + 44, 134, 'Bash · rm -rf node_modules/.cache…', { s: 11.5, m: true, c: C.ink2 });
-      s += t(bx + 44, 152, 'viewing now · 0:12', { s: 11, c: C.accent });
+      s += t(bx + 44, 152, '正在查看 · 0:12', { s: 11, c: C.accent });
       s += ic('pencil', bx + 20, 182, 16, C.ink2);
-      s += t(bx + 44, 194, 'Refactor auth middleware', { s: 13, w: 600 });
+      s += t(bx + 44, 194, '重构鉴权中间件', { s: 13, w: 600 });
       s += t(bx + 44, 212, 'Edit · src/auth/session.ts', { s: 11.5, m: true, c: C.ink2 });
-      s += t(bx + 44, 230, 'waiting 1m 03s', { s: 11, c: C.warnInk });
-      s += btn(bx + 276, 186, 'Open', { h: 26, s: 12, w: 56 });
+      s += t(bx + 44, 230, '已等待 1分03秒', { s: 11, c: C.warnInk });
+      s += btn(bx + 276, 186, '打开', { h: 26, s: 12, w: 56 });
       s += hline(bx, 250, 346);
-      s += toggle(bx + 16, 270, true, 'Browser notification when waiting', { s: 12.5 });
+      s += toggle(bx + 16, 270, true, '等待时发送浏览器通知', { s: 12.5 });
 
-      s += t(1117, 352, 'VARIANT · HIGH-RISK REQUEST', { s: 11, w: 700, c: C.muted, ls: 0.4 });
+      s += t(1117, 352, '变体 · 高风险请求', { s: 11, w: 700, c: C.muted, ls: 0.4 });
       s += rect(1117, 364, 307, 252, { r: 10, fill: C.surface, stroke: C.crit, sw: 1.5 });
       s += ic('warning', 1131, 380, 18, C.crit);
-      s += t(1157, 394, 'Delete outside the workspace?', { s: 13.5, w: 700 });
+      s += t(1157, 394, '删除工作区外的文件？', { s: 13.5, w: 700 });
       s += code(1131, 410, 279, ['rm -rf ~/projects/old-build'], { s: 11.5 });
-      s += para(1131, 460, 'Claude Code flagged a critical path. Decline is focused, there is no one-key approve and no "always allow".', 279, { s: 12, c: C.ink2, lh: 17 });
-      s += btn(1131, 524, 'Deny', { v: 'primary', w: 136, focus: true });
-      s += btn(1275, 524, 'Allow once', { w: 135 });
-      s += t(1131, 586, 'Type ALLOW to enable the button', { s: 11.5, c: C.muted });
+      s += para(1131, 460, 'Claude Code 判定这是关键路径。默认焦点在「拒绝」，没有一键批准，也不提供「始终允许」。', 279, { s: 12, c: C.ink2, lh: 17 });
+      s += btn(1131, 524, '拒绝', { v: 'primary', w: 136, focus: true });
+      s += btn(1275, 524, '仅此一次', { w: 135 });
+      s += t(1131, 586, '输入 ALLOW 后才能点击允许', { s: 11.5, c: C.muted });
 
-      s += mk(L.TX - 13, 236, 1) + mk(X + 206, y + 12, 2) + mk(L.TX - 13, y + 72, 3) + mk(L.TX - 13, y + 110, 4) + mk(L.TX - 13, oy + 20, 5);
+      s += mk(L.TX - 13, 236, 1) + mk(X + 198, y + 12, 2) + mk(L.TX - 13, y + 72, 3) + mk(L.TX - 13, y + 110, 4) + mk(L.TX - 13, oy + 20, 5);
       s += mk(L.TX - 13, oy + 70, 6) + mk(L.TX - 13, oy + 120, 7) + mk(L.TX - 13, oy + 170, 8) + mk(L.TX - 13, fy + 15, 9);
       s += mk(1082, 56, 10) + mk(1113, 368, 11) + mk(L.TX - 13, 790, 12);
       return s;
     },
     notes: [
-      ['Pending tool card', 'The tool call that triggered the request stays in the transcript with an amber "waiting" state and a timer; it updates to approved / denied once answered.', '`canUseTool(toolName, input, { toolUseID })`'],
-      ['Request header', 'Plain question naming the action. A chip shows when a subagent asked rather than the main agent; for MCP tools, the server and where it was configured.', '`agentID`, `mcpServer { name, source }`'],
-      ['Why it is asking', 'One line built from the SDK\'s reason (no allow rule, an ask rule, plan mode, a path outside the workspace…) plus the blocked path when there is one.', '`decisionReason`, `blockedPath`'],
-      ['Action preview', 'Bash shows the command and its description; Edit/Write show a diff; MCP tools show their JSON input; WebFetch shows the domain.', 'Tool `input` (typed by tool)'],
-      ['Allow once', 'Runs this call only. Key 1.', '`{ behavior: "allow", updatedInput: input }`'],
-      ['Allow and remember', 'Pick one of the rules Claude Code suggests (editable) and where to save it: this session, this project (local or shared settings) or all projects. Hidden when the SDK says not to offer it. Key 2.', '`suggestions` → `updatedPermissions` with `destination`; `suppressAlwaysAllowRule`'],
-      ['Edit, then allow', 'Opens the command (or JSON input) for editing; the edited input runs. Claude is not told it was edited. Key 3.', '`updatedInput`'],
-      ['Deny with instructions', 'The text goes back to Claude as the denial reason so it can change course. Key 4. Typing in the composer while a request is open does the same.', '`{ behavior: "deny", message }`'],
-      ['Deny and stop', 'Denies and interrupts the turn.', '`{ behavior: "deny", interrupt: true }`'],
-      ['Approvals inbox', 'The bell lists requests from every live session with how long each has waited. Answering in one tab resolves it in all tabs; a re-delivered request (after reconnect) is matched by its id and never shown twice.', '`requestId`, `reinitialize()`, `session_state_changed` (FR-PERM-06/07)'],
-      ['High-risk variant', 'When the SDK marks a request as one a stray key must not approve, Deny is focused, number keys are disabled, "remember" is hidden and Allow needs typing ALLOW.', '`defaultToNo`, `suppressAlwaysAllowRule` (FR-PERM-05)'],
-      ['Composer during a request', 'Stays usable: sending text denies the pending request with that text as the message.', '`{ behavior: "deny", message }`'],
+      ['待审批的工具卡片', '触发请求的工具调用留在对话里，显示琥珀色「等待中」和计时；处理后更新为已批准 / 已拒绝。', '`canUseTool(toolName, input, { toolUseID })`'],
+      ['请求标题', '用一句话说明要做什么。由子代理而非主 Agent 发起时显示标签；MCP 工具还会显示服务器名及其配置来源。', '`agentID`、`mcpServer { name, source }`'],
+      ['为什么要问', '由 SDK 给出的原因生成的本地化说明（无允许规则、命中询问规则、规划模式、路径在工作区外…），有被拦路径时一并显示；可展开查看 SDK 原文。', '`decisionReason`、`blockedPath`（FR-I18N-06）'],
+      ['操作预览', 'Bash 显示命令及其说明；Edit/Write 显示 diff；MCP 工具显示 JSON 输入；WebFetch 显示域名。', '工具 `input`（按工具类型）'],
+      ['仅允许这一次', '只放行这一次调用。快捷键 1。', '`{ behavior: "allow", updatedInput: input }`'],
+      ['允许并记住', '从 Claude Code 建议的规则中选一条（可编辑），再选保存位置：本会话、本项目（本地或共享设置）或所有项目。SDK 表示不应提供时隐藏。快捷键 2。', '`suggestions` → 带 `destination` 的 `updatedPermissions`；`suppressAlwaysAllowRule`'],
+      ['修改后允许', '打开命令（或 JSON 输入）进行编辑，执行修改后的版本。Claude 不会被告知被修改过。快捷键 3。', '`updatedInput`'],
+      ['拒绝并说明', '输入的文字作为拒绝原因返回给 Claude，让它调整做法。快捷键 4。请求未处理时在输入框发消息效果相同。输入法组字时回车不提交。', '`{ behavior: "deny", message }`（FR-I18N-07）'],
+      ['拒绝并停止', '拒绝并中断本轮。', '`{ behavior: "deny", interrupt: true }`'],
+      ['审批收件箱', '铃铛列出所有运行中会话的请求及已等待时间。在任一标签页处理后，其他标签页同步消失；重连后重复投递的请求按 id 去重，不会出现两次。', '`requestId`、`reinitialize()`、`session_state_changed`（FR-PERM-06/07）'],
+      ['高风险变体', 'SDK 标记该请求不能被误触批准时：焦点在「拒绝」，数字快捷键失效，隐藏「记住」，需输入 ALLOW 才能允许。', '`defaultToNo`、`suppressAlwaysAllowRule`（FR-PERM-05）'],
+      ['请求期间的输入框', '仍可使用：发送文字即以该文字为说明拒绝当前请求。', '`{ behavior: "deny", message }`'],
     ],
   });
 
   // ------------------------------------------------------------------ P07
   window.SCREENS.push({
     id: 'P07',
-    group: 'Live session',
-    title: 'Clarifying questions',
-    summary: 'When Claude calls AskUserQuestion, its questions dock above the composer as a short form: one step per question, option cards with descriptions, optional side-by-side previews, and a free-text "Other".',
+    group: '运行中的会话',
+    title: '澄清提问',
+    summary: 'Claude 调用 AskUserQuestion 时，问题以简短表单停靠在输入框上方：每个问题一步，选项卡片带说明，可并排预览，并支持自由填写「其他」。问题内容由 Claude 生成，语言跟随对话。',
     frs: ['FR-ASK-01..05', 'FR-TOOL-08'],
     draw() {
       let s = K.shell({ nav: 'sessions', approvals: 1 });
       s += K.sessionColumn({ active: 2, live: [
-        ['Fix flaky checkout tests', 'running', 'shop-api'],
-        ['Refactor auth middleware', 'running', 'shop-api'],
-        ['Add rate limiting', 'requires_action', 'shop-api', 'Needs your answer'],
+        ['修复结账测试偶发失败', 'running', 'shop-api'],
+        ['重构鉴权中间件', 'running', 'shop-api'],
+        ['添加限流', 'requires_action', 'shop-api', '等你回答'],
       ] });
       s += rect(L.MX, 49, L.MW, 851, { fill: C.page });
-      s += K.sessionHeader(L.MX, 49, L.MW, { state: 'requires_action', title: 'Add rate limiting', cost: '$0.09', ctx: 12 });
+      s += K.sessionHeader(L.MX, 49, L.MW, { state: 'requires_action', title: '添加限流', cost: '$0.09', ctx: 12 });
       const X = L.TX;
       const W = L.TW;
-      s += K.userMsg(X, 122, W, 'Add rate limiting to the /orders endpoint.');
-      s += t(X, 202, 'A couple of choices shape the design:', { s: 14 });
-      s += K.toolCard(X, 216, W, { icon: 'chat', name: 'AskUserQuestion', detail: '2 questions', right: 'waiting 0:31', st: 'wait' });
+      s += K.userMsg(X, 122, W, '给 /orders 接口加上限流。');
+      s += t(X, 202, '有几个选择会影响设计：', { s: 14 });
+      s += K.toolCard(X, 216, W, { icon: 'chat', name: 'AskUserQuestion', detail: '2 个问题', right: '已等待 0:31', st: 'wait' });
 
       const y = 268;
       s += rect(X, y, W, 496, { r: 10, fill: C.surface, stroke: C.accent, sw: 1.5, shadow: true });
       s += ic('chat', X + 16, y + 16, 20, C.accent);
-      s += t(X + 44, y + 32, 'Claude has 2 questions', { s: 15, w: 700 });
-      s += t(X + W - 16, y + 31, 'Skip and reply in chat', { s: 12.5, c: C.accent, a: 'end' });
-      // steps
-      s += rect(X + 16, y + 50, 150, 30, { r: 15, fill: C.accentSoft, stroke: C.accent });
+      s += t(X + 44, y + 32, 'Claude 有 2 个问题', { s: 15, w: 700 });
+      s += t(X + W - 16, y + 31, '跳过，直接在对话里回复', { s: 12.5, c: C.accent, a: 'end' });
+      s += rect(X + 16, y + 50, 130, 30, { r: 15, fill: C.accentSoft, stroke: C.accent });
       s += circle(X + 33, y + 65, 9, { fill: C.accent }) + t(X + 33, y + 69, '1', { s: 11, w: 700, c: '#fff', a: 'middle' });
-      s += t(X + 50, y + 69.5, 'Store', { s: 12.5, w: 600, c: C.accent });
-      s += t(X + 92, y + 69.5, 'single', { s: 11, c: C.accent });
-      s += rect(X + 176, y + 50, 168, 30, { r: 15, fill: C.surface, stroke: C.border });
-      s += circle(X + 193, y + 65, 9, { fill: C.surface3 }) + t(X + 193, y + 69, '2', { s: 11, w: 700, c: C.ink2, a: 'middle' });
-      s += t(X + 210, y + 69.5, 'Scope', { s: 12.5, w: 600, c: C.ink2 });
-      s += t(X + 254, y + 69.5, 'multi-select', { s: 11, c: C.muted });
+      s += t(X + 50, y + 69.5, '存储', { s: 12.5, w: 600, c: C.accent });
+      s += t(X + 84, y + 69.5, '单选', { s: 11, c: C.accent });
+      s += rect(X + 156, y + 50, 130, 30, { r: 15, fill: C.surface, stroke: C.border });
+      s += circle(X + 173, y + 65, 9, { fill: C.surface3 }) + t(X + 173, y + 69, '2', { s: 11, w: 700, c: C.ink2, a: 'middle' });
+      s += t(X + 190, y + 69.5, '范围', { s: 12.5, w: 600, c: C.ink2 });
+      s += t(X + 224, y + 69.5, '多选', { s: 11, c: C.muted });
 
-      s += t(X + 16, y + 112, 'Where should the rate limiter keep its counters?', { s: 15, w: 600 });
+      s += t(X + 16, y + 112, '限流计数器存放在哪里？', { s: 15, w: 600 });
       const opts = [
-        ['Redis (Recommended)', 'Shared across instances; uses the existing Redis.', true],
-        ['In-memory', 'Simplest; limits apply per instance only.'],
-        ['PostgreSQL', 'No new infra; adds a write on every request.'],
+        ['Redis（推荐）', '多实例共享；使用现有的 Redis。', true],
+        ['内存', '最简单；但限额只对单个实例生效。'],
+        ['PostgreSQL', '不需新基础设施；每个请求多一次写入。'],
       ];
       opts.forEach(([label, desc, on], i) => {
         const oy = y + 130 + i * 66;
@@ -809,15 +790,14 @@
       const oy4 = y + 328;
       s += rect(X + 16, oy4, 370, 70, { r: 8, fill: C.surface, stroke: C.border });
       s += radio(X + 28, oy4 + 12, false);
-      s += t(X + 54, oy4 + 25, 'Other', { s: 13.5, w: 600 });
+      s += t(X + 54, oy4 + 25, '其他', { s: 13.5, w: 600 });
       s += kbd(X + 358, oy4 + 10, '4');
-      s += input(X + 54, oy4 + 34, 316, { h: 28, ph: 'Describe another option…', s: 12.5 });
+      s += input(X + 54, oy4 + 34, 316, { h: 28, ph: '描述其他方案…', s: 12.5 });
 
-      // preview
       const px = X + 402;
       s += rect(px, y + 130, 329, 268, { r: 8, fill: C.surface2, stroke: C.border });
-      s += t(px + 12, y + 150, 'PREVIEW · REDIS', { s: 10.5, w: 700, c: C.muted, ls: 0.4 });
-      s += t(px + 317, y + 150, 'sandboxed HTML', { s: 10.5, c: C.muted, a: 'end' });
+      s += t(px + 12, y + 150, '预览 · Redis', { s: 11, w: 700, c: C.muted });
+      s += t(px + 317, y + 150, '在沙箱中渲染的 HTML', { s: 10.5, c: C.muted, a: 'end' });
       s += rect(px + 12, y + 162, 305, 222, { r: 6, fill: C.surface, stroke: C.border });
       ['API #1', 'API #2', 'API #3'].forEach((n, i) => {
         s += box(px + 28, y + 178 + i * 46, 96, 34, n, null, { s: 12 });
@@ -828,137 +808,135 @@
       s += t(px + 28, y + 354, 'window: sliding, 60 s', { s: 11.5, m: true, c: C.ink2 });
       s += t(px + 28, y + 372, 'on limit: 429 + Retry-After', { s: 11.5, m: true, c: C.ink2 });
 
-      s += input(X + 16, y + 412, W - 32, { h: 32, ph: 'Note for Claude about this answer (optional)', icon: 'pencil' });
+      s += input(X + 16, y + 412, W - 32, { h: 32, ph: '给 Claude 的补充说明（可选）', icon: 'pencil' });
       s += hline(X, y + 456, W);
-      s += t(X + 16, y + 482, '1–4 choose · Enter next · Shift Tab back', { s: 12, c: C.muted });
-      s += btn(X + W - 232, y + 464, 'Back', { w: 70 });
-      s += btn(X + W - 154, y + 464, 'Next question', { v: 'primary', w: 138 });
-      s += K.composer(X, 776, W, { h: 108, ph: 'Or answer everything in your own words…' });
+      s += t(X + 16, y + 482, '1–4 选择 · Enter 下一题 · Shift Tab 上一题', { s: 12, c: C.muted });
+      s += btn(X + W - 206, y + 464, '上一题', { w: 74 });
+      s += btn(X + W - 124, y + 464, '下一题', { v: 'primary', w: 108 });
+      s += K.composer(X, 776, W, { h: 108, ph: '或者用你自己的话一次性回答所有问题…' });
 
       s += K.inspector(0);
-      s += t(L.IX + L.IW / 2, 220, 'No tasks yet', { s: 13, w: 600, c: C.ink2, a: 'middle' });
-      s += t(L.IX + L.IW / 2, 240, 'Claude adds tasks once work starts.', { s: 12, c: C.muted, a: 'middle' });
+      s += t(L.IX + L.IW / 2, 220, '暂无任务', { s: 13, w: 600, c: C.ink2, a: 'middle' });
+      s += t(L.IX + L.IW / 2, 240, 'Claude 开始干活后会在这里列出任务。', { s: 12, c: C.muted, a: 'middle' });
 
       s += mk(L.TX - 13, 232, 1) + mk(X + 20, y + 52, 2) + mk(L.TX - 13, y + 108, 3) + mk(L.TX - 13, y + 160, 4) + mk(X + 380, y + 132, 5);
       s += mk(L.TX - 13, oy4 + 20, 6) + mk(px + 324, y + 134, 7) + mk(L.TX - 13, y + 428, 8) + mk(X + W - 6, y + 468, 9) + mk(L.TX - 13, 790, 10);
       return s;
     },
     notes: [
-      ['Question card in the transcript', 'Claude\'s AskUserQuestion call appears as a waiting card; after answering, it shows the questions with the chosen answers.', '`AskUserQuestion` via `canUseTool` (FR-TOOL-08)'],
-      ['Question steps', 'One pill per question using Claude\'s short header (max 12 characters) and whether it is single or multi-select. Answered steps get a check; clicking a pill jumps to it.', '`questions[].header`, `multiSelect`'],
-      ['Question', 'The full question text, as Claude wrote it.', '`questions[].question`'],
-      ['Option cards', 'Two to four options with descriptions. Single-select uses radio cards, multi-select uses checkboxes. Number keys pick.', '`questions[].options[]` (`label`, `description`)'],
-      ['Recommended option', 'Claude marks its suggestion in the label; the UI keeps the wording and does not preselect it.', 'Option label'],
-      ['Other', 'Free text when none of the options fits; the typed text becomes the answer for that question.', '`answers[question] = text`'],
-      ['Preview', 'When Claude provides previews (enabled per profile), hovering or selecting an option shows its preview. HTML previews render in a sandboxed frame with scripts disabled.', '`toolConfig.askUserQuestion.previewFormat`, `options[].preview` (FR-ASK-03)'],
-      ['Note', 'Optional note attached to the answer, e.g. "only for logged-in users".', '`annotations[question].notes` (FR-ASK-04)'],
-      ['Navigation and submit', 'Next moves through questions; on the last one the button becomes "Send answers". Answers are returned with the original questions.', '`{ behavior: "allow", updatedInput: { questions, answers } }`'],
-      ['Answer in your own words', 'Typing in the composer replies to all questions at once instead of using the form.', '`updatedInput.response`'],
+      ['对话中的提问卡片', 'Claude 的 AskUserQuestion 调用显示为等待中的卡片；回答后卡片显示问题和所选答案。', '经 `canUseTool` 的 `AskUserQuestion`（FR-TOOL-08）'],
+      ['问题步骤', '每个问题一个胶囊，使用 Claude 写的简短标题（最多 12 个字符）并注明单选或多选。已答的打勾，点击可跳转。', '`questions[].header`、`multiSelect`'],
+      ['问题', 'Claude 写的完整问题，语言跟随对话（可在配置方案中指定回复语言）。', '`questions[].question`；`settings.language`（FR-I18N-05）'],
+      ['选项卡片', '2–4 个带说明的选项。单选为单选卡片，多选为复选框。数字键选择。', '`questions[].options[]`（`label`、`description`）'],
+      ['推荐选项', 'Claude 会在标签里标出推荐项；界面保留原文，不自动预选。', '选项 `label`'],
+      ['其他', '没有合适选项时自由填写，填写内容即该问题的答案。', '`answers[question] = text`'],
+      ['预览', 'Claude 提供预览时（在配置方案中开启），悬停或选中选项即显示。HTML 预览在禁用脚本的沙箱框架中渲染。', '`toolConfig.askUserQuestion.previewFormat`、`options[].preview`（FR-ASK-03）'],
+      ['补充说明', '附在答案上的可选说明，例如「只针对已登录用户」。', '`annotations[question].notes`（FR-ASK-04）'],
+      ['切换与提交', '「下一题」逐题前进，最后一题按钮变为「提交回答」。答案连同原问题一起返回。', '`{ behavior: "allow", updatedInput: { questions, answers } }`'],
+      ['用自己的话回答', '在输入框里输入，可一次性回答所有问题，不必使用表单。', '`updatedInput.response`'],
     ],
   });
 
   // ------------------------------------------------------------------ P08
   window.SCREENS.push({
     id: 'P08',
-    group: 'Live session',
-    title: 'Plan review',
-    summary: 'In plan mode Claude explores without editing, then presents a plan. The plan renders as a document; the action bar lets the user approve it together with the mode to implement in, or send it back with feedback.',
+    group: '运行中的会话',
+    title: '计划审阅',
+    summary: '规划模式下 Claude 只探索不修改，最后给出计划。计划以文档形式展示；操作栏可以在批准的同时选择执行时的权限模式，或附上意见退回。',
     frs: ['FR-PLAN-01..03', 'FR-PERM-01', 'FR-TOOL-10'],
     draw() {
       let s = K.shell({ nav: 'sessions', approvals: 1 });
       s += K.sessionColumn({ active: 2, live: [
-        ['Fix flaky checkout tests', 'running', 'shop-api'],
-        ['Refactor auth middleware', 'running', 'shop-api'],
-        ['Add rate limiting', 'requires_action', 'shop-api', 'Plan ready for review'],
+        ['修复结账测试偶发失败', 'running', 'shop-api'],
+        ['重构鉴权中间件', 'running', 'shop-api'],
+        ['添加限流', 'requires_action', 'shop-api', '计划待审阅'],
       ] });
       s += rect(L.MX, 49, L.MW, 851, { fill: C.page });
-      s += K.sessionHeader(L.MX, 49, L.MW, { state: 'requires_action', title: 'Add rate limiting', mode: 'Plan', modeIcon: 'list', modeBg: '#eef6ff', modeStroke: '#9ec5f4', modeInk: '#184f95', cost: '$0.31', ctx: 24 });
+      s += K.sessionHeader(L.MX, 49, L.MW, { state: 'requires_action', title: '添加限流', mode: '规划模式', modeIcon: 'list', modeBg: '#eef6ff', modeStroke: '#9ec5f4', modeInk: '#184f95', cost: '$0.31', ctx: 24 });
       const X = L.TX;
       const W = L.TW;
-      s += K.userMsg(X, 122, W, 'Use Redis. Plan it first, I want to review before any edits.');
+      s += K.userMsg(X, 122, W, '用 Redis。先出计划，我审过之后再改代码。');
       s += rect(X, 186, W, 30, { r: 6, fill: C.surface, stroke: C.border });
       s += ic('list', X + 10, 193, 16, C.ink2);
-      s += t(X + 34, 205.5, 'Read 9 files · searched 3 patterns · 1 subagent (Explore) · 48 s', { s: 12.5, c: C.ink2 });
+      s += t(X + 34, 205.5, '读取 9 个文件 · 搜索 3 个模式 · 1 个子代理（Explore）· 48 秒', { s: 12.5, c: C.ink2 });
 
       const y = 230;
       s += rect(X, y, W, 482, { r: 10, fill: C.surface, stroke: '#9ec5f4', sw: 1.5 });
       s += rect(X + 1, y + 1, W - 2, 44, { r: 9, fill: '#eef6ff' });
       s += ic('list', X + 16, y + 14, 18, '#184f95');
-      s += t(X + 42, y + 28, 'Plan', { s: 14, w: 700, c: '#184f95' });
+      s += t(X + 42, y + 28, '计划', { s: 14, w: 700, c: '#184f95' });
       s += chip(X + 80, y + 13, 'v2', { h: 18, bg: C.surface });
-      s += t(X + W - 16, y + 28, 'waiting for your approval', { s: 12, c: '#184f95', a: 'end' });
+      s += t(X + W - 16, y + 28, '等待你批准', { s: 12, c: '#184f95', a: 'end' });
       let py = y + 76;
-      s += t(X + 20, py, 'Add rate limiting to POST /orders', { s: 17, w: 700 });
-      s += t(X + 20, py + 26, 'Per-API-key sliding window (100 req/min) backed by the existing Redis, returned as 429 with Retry-After.', { s: 13, c: C.ink2 });
+      s += t(X + 20, py, '为 POST /orders 添加限流', { s: 17, w: 700 });
+      s += t(X + 20, py + 26, '按 API Key 的滑动窗口限流（100 次/分钟），基于现有 Redis，超限返回 429 和 Retry-After。', { s: 13, c: C.ink2 });
       py += 62;
-      s += t(X + 20, py, 'Steps', { s: 14, w: 700 });
+      s += t(X + 20, py, '步骤', { s: 14, w: 700 });
       const steps = [
-        'Add `RateLimiter` in src/middleware/rate-limit.ts using INCR + EXPIRE',
-        'Read limits from config/limits.yaml; default 100/min',
-        'Mount the middleware on POST /orders only',
-        'Add unit tests with a fake Redis and an integration test',
-        'Document the 429 response in docs/api/orders.md',
+        '在 src/middleware/rate-limit.ts 中实现 RateLimiter（INCR + EXPIRE）',
+        '从 config/limits.yaml 读取限额，默认 100 次/分钟',
+        '只在 POST /orders 上挂载该中间件',
+        '用假 Redis 写单元测试，再加一个集成测试',
+        '在 docs/api/orders.md 中说明 429 响应',
       ];
       steps.forEach((st, i) => {
         s += t(X + 24, py + 26 + i * 24, `${i + 1}.`, { s: 13, w: 600, c: C.ink2 });
-        s += t(X + 44, py + 26 + i * 24, st.replace(/`/g, ''), { s: 13 });
+        s += t(X + 44, py + 26 + i * 24, st, { s: 13 });
       });
       py += 160;
-      s += t(X + 20, py, 'Files', { s: 14, w: 700 });
+      s += t(X + 20, py, '文件', { s: 14, w: 700 });
       let fx = X + 20;
-      ['src/middleware/rate-limit.ts  new', 'src/routes/orders.ts', 'config/limits.yaml  new', 'tests/rate-limit.test.ts  new', 'docs/api/orders.md'].forEach((f) => {
+      ['src/middleware/rate-limit.ts  新增', 'src/routes/orders.ts', 'config/limits.yaml  新增', 'tests/rate-limit.test.ts  新增', 'docs/api/orders.md'].forEach((f) => {
         const w = chip.w(f, { m: true, icon: 1 });
         if (fx + w > X + W - 20) fx = X + 20, py += 26;
         s += chip(fx, py + 12, f, { m: true, icon: 'file', h: 20 });
         fx += w + 6;
       });
       py += 64;
-      s += t(X + 20, py, 'Risks', { s: 14, w: 700 });
-      s += t(X + 24, py + 24, '•  Redis outage would block orders — fail open with a warning log.', { s: 13 });
-      s += t(X + 24, py + 46, '•  Shared NAT clients share a key only if they share an API key (acceptable).', { s: 13 });
+      s += t(X + 20, py, '风险', { s: 14, w: 700 });
+      s += t(X + 24, py + 24, '•  Redis 故障会阻塞下单——改为放行并记录告警日志。', { s: 13 });
+      s += t(X + 24, py + 46, '•  共用 NAT 的客户端只有共用同一 API Key 时才共享限额（可接受）。', { s: 13 });
 
-      // action bar
       const ay = 724;
       s += rect(X, ay, W, 160, { r: 10, fill: C.surface, stroke: C.borderStrong, shadow: true });
-      s += t(X + 16, ay + 28, 'Ready to implement?', { s: 14, w: 700 });
-      s += t(X + 170, ay + 28, 'Approving switches the session out of plan mode.', { s: 12, c: C.muted });
-      s += btn(X + 16, ay + 44, 'Approve · accept edits', { v: 'primary', icon: 'check', w: 196 });
-      s += btn(X + 220, ay + 44, 'Approve · ask each step', { w: 190 });
-      s += btn(X + 418, ay + 44, 'Approve · auto mode', { icon: 'spark', w: 170 });
+      s += t(X + 16, ay + 28, '可以开始实现了吗？', { s: 14, w: 700 });
+      s += t(X + 160, ay + 28, '批准后会话将退出规划模式。', { s: 12, c: C.muted });
+      s += btn(X + 16, ay + 44, '批准 · 自动接受编辑', { v: 'primary', icon: 'check', w: 180 });
+      s += btn(X + 204, ay + 44, '批准 · 每步都询问', { w: 156 });
+      s += btn(X + 368, ay + 44, '批准 · 自动模式', { icon: 'spark', w: 150 });
       s += hline(X + 16, ay + 92, W - 32);
-      s += input(X + 16, ay + 108, W - 172, { h: 34, ph: 'Tell Claude what to change in the plan…' });
-      s += btn(X + W - 148, ay + 110, 'Keep planning', { w: 132 });
+      s += input(X + 16, ay + 108, W - 172, { h: 34, ph: '告诉 Claude 计划要怎么改…' });
+      s += btn(X + W - 148, ay + 110, '继续规划', { w: 132 });
 
-      // inspector: plan history
-      s += K.inspector(0, { tabs: ['Plan', 'Tasks', 'Changes', 'Checkpoints', 'Context'] });
+      s += K.inspector(0, { tabs: ['计划', '任务', '变更', '检查点', '上下文'] });
       const IX = L.IX + 16;
-      s += t(IX, 152, 'Plan versions', { s: 13, w: 600 });
+      s += t(IX, 152, '计划版本', { s: 13, w: 600 });
       s += rect(IX, 166, 307, 58, { r: 8, fill: C.accentSoft, stroke: C.accentLine });
-      s += t(IX + 12, 188, 'v2 · current', { s: 13, w: 600, c: C.accent });
-      s += t(IX + 12, 208, 'now · after your answer “Redis”', { s: 11.5, c: C.ink2 });
+      s += t(IX + 12, 188, 'v2 · 当前', { s: 13, w: 600, c: C.accent });
+      s += t(IX + 12, 208, '刚刚 · 根据你的回答「Redis」', { s: 11.5, c: C.ink2 });
       s += rect(IX, 232, 307, 58, { r: 8, fill: C.surface, stroke: C.border });
       s += t(IX + 12, 254, 'v1', { s: 13, w: 600 });
-      s += t(IX + 12, 274, '6 min ago · in-memory store', { s: 11.5, c: C.ink2 });
-      s += t(IX, 316, 'Compare v1 ↔ v2', { s: 12.5, c: C.accent });
+      s += t(IX + 12, 274, '6 分钟前 · 内存存储方案', { s: 11.5, c: C.ink2 });
+      s += t(IX, 316, '对比 v1 ↔ v2', { s: 12.5, c: C.accent });
       s += hline(L.IX, 336, L.IW);
-      s += t(IX, 362, 'Plan mode', { s: 13, w: 600 });
-      s += kv(IX, 388, 'Instructions', 'Profile: “Team planning”', { kw: 96 });
-      s += kv(IX, 410, 'Read-only', 'edits always ask', { kw: 96 });
-      s += kv(IX, 432, 'After approval', 'Accept edits', { kw: 96 });
+      s += t(IX, 362, '规划模式', { s: 13, w: 600 });
+      s += kv(IX, 388, '工作流说明', '配置方案：团队规划', { kw: 96 });
+      s += kv(IX, 410, '只读', '编辑总是需要询问', { kw: 96 });
+      s += kv(IX, 432, '批准后', '自动接受编辑', { kw: 96 });
 
-      s += mk(704, 64, 1) + mk(L.TX - 13, y + 22, 2) + mk(L.TX - 13, y + 140, 3) + mk(X + 18, ay + 46, 4) + mk(X + 222, ay + 46, 5);
-      s += mk(X + 420, ay + 46, 6) + mk(L.TX - 13, ay + 124, 7) + mk(L.IX + 120, 147, 8);
+      s += mk(704, 64, 1) + mk(L.TX - 13, y + 22, 2) + mk(L.TX - 13, y + 140, 3) + mk(X + 18, ay + 46, 4) + mk(X + 206, ay + 46, 5);
+      s += mk(X + 370, ay + 46, 6) + mk(L.TX - 13, ay + 124, 7) + mk(L.IX + 90, 147, 8);
       return s;
     },
     notes: [
-      ['Plan mode in the header', 'The mode menu shows Plan with its own colour. Switching to Plan mid-session is allowed at any time; Claude then stops editing and ends with a plan.', '`setPermissionMode("plan")`, `EnterPlanMode`'],
-      ['Plan card', 'Claude\'s plan from the ExitPlanMode call, rendered as Markdown. The header shows the version and that approval is pending.', '`ExitPlanMode` via `canUseTool` (FR-TOOL-10)'],
-      ['Plan content', 'Rendered Markdown with file chips linking to the files. Long plans scroll inside the card; the action bar stays visible.', 'Plan text'],
-      ['Approve · accept edits', 'Approves and switches the session to Accept edits so Claude implements without asking for each file edit.', '`allow` + `setPermissionMode("acceptEdits")` (FR-PLAN-01)'],
-      ['Approve · ask each step', 'Approves and returns to the default mode; edits and commands still ask.', '`allow` + `setPermissionMode("default")`'],
-      ['Approve · auto mode', 'Approves and lets the classifier review each action. Shown only when the model supports auto mode.', '`allow` + `setPermissionMode("auto")`; `ModelInfo.supportsAutoMode`'],
-      ['Keep planning', 'Sends the feedback; Claude stays in plan mode and returns a new version.', '`{ behavior: "deny", message: feedback }`'],
-      ['Plan versions', 'Every plan version in this session, with a diff between versions, and the plan-mode settings: custom instructions from the profile and the mode used after approval.', 'Transcript; `planModeInstructions` (FR-PLAN-02/03)'],
+      ['标题栏中的规划模式', '权限模式菜单以独立颜色显示「规划模式」。会话中随时可以切到规划模式，此后 Claude 不再修改文件，最后给出计划。', '`setPermissionMode("plan")`、`EnterPlanMode`'],
+      ['计划卡片', 'Claude 通过 ExitPlanMode 提交的计划，以 Markdown 渲染。卡头显示版本和「等待批准」。', '经 `canUseTool` 的 `ExitPlanMode`（FR-TOOL-10）'],
+      ['计划内容', 'Markdown 渲染，文件标签可点击打开对应文件。计划较长时在卡片内滚动，操作栏始终可见。', '计划文本'],
+      ['批准 · 自动接受编辑', '批准并把会话切到「自动接受编辑」，Claude 实施时不再逐个文件询问。', '`allow` + `setPermissionMode("acceptEdits")`（FR-PLAN-01）'],
+      ['批准 · 每步都询问', '批准并回到默认模式，编辑和命令仍需审批。', '`allow` + `setPermissionMode("default")`'],
+      ['批准 · 自动模式', '批准并由分类模型审查每个操作。仅在模型支持自动模式时显示。', '`allow` + `setPermissionMode("auto")`；`ModelInfo.supportsAutoMode`'],
+      ['继续规划', '发送意见；Claude 留在规划模式并给出新版本。', '`{ behavior: "deny", message: 意见 }`'],
+      ['计划版本', '本会话的所有计划版本，可对比版本差异；以及规划模式设置：配置方案中的自定义工作流说明、批准后使用的模式。', '对话记录；`planModeInstructions`（FR-PLAN-02/03）'],
     ],
   });
 })();

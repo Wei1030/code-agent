@@ -25,15 +25,15 @@
         <h2>${esc(s.title)}</h2>
         <span class="group">${esc(s.group)}</span>
         <div class="tools">
-          <button data-act="open">Open SVG</button>
-          <button data-act="download">Download SVG</button>
+          <button data-act="open">打开 SVG</button>
+          <button data-act="download">下载 SVG</button>
         </div>
       </div>
       <p class="summary">${rich(s.summary)}</p>
-      <p class="frs">Requirements: ${s.frs.map((f) => `<code>${esc(f)}</code>`).join(' ')}</p>
+      <p class="frs">对应需求：${s.frs.map((f) => `<code>${esc(f)}</code>`).join(' ')}</p>
       <figure class="canvas">${svgMarkup}</figure>
       <table class="notes">
-        <thead><tr><th>#</th><th>Element</th><th>Interaction</th><th>Behaviour · SDK</th></tr></thead>
+        <thead><tr><th>#</th><th>元素</th><th>交互方式</th><th>行为 · SDK</th></tr></thead>
         <tbody>${s.notes
           .map(([el, how, sdk], i) => `<tr data-n="${i + 1}"><td><span class="num">${i + 1}</span></td><td class="el">${rich(el)}</td><td>${rich(how)}</td><td class="sdk">${rich(sdk)}</td></tr>`)
           .join('')}</tbody>
@@ -81,7 +81,8 @@
     sec.querySelector('[data-act="download"]').addEventListener('click', () => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob());
-      a.download = `${s.id}-${s.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.svg`;
+      // Keep CJK titles; only strip characters file systems reject.
+      a.download = `${s.id}-${s.title.replace(/[\\/:*?"<>|\s—]+/g, '-')}.svg`;
       a.click();
     });
   }
