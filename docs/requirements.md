@@ -2,8 +2,9 @@
 
 | Item | Value |
 | --- | --- |
-| Document | Product requirements, v0.1 (draft) |
-| Date | 2026-10-27 |
+| Document | Product requirements, v0.2 (draft) |
+| Date | 2026-10-28 |
+| Languages | English (this file) · Simplified Chinese: [`requirements.zh-CN.md`](requirements.zh-CN.md) — keep both in sync |
 | Scope | Phase 1: a local, single-user web workbench over the Claude Agent SDK (TypeScript) |
 | Stack | Node.js backend + browser frontend |
 | SDK baseline | `@anthropic-ai/claude-agent-sdk` 0.3.x (docs read at the 0.3.301 / Claude Code 2.1.302 level) |
@@ -44,9 +45,9 @@ machine, drives the SDK from a Node.js server and presents everything in a brows
 ### 1.2 Non-goals (phase 1)
 
 - Multi-user / multi-tenant hosting, accounts, or remote SaaS deployment.
-- A claude.ai login flow. The SDK overview states that third-party products may not offer
-  claude.ai login or rate limits; Code Agent authenticates with an API key or a cloud provider
-  (see FR-AUTH).
+- Providing a claude.ai sign-in flow, or reading, storing or relaying claude.ai credentials.
+  Code Agent can still run sessions on a subscription the user signed in to themselves in the
+  official Claude Code (FR-AUTH-04, §1.4).
 - The Python SDK, mobile clients, IDE plugins.
 - Re-implementing CLI-only features that the SDK does not expose (agent teams, Remote Control,
   the terminal UI).
@@ -56,6 +57,29 @@ machine, drives the SDK from a Node.js server and presents everything in a brows
 Per the SDK branding guidelines, the product must keep its own name. It must **not** be called
 "Claude Code" or "Claude Code Agent" and must not reuse Claude Code ASCII art or visual identity.
 Allowed: "Code Agent", "Code Agent — Powered by Claude", or "Claude Agent" in a model/agent menu.
+
+### 1.4 Authentication constraints
+
+From the Claude Code legal and compliance page (section "Authentication and credential use") and
+the Agent SDK overview, as of 2026-10-28:
+
+- Products built on the Agent SDK should authenticate with API keys (Claude Console) or a
+  supported cloud provider. Third-party developers may not offer claude.ai login in their
+  applications, route requests through Free / Pro / Max credentials on behalf of their users, or
+  collect, store or intermediate claude.ai credentials or session tokens; sign-in must complete
+  through Anthropic's own flow.
+- These terms do not prevent an end user from signing in to the **unmodified** Claude Code binary
+  with their own Claude subscription. Advertised Pro and Max usage limits assume ordinary,
+  individual use of Claude Code and the Agent SDK.
+- Products that run Claude Code must not modify the binary or remove its authentication methods,
+  and must not pay for, resell or intermediate Claude usage: each end user authenticates with
+  their own credentials.
+
+Code Agent therefore supports two kinds of credentials: (1) API keys and cloud providers, stored
+by Code Agent on the local server; (2) the user's own Claude subscription, used only through the
+official, unmodified Claude Code binary, where Code Agent never sees the credentials (FR-AUTH-04).
+Option (2) targets personal use on the user's own machine. Distributing Code Agent to other
+people with option (2) should be confirmed with Anthropic first (open decision D7).
 
 ---
 
@@ -76,6 +100,7 @@ supported), comfortable with Claude Code concepts.
 | SC8 | Watch spend and context, compact or clear when needed | Cost tracking, context usage, /compact, /clear |
 | SC9 | Pick up yesterday's session, or find a past one by tag | Session list, resume, rename, tag |
 | SC10 | Debug odd agent behaviour | Raw event inspector, hook events, stderr, OpenTelemetry |
+| SC11 | Work in a Chinese UI, with Claude replying in Chinese and the input method working normally | Internationalization, response language, IME handling |
 
 ---
 
@@ -95,6 +120,7 @@ supported), comfortable with Claude Code concepts.
 | Profile | A Code Agent concept: a named, saved set of SDK `Options` used to start sessions |
 | Hook rule | A Code Agent concept: a UI-defined hook compiled into an SDK `HookCallback` |
 | Setting sources | Which filesystem settings the SDK loads: `user`, `project`, `local` |
+| Response language | The language Claude replies and titles sessions in (the `language` setting) |
 
 ---
 
@@ -133,10 +159,11 @@ code-agent/
 ├── README.md
 ├── docs/
 │   ├── requirements.md          # this document
+│   ├── requirements.zh-CN.md    # Simplified Chinese version
 │   └── prototype/               # SVG interaction prototype (static web page)
 ├── apps/
 │   ├── server/                  # Node.js: REST + WebSocket API, SessionManager, SDK adapter
-│   └── web/                     # Browser SPA
+│   └── web/                     # Browser SPA (incl. locales/ message catalogs)
 ├── packages/
 │   └── protocol/                # Shared TypeScript types for the REST/WS protocol
 └── (tooling: package.json, pnpm-workspace.yaml, tsconfig.base.json, …)
@@ -152,6 +179,7 @@ Only `docs/` exists in this round; `apps/` and `packages/` are created with the 
 | Server | Fastify + `@fastify/websocket` | Small, typed, fast; WS for the event stream |
 | SDK | `@anthropic-ai/claude-agent-sdk` (root entry) | Root entry includes `prewarm()`, session helpers |
 | Web | React + Vite + TypeScript, Zustand for state | Common, fast dev loop |
+| i18n | ICU MessageFormat library (e.g. FormatJS / i18next) + `Intl` | Plurals, variables, date and number formatting |
 | Editors | Monaco (JSON schema, SKILL.md, CLAUDE.md, settings JSON) | Schema validation, markdown |
 | Rendering | Markdown + syntax highlighting, side-by-side / unified diff | Tool results and edits |
 | App storage | SQLite (`better-sqlite3`) in the app data dir | Cost ledger, registries, profiles |
@@ -464,9 +492,10 @@ the call run (auto-approved by rule X / approved by user / mode).
 
 | ID | Requirement | SDK surface | Pri |
 | --- | --- | --- | --- |
-| FR-AUTH-01 | Provider setup: Anthropic API key, Amazon Bedrock, Google Cloud Agent Platform (Vertex), Microsoft Foundry, or an LLM gateway base URL. Secrets are stored server-side only and injected as env vars. | env `ANTHROPIC_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_BASE_URL` | P0 |
+| FR-AUTH-01 | Provider setup per profile: Claude subscription via the user's Claude Code login (FR-AUTH-04), Anthropic API key, Amazon Bedrock, Google Cloud Agent Platform (Vertex), Microsoft Foundry, or an LLM gateway base URL. API keys and cloud secrets are stored server-side only and injected as env vars. | env `ANTHROPIC_API_KEY`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_BASE_URL` | P0 |
 | FR-AUTH-02 | Account card: email / organization / subscription / token and key source; auth status messages. | `accountInfo()` → `AccountInfo`, init `apiKeySource`, `SDKAuthStatusMessage` | P0 |
 | FR-AUTH-03 | Connection test on save (start a minimal session, report the result or startup failure reason). | `startup()`, `startup_failure_reason` | P1 |
+| FR-AUTH-04 | **Use the user's own Claude Code login (Claude subscription).** The user signs in themselves by running the official `claude` CLI and `/login` in their own terminal. Code Agent starts sessions with the unmodified Claude Code binary — the SDK's bundled binary by default, or the user's installed `claude` — and a Claude config directory chosen per profile: default `~/.claude`, the server's `CLAUDE_CONFIG_DIR`, or a custom directory (e.g. separate work and personal accounts). Claude Code reads its own credentials. Rules: Code Agent never offers a sign-in UI, never proxies OAuth, and never reads, copies, stores, transmits or displays credential files or tokens (`.credentials.json`, `CLAUDE_CODE_OAUTH_TOKEN`); for these sessions it removes `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` from the child environment (they outrank the subscription login) and says so in the UI; it shows which credential is active and the plan; when Claude Code is not signed in, it shows instructions (`claude` → `/login`) and a "check again" action; session history is read from the same config directory. Personal, single-user use; see §1.4. | `env.CLAUDE_CONFIG_DIR`, `pathToClaudeCodeExecutable`, `accountInfo()`, `auth_status`, assistant error `authentication_failed` | P0 |
 
 ### 5.27 Notifications (FR-NTF)
 
@@ -484,6 +513,21 @@ the call run (auto-approved by rule X / approved by user / mode).
 | FR-MISC-03 | Watch files and react (reload config) via hooks. | `FileChanged`, `ConfigChange` hooks, `watchPaths` | P2 |
 | FR-MISC-04 | Handle `worker_shutting_down` by showing the reason and offering to resume. | `SDKWorkerShuttingDownMessage` | P1 |
 
+### 5.29 Internationalization and localization (FR-I18N)
+
+| ID | Requirement | SDK surface | Pri |
+| --- | --- | --- | --- |
+| FR-I18N-01 | UI languages at launch: Simplified Chinese (`zh-CN`) and English (`en`). Adding a locale needs only a resource file, no code change. | — | P0 |
+| FR-I18N-02 | Language selection: default follows the browser (`navigator.languages`), falling back to English; switch from the top bar or Settings → Language & region; applies immediately without reload; saved server-side in the user's preferences. | — | P0 |
+| FR-I18N-03 | Resources: every UI string is a key in a message catalog (ICU MessageFormat for plurals and variables); missing translations fall back to English; CI fails on missing or unused keys; translation coverage shown in settings. | — | P0 |
+| FR-I18N-04 | Locale formatting via `Intl`: dates and times, relative times, numbers and token counts, durations, time zone (system). Money is always shown in USD (the SDK estimates in USD), formatted for the locale, never currency-converted. | `total_cost_usd`, timestamps | P0 |
+| FR-I18N-05 | Claude's response language per profile and per session: follow the UI language (default), leave it to the conversation, or a named language. Implemented with the `language` setting, which also sets the language of auto-generated session titles; fixed at session start. | `Options.settings.language` | P1 |
+| FR-I18N-06 | Content from the SDK and third parties: SDK codes (result subtypes, `SDKAssistantMessageError`, `startup_failure_reason`, permission modes, MCP status, structured decision reasons) map to localized messages, with the original code / text available under "details" (optionally expanded by default). Descriptions written by skill, plugin, MCP or agent authors, tool names, command output and file content are shown as-is, never machine-translated. Claude-generated content follows FR-I18N-05. | All message types | P0 |
+| FR-I18N-07 | Input method editors: Enter never sends or submits while an IME composition is active (`isComposing` / keyCode 229) — composer, approval feedback, question "Other", search and every other Enter-to-submit field. Not configurable. | — | P0 |
+| FR-I18N-08 | CJK text and paths: font stacks with CJK fallbacks; truncation by measured width; search over sessions, events and commands works without word boundaries; non-ASCII paths and file names (e.g. Chinese folder names on Windows) work end to end in UTF-8; CSV exports include a BOM for spreadsheet apps. | `cwd`, file tools | P0 |
+| FR-I18N-09 | Keyboard shortcuts avoid common IME toggles (Ctrl/Shift + Space) and their labels are localized. | — | P1 |
+| FR-I18N-10 | Documentation in both languages: requirements and user docs exist in Simplified Chinese and English and are updated together; code, identifiers and commit messages stay in English. | — | P1 |
+
 ---
 
 ## 6. Non-functional requirements
@@ -493,11 +537,11 @@ the call run (auto-approved by rule X / approved by user / mode).
 | NFR-01 | Latency | Browser renders a stream delta within 50 ms of the server receiving it. First-token time is shown per turn. Warm start (FR-SES-04) targets < 1 s to first request. |
 | NFR-02 | Reliability | A browser disconnect never stops a live session. The server keeps the last N (default 5 000) events per session for replay. Approval callbacks stay pending until answered, the session is stopped, or a configurable timeout denies them. |
 | NFR-03 | Resource limits | Configurable maximum of live sessions (default 6; each process uses roughly 250 MB); idle live sessions can be suspended (closed) after a timeout and resumed on demand. |
-| NFR-04 | Security | Server binds to `127.0.0.1` by default; a random access token is required for every request (shown on first start). API keys never reach the browser. HTML from previews and MCP apps renders in sandboxed iframes with a strict CSP. Destructive actions (delete session, bypass mode, rewind) require confirmation. |
+| NFR-04 | Security | Server binds to `127.0.0.1` by default; a random access token is required for every request (shown on first start). API keys never reach the browser; Claude subscription credentials are never read at all. HTML from previews and MCP apps renders in sandboxed iframes with a strict CSP. Destructive actions (delete session, bypass mode, rewind) require confirmation. |
 | NFR-05 | Compatibility | Windows 10+ (primary), macOS, Linux; Node.js 22 LTS; evergreen Chromium / Firefox / Safari. Windows paths and PowerShell tool supported. |
 | NFR-06 | Version awareness | Read `claude_code_version` and `capabilities` from session init; hide or disable features the running Claude Code version does not support. |
 | NFR-07 | Accessibility | Full keyboard operation (see prototype "Global interactions"), visible focus, ARIA live region for streaming text, colour is never the only signal. |
-| NFR-08 | Internationalization | UI strings externalized; English and Simplified Chinese. |
+| NFR-08 | Internationalization | See FR-I18N: Simplified Chinese and English at launch, more locales by adding resource files. |
 | NFR-09 | Branding | Complies with §1.3. |
 | NFR-10 | Data | App data in one directory, human-readable exports; no telemetry leaves the machine unless the user configures OpenTelemetry. |
 
@@ -507,7 +551,7 @@ the call run (auto-approved by rule X / approved by user / mode).
 
 ```
 App shell
-├── Top bar: product name · workspace switcher · approvals inbox · warm pool · account
+├── Top bar: product name · workspace switcher · approvals inbox · warm pool · language switch · account
 ├── Nav rail
 │   ├── Sessions        → Home (workspaces) · Session history · Live session tabs
 │   ├── Agents          → Subagent library and editor
@@ -516,7 +560,7 @@ App shell
 │   ├── Hooks           → Hook rules and activity
 │   ├── Jobs            → Structured output job templates and runs
 │   ├── Usage           → Cost and usage dashboard
-│   └── Settings        → Profiles, provider/auth, permissions rules, sandbox, env, prompt & memory, advanced
+│   └── Settings        → Profiles, provider/auth, permissions rules, sandbox, env, prompt & memory, language & region, advanced
 └── Live session view
     ├── Header: title · state · model · effort · permission mode · context meter · cost · stop
     ├── Transcript: messages, thinking, tool cards, subagent cards, banners
@@ -533,8 +577,8 @@ Screen-by-screen layouts and interaction details are in the prototype (§11).
 | Entity | Key fields |
 | --- | --- |
 | `Workspace` | id, path, display name, pinned, last opened, default profile |
-| `Profile` | id, name, description, `options` (serializable subset of SDK `Options`), env (secret refs), created / updated |
-| `Secret` | id, provider kind, encrypted value (OS keychain when available) |
+| `Profile` | id, name, description, auth mode (subscription / API key / cloud provider / gateway), Claude config directory, Claude Code executable, response language, `options` (serializable subset of SDK `Options`), env (secret refs), created / updated |
+| `Secret` | id, provider kind, encrypted value (OS keychain when available); never holds Claude subscription credentials |
 | `McpServerEntry` | id, name, type (stdio / http / sse / sdk / webhook-tools), config, enabled by default |
 | `AgentEntry` | id, name, `AgentDefinition`, source (app) |
 | `HookRule` | id, event, matcher, timeout, action type, action config, enabled, scope (global / profile) |
@@ -543,7 +587,7 @@ Screen-by-screen layouts and interaction details are in the prototype (§11).
 | `CostEntry` | session id, workspace, profile, result subtype, `total_cost_usd`, `modelUsage`, timestamps |
 | `SessionMeta` | session id, workspace, profile used, fork parent, pinned (SDK keeps title and tag) |
 | `CheckpointRef` | session id, user message uuid, label, files changed (cached) |
-| `UiPrefs` | theme, language, notification opt-ins, layout sizes |
+| `UiPrefs` | theme, UI language (or "follow browser"), number style, show-raw-SDK-text default, notification opt-ins, layout sizes |
 
 ---
 
@@ -564,6 +608,9 @@ Screen-by-screen layouts and interaction details are in the prototype (§11).
 | `PATCH /api/sessions/:id` | Rename / tag |
 | `DELETE /api/sessions/:id` | `deleteSession()` |
 | `GET/PUT /api/profiles…`, `/api/mcp…`, `/api/agents…`, `/api/hooks…`, `/api/jobs…`, `/api/secrets…` | Registries |
+| `GET /api/auth/status?profile=` | Active credential kind, plan and sign-in state (from `accountInfo()`, never credentials) |
+| `GET/PUT /api/prefs` | User preferences incl. UI language |
+| `GET /api/i18n/:locale` | Message catalog |
 | `GET /api/usage?from=&to=&groupBy=` | Cost ledger |
 
 ### 9.2 WebSocket messages
@@ -589,14 +636,16 @@ replay) · `approval.request {requestId, toolName, input, options}` ·
 `approval.resolved {requestId, by}` · `session.state {state}` · `session.closed {reason}` ·
 `control.result {requestRef, result | error}` · `replay.begin/end {fromSeq}`
 
+Errors cross the protocol as code + original text; the browser localizes them (FR-I18N-06).
+
 ---
 
 ## 10. Milestones
 
 | Milestone | Content |
 | --- | --- |
-| **M0** (this round) | Requirements, interaction prototype, repository skeleton docs |
-| **M1 — core** | Server + web skeleton; provider setup; profiles (basic); start / resume / list / rename / tag sessions; streaming transcript with thinking and tool cards; composer with images, slash palette, queue and interrupt; approvals; AskUserQuestion; plan review; permission mode and model switch; cost and context meter; tasks panel; background tasks; checkpoint rewind; notifications; reconnect |
+| **M0** (this round) | Requirements (English and Chinese), interaction prototype, repository skeleton docs |
+| **M1 — core** | Server + web skeleton; i18n framework with zh-CN and en, IME-safe inputs; provider setup incl. the user's own Claude Code login; profiles (basic); start / resume / list / rename / tag sessions; streaming transcript with thinking and tool cards; composer with images, slash palette, queue and interrupt; approvals; AskUserQuestion; plan review; permission mode and model switch; cost and context meter; tasks panel; background tasks; checkpoint rewind; notifications; reconnect |
 | **M2 — configuration** | MCP registry and live control; agents library; skills and plugins; hooks editor; system prompt / setting sources / CLAUDE.md editor; sandbox; env; fork and branch-from-here; changes panel; context inspector; cost ledger dashboard; jobs; event inspector |
 | **M3 — advanced** | Warm pool; session store mirror; webhook tools and tool policies; MCP apps widgets and elicitation URL mode; output styles; fast mode / ultracode / task budget; OpenTelemetry; custom spawner; worktree and schedule panels |
 
@@ -604,7 +653,8 @@ replay) · `approval.request {requestId, toolName, input, options}` ·
 
 ## 11. Interaction prototype
 
-The prototype is a static web page (`docs/prototype/index.html`, open directly in a browser). Every
+The prototype is a static web page (`docs/prototype/index.html`, open directly in a browser); its
+UI text is Simplified Chinese. Every
 screen's UI and layout is drawn as SVG; numbered markers on each screen link to a table describing
 the interaction, the resulting behaviour and the SDK call involved. Each screen lists the
 requirement IDs it covers.
@@ -620,9 +670,10 @@ requirement IDs it covers.
 | P07 | Clarifying questions | P19 | Usage and cost |
 | P08 | Plan review | P20 | Settings — profiles |
 | P09 | Subagents and background work | P21 | Settings — permission rules and sandbox |
-| P10 | Checkpoints and rewind | P22 | Settings — provider, account, environment |
+| P10 | Checkpoints and rewind | P22 | Settings — provider (incl. Claude subscription), account, environment |
 | P11 | Context and cost | P23 | Event inspector |
 | P12 | Session history — resume, fork, manage | P24 | Session states and messages |
+| | | P25 | Settings — language and region |
 
 ---
 
@@ -633,9 +684,10 @@ requirement IDs it covers.
 | D1 | Product name | Keep "Code Agent" (repository name); allowed by the branding rules |
 | D2 | Frontend framework | React + Vite + TypeScript |
 | D3 | App storage | SQLite (`better-sqlite3`) in `~/.code-agent/` |
-| D4 | Authentication method for the user's own use | Anthropic API key first; Bedrock / Vertex / Foundry / gateway via env |
+| D4 | Default authentication | The user's own Claude Code login (FR-AUTH-04) when one is detected, otherwise an API key; cloud providers and gateways per profile |
 | D5 | Remote access (open the UI from another device) | Not in phase 1; localhost only, token-protected |
-| D6 | UI language default | English UI with a Simplified Chinese locale |
+| D6 | Default UI language | Follow the browser language (zh-CN or en), falling back to English |
+| D7 | Distributing Code Agent to other people | Not planned. If it happens, confirm with Anthropic whether subscription-login mode (FR-AUTH-04) may be offered, or ship API-key / cloud-provider modes only |
 
 ---
 
@@ -669,7 +721,7 @@ Every public surface of the TypeScript Agent SDK and where this document covers 
 | `additionalDirectories` | FR-WS-02 | `model` | FR-MOD-01 |
 | `agent` | FR-AGT-03 | `onElicitation` | FR-MCP-06 |
 | `agents` | FR-AGT-01/02 | `outputFormat` | FR-JOB-01 |
-| `agentProgressSummaries` | FR-AGT-04 | `pathToClaudeCodeExecutable` | FR-CFG-06 |
+| `agentProgressSummaries` | FR-AGT-04 | `pathToClaudeCodeExecutable` | FR-CFG-06, FR-AUTH-04 |
 | `allowDangerouslySkipPermissions` | FR-PERM-02 | `permissionMode` | FR-PERM-01 |
 | `allowedTools` | FR-PERM-08 | `permissionPromptToolName` | FR-PERM-13 |
 | `betas` | FR-MOD-08 | `permissionPrompts` | FR-PERM-10 |
@@ -680,10 +732,10 @@ Every public surface of the TypeScript Agent SDK and where this document covers 
 | `disallowedTools` | FR-PERM-08 | `promptSuggestions` | FR-IN-10 |
 | `effort` | FR-MOD-03 | `resume` | FR-SES-07 |
 | `enableFileCheckpointing` | FR-CKPT-01 | `resumeSessionAt`, `resumeDropsTurn` | FR-SES-11 |
-| `env` | FR-CFG-04, FR-AUTH-01 | `sandbox` | FR-CFG-05 |
+| `env` | FR-CFG-04, FR-AUTH-01/04 | `sandbox` | FR-CFG-05 |
 | `executable`, `executableArgs`, `extraArgs` | FR-CFG-06, FR-CKPT-01 | `sessionId` | FR-SES-02 |
 | `fallbackModel` | FR-MOD-02 | `sessionStore`, `sessionStoreFlush`, `loadTimeoutMs` | FR-SES-16 |
-| `forkSession` | FR-SES-10 | `settings` | FR-CFG-03 |
+| `forkSession` | FR-SES-10 | `settings` | FR-CFG-03, FR-I18N-05 |
 | `forwardSubagentText` | FR-AGT-04 | `settingSources` | FR-PROMPT-02 |
 | `hooks` | FR-HOOK-01..03 | `skills` | FR-SKILL-02 |
 | `includeHookEvents` | FR-HOOK-04 | `spawnClaudeCodeProcess` | FR-CFG-08 |
@@ -705,7 +757,7 @@ Every public surface of the TypeScript Agent SDK and where this document covers 
 | `rewindFiles()` | FR-CKPT-03 | `reloadSkills()` | FR-SKILL-03 |
 | `setPermissionMode()` | FR-PERM-01, FR-PLAN-01 | `reloadOutputStyles()` | FR-PROMPT-04 |
 | `setModel()` | FR-MOD-01 | `seedReadState()` | FR-FILE-03 |
-| `setMaxThinkingTokens()` (deprecated) | Superseded by FR-MOD-04 | `accountInfo()` | FR-AUTH-02 |
+| `setMaxThinkingTokens()` (deprecated) | Superseded by FR-MOD-04 | `accountInfo()` | FR-AUTH-02/04 |
 | `applyFlagSettings()` | FR-CFG-03, FR-MOD-03/05/06, FR-AGT-03, FR-HOOK-06 | `reconnectMcpServer()` | FR-MCP-03 |
 | `updateSettings()` | FR-MOD-03, FR-PROMPT-04 | `toggleMcpServer()` | FR-MCP-03 |
 | `initializationResult()` | FR-SES-17 | `setMcpServers()` | FR-MCP-03, FR-CTOOL-03 |
