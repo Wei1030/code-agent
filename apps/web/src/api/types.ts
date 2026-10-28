@@ -739,7 +739,9 @@ export interface BoardItem {
 export interface BoardSettings {
   /** After each turn, a cheap model records decisions, confirmed issues and finished work. */
   recorder: boolean;
+  /** Model and effort for the recorder and for import runs. */
   recorderModel: string;
+  recorderEffort: Effort;
   /** Give new sessions the titles and ids of the features in progress. */
   startContext: boolean;
 }

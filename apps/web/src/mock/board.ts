@@ -9,7 +9,7 @@ import type { BoardItem, BoardKind, BoardSource } from '../api/types';
 import { useApp } from '../store/app';
 import { uid } from '../lib/util';
 import { addItem, finishTool, newTool, patch, raw, rt, sleep, streamText, type Run } from './engine';
-import { MODELS } from './data';
+import { EFFORT_LABEL, MODELS } from './data';
 import { CLOSED, FIRST_STATUS, KIND_ICON, PREFIX, STATUS_LABEL } from '../lib/board';
 import { footer } from './scenarios';
 
@@ -116,7 +116,7 @@ export type TurnFacts =
 export function recordTurn(sid: string, facts: TurnFacts) {
   const settings = useApp.getState().boardSettings;
   if (!settings.recorder) return;
-  const model = MODELS.find((m) => m.id === settings.recorderModel)?.label ?? settings.recorderModel;
+  const model = `${MODELS.find((m) => m.id === settings.recorderModel)?.label ?? settings.recorderModel} · 思考${EFFORT_LABEL[settings.recorderEffort]}`;
   setTimeout(() => {
     if (!rt(sid)) return;
     const wsId = wsOf(sid);

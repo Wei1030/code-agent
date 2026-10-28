@@ -134,7 +134,7 @@ export const useApp = create<AppState>((set, get) => ({
   peer: { inbound: 'parity', maxHops: 6 },
   maxRunning: 4,
   board: BOARD_ITEMS,
-  boardSettings: { recorder: true, recorderModel: 'haiku', startContext: true },
+  boardSettings: { recorder: true, recorderModel: 'haiku', recorderEffort: 'low', startContext: true },
   reviews: [],
   reviewChecks: { 'ws-shop-api': ['npm run typecheck', 'npm test'] },
   reviewProfile: { model: 'opus', effort: 'high', tools: [], claudeMd: true, extraPrompt: '' },

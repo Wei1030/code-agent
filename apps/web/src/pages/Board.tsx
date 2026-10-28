@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { BoardItem, BoardKind, BoardStatus } from '../api/types';
+import type { BoardItem, BoardKind, BoardStatus, Effort } from '../api/types';
 import type { ImportRow } from '../mock/board';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
@@ -12,7 +12,7 @@ import { Button, Check, Chip, Field, Modal, Seg, Select, Tabs, Toggle } from '..
 import { linkify } from '../components/BoardLink';
 import { SessionLink } from '../session/Transcript';
 import { useApp } from '../store/app';
-import { MODELS } from '../mock/data';
+import { EFFORT_LABEL, MODELS } from '../mock/data';
 import { CLOSED, KIND_ICON, KIND_LABEL, STATUSES, STATUS_LABEL, STATUS_TONE } from '../lib/board';
 import { relTime } from '../lib/format';
 import { cx, download, uid } from '../lib/util';
@@ -75,7 +75,7 @@ export function Board() {
           <span className="grow" />
           <Button icon="download" onClick={() => download(`board-${app.workspaces.find((w) => w.id === wsId)?.name ?? wsId}.md`, api.boardMarkdown(wsId), 'text/markdown;charset=utf-8')}>{t('导出')}</Button>
           <Button icon="upload" onClick={() => setDialog('import')}>{t('导入')}</Button>
-          <Button icon="gear" variant="ghost" title={t('看板设置')} onClick={() => setDialog('settings')} />
+          <Button icon="gear" title={t('自动记录、识别用的模型和思考强度')} onClick={() => setDialog('settings')}>{t('设置')}</Button>
           <Button variant="primary" icon="plus" onClick={() => setDialog('new')}>{t('新建')}</Button>
         </div>
         {view !== 'unconfirmed' && (
@@ -278,7 +278,7 @@ type Source = 'github' | 'jira' | 'paste' | 'file';
 function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => void; onDone: (firstCreated?: string) => void }) {
   const t = useT();
   const app = useApp();
-  const recorder = MODELS.find((m) => m.id === app.boardSettings.recorderModel)?.label ?? '';
+  const recorder = `${MODELS.find((m) => m.id === app.boardSettings.recorderModel)?.label ?? ''} · ${t('思考')}${t(EFFORT_LABEL[app.boardSettings.recorderEffort])}`;
   const jiraOk = app.mcp.some((m) => m.name === 'jira' && m.status === 'connected');
   const [source, setSource] = useState<Source>('github');
   const [repo, setRepo] = useState('acme/shop-api');
@@ -395,13 +395,23 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title={t('看板设置')} width={560} onClose={onClose} footer={<Button variant="primary" onClick={onClose}>{t('完成')}</Button>}>
       <div className="col" style={{ gap: 14 }}>
-        <Toggle on={s.recorder} onChange={(v) => set({ recorder: v })} label={t('每轮对话结束后自动记录')}
-          hint={t('只记你拍板的决定、确认过的问题和完成的工作，讨论中的想法不记；优先更新已有条目。直接写进看板并标为「待确认」，对话里可以一键撤销。')} />
-        <Field label={t('自动记录用的模型')} hint={t('在后台运行，不拖慢会话。选便宜的模型就够了。')}>
-          <Select value={s.recorderModel} disabled={!s.recorder} className="w-240" onChange={(v) => set({ recorderModel: v })} options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
+        <div>
+          <Toggle on={s.recorder} onChange={(v) => set({ recorder: v })} label={t('每轮对话结束后自动记录')} />
+          <div className="hint" style={{ marginTop: 4, lineHeight: 1.6 }}>{t('只记你拍板的决定、确认过的问题和完成的工作，讨论中的想法不记；优先更新已有条目。直接写进看板并标为「待确认」，对话里可以一键撤销。')}</div>
+        </div>
+        <Field label={t('后台识别用的模型')} hint={t('自动记录和导入时整理条目都用它。在后台运行，不拖慢会话；选便宜的模型、较低的思考强度就够了。')}>
+          <div className="row" style={{ gap: 8 }}>
+            <Select value={s.recorderModel} className="w-240" icon="cpu"
+              onChange={(v) => { const m = MODELS.find((x) => x.id === v)!; set({ recorderModel: v, recorderEffort: m.efforts.includes(s.recorderEffort) ? s.recorderEffort : m.efforts[0] }); }}
+              options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
+            <Select<Effort> value={s.recorderEffort} className="w-240" icon="bulb" renderValue={(o) => <>{t('思考')} · {o?.label}</>} onChange={(v) => set({ recorderEffort: v })}
+              options={(MODELS.find((m) => m.id === s.recorderModel)?.efforts ?? []).map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
+          </div>
         </Field>
-        <Toggle on={s.startContext} onChange={(v) => set({ startContext: v })} label={t('会话开始时告诉 Claude 进行中的功能')}
-          hint={t('只附上编号和标题，几十个 token。Claude 需要详情时自己用看板工具查。')} />
+        <div>
+          <Toggle on={s.startContext} onChange={(v) => set({ startContext: v })} label={t('会话开始时告诉 Claude 进行中的功能')} />
+          <div className="hint" style={{ marginTop: 4, lineHeight: 1.6 }}>{t('只附上编号和标题，几十个 token。Claude 需要详情时自己用看板工具查。')}</div>
+        </div>
         <ul className="plain-list">
           <li>{t('每个会话里，Claude 都有四个看板工具：搜索、查看、新建、修改。你说「记到看板」，它就会先查重再记。')}</li>
           <li>{t('Claude 提到条目时会写编号，对话里的编号可以点，鼠标停在上面能看到摘要。')}</li>
