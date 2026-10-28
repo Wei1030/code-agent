@@ -12,7 +12,7 @@ import { relTime, tokens as fmtTokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { SessionLink, Transcript } from './Transcript';
-import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar } from './Dock';
+import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar, WaitingBar } from './Dock';
 import { Composer } from './Composer';
 import { Inspector } from './Inspector';
 import { RewindDialog } from './RewindDialog';
@@ -69,8 +69,9 @@ export function SessionPage() {
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'plan' && <PlanReviewBar key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
+            {sum.waiting && <WaitingBar sid={id} />}
             {rt.readOnly ? (
-              <ReadOnlyBar sid={id} onFork={() => { const nid = api.forkAt(id); nav(`/s/${nid}`); }} />
+              !sum.waiting && <ReadOnlyBar sid={id} onFork={() => { const nid = api.forkAt(id); nav(`/s/${nid}`); }} />
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />
@@ -93,8 +94,8 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
   const ws = useApp((s) => s.workspaces.find((w) => w.id === wsId));
   const sessions = useApp((s) => s.sessions);
   const mine = sessions.filter((s) => s.workspaceId === wsId && (!s.draft || s.id === current?.id) && (!s.jobId || s.id === current?.id)).sort((a, b) => b.lastActive - a.lastActive);
-  const live = mine.filter((s) => s.live || s.draft);
-  const saved = mine.filter((s) => !s.live && !s.draft).slice(0, 10);
+  const live = mine.filter((s) => s.live || s.draft || s.waiting);
+  const saved = mine.filter((s) => !s.live && !s.draft && !s.waiting).slice(0, 10);
   const actions = useSessionActions();
 
   const item = (s: SessionSummary) => (
@@ -102,8 +103,8 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
       <span className={cx('sdot', s.live ? s.state : 'idle')} style={!s.live ? { background: 'transparent', border: '1.5px solid var(--border-strong)' } : undefined} />
       <div className="grow">
         <div className="t truncate">{s.title}</div>
-        <div className={cx('m truncate', s.state === 'requires_action' && s.live && 'warn')} title={s.createdBy ? t('由会话「{x}」创建', { x: s.createdBy.title }) : undefined}>
-          {s.draft ? t('未发送') : s.live && s.state === 'requires_action' ? t('等你处理') : s.live && s.state === 'running' ? t('运行中') : relTime(s.lastActive)}
+        <div className={cx('m truncate', ((s.state === 'requires_action' && s.live) || s.waiting) && 'warn')} title={s.createdBy ? t('由会话「{x}」创建', { x: s.createdBy.title }) : undefined}>
+          {s.draft ? t('未发送') : s.waiting ? t('等待空位') : s.live && s.state === 'requires_action' ? t('等你处理') : s.live && s.state === 'running' ? t('运行中') : relTime(s.lastActive)}
           {s.createdBy && <span className="by"> · {t('由「{x}」创建', { x: s.createdBy.title })}</span>}
         </div>
       </div>

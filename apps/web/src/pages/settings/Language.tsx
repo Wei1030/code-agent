@@ -73,7 +73,6 @@ export function Language() {
       <Section title={t('其他')}>
         <div className="col">
           <Toggle on={prefs.showRawSdkText} onChange={(v) => setPrefs({ showRawSdkText: v })} label={t('审批面板中默认展开 SDK 原文')} hint={t('SDK 给出的原因是英文')} />
-          <Toggle on={prefs.browserNotifications} onChange={(v) => setPrefs({ browserNotifications: v })} label={t('需要我处理时发送浏览器通知')} />
         </div>
       </Section>
     </>

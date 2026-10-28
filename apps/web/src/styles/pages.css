@@ -182,3 +182,5 @@
 .ext-item .sub.sched { display: block; }
 .ext-item .sub.sched .icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }
 .plain-list { margin: 0; padding-left: 18px; color: var(--ink-2); line-height: 1.8; font-size: 13px; }
+.tool-item.disabled { opacity: .55; cursor: not-allowed; }
+.tool-item.disabled:hover { border-color: var(--border); }

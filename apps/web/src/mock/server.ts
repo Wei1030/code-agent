@@ -3,7 +3,7 @@
  * mutates in-memory data and pushes session events into the store.
  */
 import type {
-  ApprovalAnswer, Attachment, BannerKind, Effort, ElicitationAnswer, Item, PermissionMode, PlanAnswer, QuestionAnswer,
+  ApprovalAnswer, Attachment, BannerKind, Effort, ElicitationAnswer, Item, JobTemplate, PermissionMode, PlanAnswer, QuestionAnswer,
   QueuedMessage, SessionRef,
 } from '../api/types';
 import { useApp } from '../store/app';
@@ -21,8 +21,11 @@ import {
   scenarioCommand, scenarioElicitForm, scenarioElicitUrl, scenarioFix, scenarioHighRisk, scenarioJob, scenarioOutside, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
 } from './scenarios';
 import { humanTurn, scenarioAskPeer, scenarioRefs, scenarioSpawn, takeQueued } from './peer';
+import { acquire, cancelWaiting, pump } from './slots';
+import { notify } from '../lib/notify';
 
 export { mockHeld, mockPeerMessage, rejectHeld, releaseHeld } from './peer';
+export { cancelWaiting, pump as pumpSlots } from './slots';
 
 const MODEL_ID: Record<string, string> = { opus: 'claude-opus-5-5', fable: 'claude-fable-5-1', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5' };
 
@@ -88,8 +91,23 @@ export function send(sid: string, text: string, opts: SendOptions = {}) {
   const r = rt(sid);
   if (!sum || !r) return;
   if (sum.draft) {
-    app.patchSession(sid, { draft: false, live: true, title: titleFrom(text), firstPrompt: text, createdAt: Date.now() });
-    initRaw(sid);
+    // The first message starts the Claude Code process, within the running-session limit.
+    app.patchSession(sid, { draft: false, title: titleFrom(text), firstPrompt: text, createdAt: Date.now(), lastActive: Date.now() });
+    const qid = uid('q');
+    const started = acquire(sid, () => {
+      useApp.getState().patchSession(sid, { live: true });
+      initRaw(sid);
+    }, () => {
+      const cur = rt(sid)!;
+      if (cur.queue.some((q) => q.id === qid)) emit(sid, { t: 'queue', queue: cur.queue.filter((q) => q.id !== qid) });
+      send(sid, text, opts);
+    });
+    if (!started) emit(sid, { t: 'queue', queue: [...r.queue, { id: qid, text, priority: 'later' }] });
+    return;
+  }
+  if (sum.waiting) {
+    emit(sid, { t: 'queue', queue: [...r.queue, { id: uid('q'), text, priority: 'later' }] });
+    return;
   }
   app.patchSession(sid, { lastActive: Date.now() });
   if (!opts.contextOnly) humanTurn(sid);
@@ -276,6 +294,7 @@ export function latestSession(workspaceId: string): string | null {
 
 /** End the Claude Code process; the session becomes a saved, read-only session. Running work is killed. */
 export function stop(sid: string) {
+  cancelWaiting(sid);
   cancelRun(sid);
   useApp.getState().set({ dirs: useApp.getState().dirs.filter((d) => d.sessionId !== sid) });
   const r = rt(sid);
@@ -290,11 +309,14 @@ export function stop(sid: string) {
   emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] process exited (code 0)` });
 }
 
-export function resume(sid: string) {
+/** Start a saved session's process again, within the running-session limit; `then` runs once it runs. */
+export function resume(sid: string, then?: () => void): boolean {
   openSession(sid);
-  emit(sid, { t: 'settings', patch: { readOnly: false } });
-  useApp.getState().patchSession(sid, { live: true, state: 'idle', lastActive: Date.now() });
-  initRaw(sid);
+  return acquire(sid, () => {
+    emit(sid, { t: 'settings', patch: { readOnly: false } });
+    useApp.getState().patchSession(sid, { live: true, state: 'idle', lastActive: Date.now() });
+    initRaw(sid);
+  }, then);
 }
 
 export function backgroundTool(sid: string, toolId: string) {
@@ -375,13 +397,17 @@ export function forkAt(sid: string, beforeUserId?: string, suffix = '（分叉�
   const id = uid('s');
   const items: Item[] = r.items.slice(0, idx).map((it) => ({ ...it }));
   app.upsertSession({
-    ...sum, id, title: `${sum.title}${suffix}`, live: true, state: 'idle', forkedFrom: sum.title, createdAt: Date.now(), lastActive: Date.now(), draft: false,
+    ...sum, id, title: `${sum.title}${suffix}`, live: false, state: 'idle', forkedFrom: sum.title, createdAt: Date.now(), lastActive: Date.now(), draft: false,
+    peerUnread: 0, waiting: false,
   });
   useSessions.getState().init(emptyRuntime(id, {
     items, model: r.model, effort: r.effort, mode: r.mode, context: r.context, turn: r.turn, tokens: r.tokens,
     changes: [], readOnly: false,
   }));
-  initRaw(id);
+  acquire(id, () => {
+    useApp.getState().patchSession(id, { live: true });
+    initRaw(id);
+  });
   return id;
 }
 
@@ -428,9 +454,11 @@ export function tag(sid: string, value: string | null) {
   useApp.getState().patchSession(sid, { tag: value });
 }
 export function remove(sid: string) {
+  cancelWaiting(sid);
   cancelRun(sid);
   useSessions.getState().drop(sid);
   useApp.getState().removeSession(sid);
+  pump();
 }
 
 export function exportMarkdown(sid: string): string {
@@ -463,12 +491,21 @@ export function runJob(jobId: string, vars: Record<string, string>, trigger: 'ma
   const started = Date.now();
   app.upsertSession({
     id: sid, workspaceId: ws.id, title: `作业 · ${job.name}`, firstPrompt: prompt, branch: ws.branch, createdAt: started, lastActive: started,
-    tag: '作业', live: true, state: 'running', forkedFrom: null, tokens: 0, jobId,
+    tag: '作业', live: false, state: 'idle', forkedFrom: null, tokens: 0, jobId,
   });
   useSessions.getState().init(emptyRuntime(sid, { model: job.model, effort: job.effort, mode: job.mode }));
+  app.set({ jobRuns: [{ id: runId, jobId, trigger, startedAt: started, vars, status: 'queued', turns: 0, tokens: 0, sessionId: sid }, ...app.jobRuns] });
+  acquire(sid, () => startJob(sid, runId, job, prompt));
+  return runId;
+}
+
+function startJob(sid: string, runId: string, job: JobTemplate, prompt: string) {
+  const jobId = job.id;
+  const now = Date.now();
+  useApp.getState().patchSession(sid, { live: true, lastActive: now });
+  useApp.getState().set({ jobRuns: useApp.getState().jobRuns.map((x) => (x.id === runId ? { ...x, status: 'running', startedAt: now } : x)) });
   initRaw(sid);
   userItem(sid, prompt);
-  app.set({ jobRuns: [{ id: runId, jobId, trigger, startedAt: started, vars, status: 'running', turns: 0, tokens: 0, sessionId: sid }, ...app.jobRuns] });
   void startRun(sid, async (run) => {
     const ok = await scenarioJob(run, jobId);
     const r = rt(sid);
@@ -480,14 +517,13 @@ export function runJob(jobId: string, vars: Record<string, string>, trigger: 'ma
     useApp.getState().set({ jobRuns: useApp.getState().jobRuns.map((x) => (x.id === runId ? { ...x, ...patchRun } : x)) });
     // One message per run: the process ends; the session stays saved and can be resumed.
     setTimeout(() => stop(sid), 0);
-    const notify = job.notify === 'always' || (job.notify === 'failure' && !ok);
-    if (notify && window.location.pathname !== '/jobs') {
-      useApp.getState().toast(ok ? `作业「${job.name}」已完成` : `作业「${job.name}」失败：没有符合结构的输出`, ok ? 'good' : 'warn', {
-        label: '查看', run: () => { window.history.pushState({}, '', '/jobs'); window.dispatchEvent(new PopStateEvent('popstate')); },
+    if (job.notify === 'always' || (job.notify === 'failure' && !ok)) {
+      notify('background', {
+        path: '/jobs', title: ok ? `作业「${job.name}」已完成` : `作业「${job.name}」失败`, body: ok ? undefined : '没有符合结构的输出',
+        tone: ok ? 'good' : 'warn', action: '查看',
       });
     }
   });
-  return runId;
 }
 
 /** Mock console: a scheduled job comes due. */

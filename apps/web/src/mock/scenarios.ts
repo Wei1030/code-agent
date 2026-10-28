@@ -8,6 +8,7 @@ import {
   streamText, userItem, waitFor, type Run,
 } from './engine';
 import { scenarioAskPeer, scenarioSpawn } from './peer';
+import { notify } from '../lib/notify';
 
 const short = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
@@ -108,14 +109,8 @@ export function finishBackground(sid: string, taskId: string, toolId: string | n
   if (toolId) patch(sid, toolId, { status: failed ? 'error' : 'ok', right: failed ? '失败' : '后台完成' });
   addItem(sid, { kind: 'notice', id: uid('note'), tone: failed ? 'warn' : 'good', text, action: '查看输出' });
   raw(sid, 'system/task_notification', `${failed ? 'failed' : 'completed'} · ${task.name}`, { task_id: taskId, status: failed ? 'failed' : 'completed' });
-  // Real implementation: also a browser notification when the tab is hidden. The mock only toasts,
-  // and only when the user is looking at another page.
-  if (window.location.pathname === `/s/${sid}`) return;
   const title = useApp.getState().sessions.find((x) => x.id === sid)?.title ?? '';
-  useApp.getState().toast(`「${title}」${text}`, failed ? 'warn' : 'good', {
-    label: '打开',
-    run: () => { window.history.pushState({}, '', `/s/${sid}`); window.dispatchEvent(new PopStateEvent('popstate')); },
-  });
+  notify('background', { sid, title: `「${title}」${text}`, tone: failed ? 'warn' : 'good' });
 }
 
 export function readGroup(sid: string, label: string, tools: Array<[string, string, string?]>): { id: string; tools: ToolItem[] } {
@@ -149,6 +144,13 @@ export function footer(sid: string, toolCalls: number, seconds: number, stop = '
   const sum = app.sessions.find((x) => x.id === sid);
   if (sum) app.patchSession(sid, { tokens: sum.tokens + tok, lastActive: Date.now() });
   runHooks(sid, 'Stop', {}, `第 ${turn} 轮结束`);
+  if (sum && !sum.jobId) {
+    const last = [...rt(sid)!.items].reverse().find((x) => x.kind === 'text');
+    notify('turnDone', {
+      sid, title: `「${sum.title}」${stop === 'end_turn' ? '这一轮已完成' : '这一轮已结束'}`, tone: stop === 'end_turn' ? 'good' : 'warn',
+      body: last?.kind === 'text' ? short(last.text, 40) : undefined,
+    });
+  }
 }
 
 // ------------------------------------------------------------------ scenarios

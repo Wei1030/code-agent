@@ -49,6 +49,8 @@ export interface SessionSummary {
   worktree?: string;
   /** Messages from other sessions that arrived while the user was elsewhere. */
   peerUnread?: number;
+  /** Waiting for a free slot: the running-session limit is reached and no running session is idle. */
+  waiting?: boolean;
 }
 
 /** A session in the same workspace, as other sessions and the composer refer to it. */
@@ -90,10 +92,6 @@ export interface PeerSettings {
   inbound: 'parity' | 'accept' | 'hold';
   /** Messages in a chain without a human message in between before the next one is held. */
   maxHops: number;
-  /** Running sessions per workspace; sessions created beyond it wait for a free slot. */
-  maxRunning: number;
-  /** Save (end the process of) agent-created sessions after this many idle minutes; 0 = never. */
-  idleSaveMinutes: number;
 }
 
 // ------------------------------------------------------------------ transcript
@@ -424,7 +422,11 @@ export interface Prefs {
   responseLanguageCustom: string;
   numberStyle: 'intl' | 'cn';
   showRawSdkText: boolean;
+  /** System notifications while the Code Agent tab is in the background. */
   browserNotifications: boolean;
+  notifyRequests: boolean;
+  notifyTurnDone: boolean;
+  notifyBackground: boolean;
 }
 
 // ------------------------------------------------------------------ extensions
@@ -588,7 +590,8 @@ export interface JobRun {
   startedAt: number;
   endedAt?: number;
   vars: Record<string, string>;
-  status: 'running' | 'success' | 'invalid' | 'error';
+  /** queued: waiting for a free slot under the running-session limit. */
+  status: 'queued' | 'running' | 'success' | 'invalid' | 'error';
   error?: string;
   output?: unknown;
   turns: number;

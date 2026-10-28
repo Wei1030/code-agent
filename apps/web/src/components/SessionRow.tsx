@@ -12,6 +12,7 @@ import { Button, Chip, Popover, Status } from './ui';
 
 export function StateBadge({ s }: { s: SessionSummary }) {
   const t = useT();
+  if (s.waiting) return <Status tone="warn">{t('等待空位')}</Status>;
   if (!s.live) return <span className="muted">{t('已保存')}</span>;
   if (s.state === 'requires_action') return <Status tone="warn">{t('等你处理')}</Status>;
   if (s.state === 'running') return <Status tone="info">{t('运行中')}</Status>;

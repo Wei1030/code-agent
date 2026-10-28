@@ -59,6 +59,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const fileInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const running = rt.state !== 'idle';
+  const waiting = !!app.sessions.find((s) => s.id === sid)?.waiting;
 
   // Reset per session; drafts are kept per session in memory.
   const drafts = useRef<Record<string, { text: string; atts: Attachment[] }>>({});
@@ -208,7 +209,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const doSend = (opts: { priority?: 'now' | 'next' | 'later'; contextOnly?: boolean; verbatim?: boolean } = {}) => {
     if (!canSend) return;
     api.send(sid, text.trim(), { attachments: atts, refs: refs.filter((r) => text.includes(`@会话「${r.title}」`)), ...opts });
-    if (running && rt.request?.kind !== 'question' && !opts.contextOnly && opts.priority !== 'now') app.toast(t('已加入队列'), 'info');
+    if ((running || waiting) && rt.request?.kind !== 'question' && !opts.contextOnly && opts.priority !== 'now') app.toast(t('已加入队列'), 'info');
     setText('');
     setAtts([]);
     setRefs([]);
@@ -254,6 +255,8 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   };
   const placeholder = disabled
     ? t('会话未运行')
+    : waiting
+      ? t('在等空位；现在发送的消息会排队，开始后依次处理 · Enter 发送 · Shift+Enter 换行')
     : rt.request?.kind === 'question'
       ? t('也可以直接用自己的话回答 · Enter 发送 · Shift+Enter 换行')
       : rt.request

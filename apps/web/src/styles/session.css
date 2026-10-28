@@ -272,3 +272,4 @@
 .qitem .from { color: var(--accent); margin-right: 4px; }
 .peer-badge { min-width: 17px; height: 17px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; align-self: center; flex: none; }
 .scol-item .by { color: var(--muted); }
+.readonly-bar.waiting { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn-ink); }

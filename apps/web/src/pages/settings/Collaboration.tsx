@@ -1,6 +1,7 @@
 /** How sessions in a workspace see, message and create each other. */
 import type { PeerSettings } from '../../api/types';
-import { Radio, Select } from '../../components/ui';
+import { Link } from 'react-router-dom';
+import { Radio } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { cx } from '../../lib/util';
 import { useT } from '../../lib/i18n';
@@ -43,24 +44,6 @@ export function Collaboration() {
         <div className="hint">{t('一串会话消息里，你没有插话时最多转发几次。超过后的消息先等你放行；你放行或发了消息后重新计数。')}</div>
       </Section>
 
-      <Section title={t('资源')}>
-        <div className="form-row">
-          <span>{t('每个工作区最多同时运行')}</span>
-          <input className="input sm" type="number" min={1} max={20} style={{ width: 72 }} value={peer.maxRunning} onChange={(e) => set({ maxRunning: num(e.target.value, 1, 20) })} />
-          <span>{t('个会话')}</span>
-        </div>
-        <div className="hint" style={{ marginBottom: 12 }}>{t('每个会话都是一个独立的 Claude Code 进程。超出时，由会话新建的会话排队等待空位；你手动发起的会话不受限制。')}</div>
-        <div className="form-row">
-          <span>{t('由会话新建的会话，空闲')}</span>
-          <Select<string> size="sm" width={160} className="w-120" value={String(peer.idleSaveMinutes)} onChange={(v) => set({ idleSaveMinutes: Number(v) })}
-            options={[
-              { value: '10', label: t('10 分钟') }, { value: '30', label: t('30 分钟') }, { value: '60', label: t('1 小时') }, { value: '0', label: t('从不') },
-            ]} />
-          <span>{t('后自动保存')}</span>
-        </div>
-        <div className="hint">{t('保存会结束它的进程，之后可以恢复；有消息发给它时会自动恢复。你手动新建的会话不会被自动保存。')}</div>
-      </Section>
-
       <Section title={t('Claude 怎样使用这些功能')}>
         <ul className="plain-list">
           <li>{t('每个会话都有五个工具：列出会话、读取会话、查看会话状态、发消息给会话、新建会话。只能用于同一工作区。')}</li>
@@ -68,6 +51,7 @@ export function Collaboration() {
           <li>{t('发消息和新建会话默认要回执：对方处理完后，结果会作为一条消息回到发起的会话。')}</li>
           <li>{t('内置的子代理仍然可用：快速搜索之类的短任务交给子代理；需要你参与或之后继续讨论的工作，Claude 会新建会话。')}</li>
           <li>{t('要并行改代码时，Claude 可以让新会话在独立的 worktree 里工作，避免互相覆盖。同一目录下两个会话改到同一个文件时会提醒。')}</li>
+          <li>{t('Claude 新建的会话和你新建的一样，受同时运行会话数的限制，在')} <Link to="/settings/general">{t('常规')}</Link> {t('里设置。')}</li>
         </ul>
       </Section>
     </>

@@ -17,6 +17,7 @@ import { cx, download, uid } from '../lib/util';
 import { useT } from '../lib/i18n';
 
 const RUN_STATUS: Record<JobRun['status'], { tone: 'good' | 'crit' | 'info'; label: string }> = {
+  queued: { tone: 'info', label: '排队等待空位' },
   running: { tone: 'info', label: '运行中' },
   success: { tone: 'good', label: '输出有效' },
   invalid: { tone: 'crit', label: '没有有效输出' },
@@ -70,7 +71,7 @@ export function Jobs() {
                   <div className="top"><Icon name="braces" size={15} className={j.id === job?.id ? 'accent' : 'muted'} /><b className="grow truncate">{j.name}</b>{(j.missedRuns ?? 0) > 0 && <Chip tone="warn">{t('错过 {n}', { n: j.missedRuns ?? 0 })}</Chip>}</div>
                   <div className="sub">
                     {r ? <Status tone={RUN_STATUS[r.status].tone}>{t(RUN_STATUS[r.status].label)}</Status> : <span>{t('从未运行')}</span>}
-                    {r && r.status !== 'running' && <span>{relTime(r.startedAt)}</span>}
+                    {r && r.status !== 'running' && r.status !== 'queued' && <span>{relTime(r.startedAt)}</span>}
                   </div>
                   <div className="sub sched"><Icon name="clock" size={12} />{t(describeSchedule(j.schedule))}{next && ` · ${t('下次 {d}', { d: dateTime(next.getTime()) })}`}</div>
                 </div>
@@ -270,7 +271,9 @@ function RunPanel({ job }: { job: JobTemplate }) {
               <span className="grow" />
               <Status tone={RUN_STATUS[sel.status].tone}>{t(RUN_STATUS[sel.status].label)}</Status>
             </div>
-            {sel.status === 'running' ? (
+            {sel.status === 'queued' ? (
+              <div className="row ink2"><span className="spinner" />{t('同时运行的会话已达上限，有会话空闲后自动开始')}</div>
+            ) : sel.status === 'running' ? (
               <div className="row ink2"><span className="spinner" />{t('Claude 正在工作，可以打开会话实时查看')}</div>
             ) : (
               <div className="hint">{t('{turns} 轮 · {tk} tokens · 用时 {s} 秒', { turns: sel.turns, tk: fmtTokens(sel.tokens), s: Math.round(((sel.endedAt ?? sel.startedAt) - sel.startedAt) / 1000) })}</div>
@@ -296,7 +299,7 @@ function RunPanel({ job }: { job: JobTemplate }) {
               {Object.keys(r.vars).length > 0 && <div className="mono muted" style={{ fontSize: 11.5 }}>{Object.entries(r.vars).map(([k, v]) => `${k} = ${v}`).join('  ')}</div>}
             </div>
             <Status tone={RUN_STATUS[r.status].tone}>{t(RUN_STATUS[r.status].label)}</Status>
-            <span className="muted" style={{ width: 56, textAlign: 'right' }}>{r.status === 'running' ? '' : fmtTokens(r.tokens)}</span>
+            <span className="muted" style={{ width: 56, textAlign: 'right' }}>{r.status === 'running' || r.status === 'queued' ? '' : fmtTokens(r.tokens)}</span>
           </div>
         ))}
       </div>

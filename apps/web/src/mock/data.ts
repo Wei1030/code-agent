@@ -155,8 +155,8 @@ export const SERVER_FOLDERS: FsNode[] = [
   { name: 'C:\\', dir: true, children: [{ name: 'Users', dir: true, children: [{ name: 'maowe', dir: true }] }] },
 ];
 
-/** Built-in tools a profile can switch on or off. WebSearch is left out: it only works with Claude models. */
-export const BUILTIN_TOOLS: Array<{ name: string; label: string; desc: string }> = [
+/** Built-in tools a profile can switch on or off. claudeOnly: run by Anthropic's API, so not offered on compatible endpoints. */
+export const BUILTIN_TOOLS: Array<{ name: string; label: string; desc: string; claudeOnly?: boolean }> = [
   { name: 'Read', label: '读取文件', desc: '查看文件内容' },
   { name: 'Glob', label: '按名称找文件', desc: '例如找出所有 *.test.ts' },
   { name: 'Grep', label: '搜索文件内容', desc: '在代码里搜索文字' },
@@ -166,6 +166,7 @@ export const BUILTIN_TOOLS: Array<{ name: string; label: string; desc: string }>
   { name: 'Bash', label: '运行命令', desc: '在终端里执行 Bash 命令' },
   { name: 'PowerShell', label: '运行 PowerShell 命令', desc: '仅 Windows' },
   { name: 'WebFetch', label: '抓取网页', desc: '读取指定网址的内容' },
+  { name: 'WebSearch', label: '网页搜索', desc: '用搜索引擎查资料', claudeOnly: true },
   { name: 'Agent', label: '子代理', desc: '把任务交给子代理并行处理' },
   { name: 'TaskCreate', label: '任务清单', desc: '把多步骤工作拆成任务并跟踪进度' },
   { name: 'AskUserQuestion', label: '向你提问', desc: '有选择时停下来问你' },

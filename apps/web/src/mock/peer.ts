@@ -10,6 +10,8 @@ import { uid } from '../lib/util';
 import { addItem, emit, finishTool, isRunning, newTool, raw, rt, sleep, startRun, streamText, userItem, type Run } from './engine';
 import { bashStep, editStep, footer, pickScenario, playGroup, readGroup } from './scenarios';
 import { initRaw, openSession, resume } from './server';
+import { acquire } from './slots';
+import { notify } from '../lib/notify';
 
 const short = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
@@ -72,6 +74,10 @@ function hold(env: Envelope, reason: HeldMessage['reason']) {
   heldEnv.set(id, env);
   app.set({ held: [...app.held, { id, from: ref(sum(env.from)!), to: ref(sum(env.to)!), text: env.text, reason, since: Date.now() }] });
   raw(env.from, 'system/peer_held', `→ ${sum(env.to)!.title} · ${reason}`, { to: env.to, reason });
+  notify('request', {
+    title: '有会话消息等你放行', body: `「${sum(env.from)!.title}」发给「${sum(env.to)!.title}」`, tone: 'warn', action: '查看',
+    open: () => useApp.getState().set({ inboxOpen: true }),
+  });
 }
 
 /** Start a turn in an idle receiver; queue the message behind a busy one; resume a saved one first. */
@@ -79,7 +85,18 @@ function handOver(env: Envelope): 'delivered' | 'queued' {
   const app = useApp.getState();
   const from = sum(env.from)!;
   const to = sum(env.to)!;
-  if (!to.live) resume(env.to);
+  if (!to.live) {
+    // A saved receiver is resumed first, which may have to wait for a free slot.
+    let now: 'delivered' | 'queued' | null = null;
+    let sync = true;
+    resume(env.to, () => {
+      const res = handOver(env);
+      if (sync) now = res;
+      else patchPeer(env.from, env.toolId, { delivery: res });
+    });
+    sync = false;
+    return now ?? 'queued';
+  }
   if (window.location.pathname !== `/s/${env.to}`) app.patchSession(env.to, { peerUnread: (to.peerUnread ?? 0) + 1 });
   const origin: PeerOrigin = { ...ref(from), kind: env.kind };
   const r = rt(env.to)!;
@@ -141,7 +158,7 @@ function sendReceipt(sid: string, to: string, gist: string, toolId?: string) {
 type TaskKind = 'csv' | 'excel' | 'generic';
 
 /** A normal session in the same workspace whose first message comes from the creating session. */
-export function createSession(fromSid: string, title: string, message: string, opts: { worktree?: string; task?: TaskKind; toolId?: string } = {}): string {
+export function createSession(fromSid: string, title: string, message: string, opts: { worktree?: string; task?: TaskKind; toolId?: string } = {}): { id: string; started: boolean } {
   const app = useApp.getState();
   const from = sum(fromSid)!;
   const r = rt(fromSid)!;
@@ -149,16 +166,20 @@ export function createSession(fromSid: string, title: string, message: string, o
   const now = Date.now();
   app.upsertSession({
     id, workspaceId: from.workspaceId, title, firstPrompt: message, branch: opts.worktree ?? from.branch, createdAt: now, lastActive: now,
-    tag: null, live: true, state: 'idle', forkedFrom: null, tokens: 0, createdBy: ref(from), worktree: opts.worktree,
+    tag: null, live: false, state: 'idle', forkedFrom: null, tokens: 0, createdBy: ref(from), worktree: opts.worktree,
   });
   // Same model, effort and permission mode as the creator, so a session can't create a more permissive one.
   useSessions.getState().init(emptyRuntime(id, { model: r.model, effort: r.effort, mode: r.mode }));
-  initRaw(id);
   const origin: PeerOrigin = { ...ref(from), kind: 'message' };
   userItem(id, message, [], { from: origin });
   chainHops.set(id, (chainHops.get(fromSid) ?? 0) + 1);
-  void startRun(id, (run) => scenarioPeerTask(run, origin, opts.task ?? 'generic', opts.toolId));
-  return id;
+  const started = acquire(id, () => {
+    useApp.getState().patchSession(id, { live: true });
+    initRaw(id);
+    patchPeer(fromSid, opts.toolId, { delivery: 'delivered' });
+    void startRun(id, (run) => scenarioPeerTask(run, origin, opts.task ?? 'generic', opts.toolId));
+  });
+  return { id, started };
 }
 
 // ------------------------------------------------------------------ tool output
@@ -240,8 +261,8 @@ async function sendStep(run: Run, target: SessionSummary, message: string): Prom
 async function createStep(run: Run, title: string, message: string, opts: { task: TaskKind; worktree?: string }) {
   const t = newTool(run.sid, 'mcp__workspace__create_session', title, { peer: { op: 'create', message, worktree: opts.worktree } });
   await sleep(run, 600);
-  const id = createSession(run.sid, title, message, { ...opts, toolId: t.id });
-  finishTool(run.sid, t, { peer: { op: 'create', target: { sessionId: id, title }, message, worktree: opts.worktree, delivery: 'delivered' } });
+  const { id, started } = createSession(run.sid, title, message, { ...opts, toolId: t.id });
+  finishTool(run.sid, t, { peer: { op: 'create', target: { sessionId: id, title }, message, worktree: opts.worktree, delivery: started ? 'delivered' : 'queued' } });
 }
 
 // ------------------------------------------------------------------ scenarios

@@ -12,7 +12,7 @@ import { useT } from '../lib/i18n';
 
 const TOOL_ICON: Record<string, string> = {
   Bash: 'terminal', PowerShell: 'terminal', Read: 'file', Write: 'file', Edit: 'pencil', Grep: 'search', Glob: 'search',
-  WebFetch: 'globe', Agent: 'agent', AskUserQuestion: 'chat', EnterPlanMode: 'list', ExitPlanMode: 'list', Skill: 'spark',
+  WebFetch: 'globe', WebSearch: 'globe', Agent: 'agent', AskUserQuestion: 'chat', EnterPlanMode: 'list', ExitPlanMode: 'list', Skill: 'spark',
 };
 
 export function Transcript({ rt, onRewind, onFork }: { rt: SessionRuntime; onRewind: (userId: string) => void; onFork: (userId: string) => void }) {

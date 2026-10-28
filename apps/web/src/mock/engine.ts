@@ -11,6 +11,7 @@ import { hookOutput, ruleMatches as hookMatches } from '../lib/hooks';
 import { useApp } from '../store/app';
 import { useSessions } from '../store/sessions';
 import { uid, uuid } from '../lib/util';
+import { notify } from '../lib/notify';
 
 export class Cancelled extends Error {}
 
@@ -34,6 +35,13 @@ export function rt(sid: string): SessionRuntime | undefined {
 export function emit(sid: string, ev: SessionEvent) {
   useSessions.getState().apply(sid, ev);
   if (ev.t === 'state') syncSummary(sid, ev.state);
+  // A session may have become idle: a waiting session can take its slot.
+  if ((ev.t === 'state' && ev.state === 'idle') || ev.t === 'background') idleHook();
+}
+
+let idleHook: () => void = () => {};
+export function onIdle(fn: () => void) {
+  idleHook = fn;
 }
 
 function syncSummary(sid: string, state: SessionState) {
@@ -160,6 +168,12 @@ export function waitFor<T>(run: Run, req: PendingRequest): Promise<T> {
   check(run);
   emit(run.sid, { t: 'request', request: req });
   emit(run.sid, { t: 'state', state: 'requires_action' });
+  const title = useApp.getState().sessions.find((s) => s.id === run.sid)?.title ?? '';
+  notify('request', {
+    sid: run.sid, title: `「${title}」等你处理`, tone: 'warn', action: '去处理',
+    body: req.kind === 'approval' ? (req.command ? `${req.title} ${req.command}` : req.title)
+      : req.kind === 'question' ? req.questions[0]?.question : req.kind === 'elicitation' ? `${req.server} 需要你提供信息` : '计划等你审阅',
+  });
   raw(run.sid, 'control_request', req.kind === 'approval' ? `can_use_tool · ${req.tool}` : req.kind === 'question' ? 'can_use_tool · AskUserQuestion' : 'can_use_tool · ExitPlanMode', { request_id: req.id });
   return new Promise<T>((resolve, reject) => {
     waiters.set(req.id, (a) => {

@@ -20,6 +20,7 @@ const FEATURES: Array<{ key: string; label: string; hint: string }> = [
 
 export function Profiles() {
   const t = useT();
+  const onClaude = useApp((s) => s.provider.kind === 'subscription');
   const app = useApp();
   const [selId, setSelId] = useState(app.profiles.find((p) => p.isDefault)?.id ?? app.profiles[0].id);
   const saved = app.profiles.find((p) => p.id === selId) ?? app.profiles[0];
@@ -113,13 +114,16 @@ export function Profiles() {
             <Section title={t('Claude 可以使用的工具')} right={<span className="hint">{t('{n}/{m} 个已开启', { n: draft.tools.length, m: BUILTIN_TOOLS.length })}</span>}>
               <div className="tool-grid">
                 {BUILTIN_TOOLS.map((tool) => {
-                  const on = draft.tools.includes(tool.name);
+                  const unavailable = !!tool.claudeOnly && !onClaude;
+                  const on = draft.tools.includes(tool.name) && !unavailable;
                   return (
-                    <div key={tool.name} className={cx('tool-item', on && 'on')} onClick={() => set({ tools: on ? draft.tools.filter((x) => x !== tool.name) : [...draft.tools, tool.name] })}>
+                    <div key={tool.name} className={cx('tool-item', on && 'on', unavailable && 'disabled')}
+                      onClick={() => !unavailable && set({ tools: on ? draft.tools.filter((x) => x !== tool.name) : [...draft.tools, tool.name] })}>
                       <Check on={on} onChange={() => {}} label="" />
                       <div className="grow">
                         <b>{t(tool.label)}</b> <span className="mono muted">{tool.name}</span>
                         {tool.desc && <div className="hint">{t(tool.desc)}</div>}
+                        {tool.claudeOnly && <div className="hint">{unavailable ? t('只在使用 Claude 订阅时提供，兼容端点上没有') : t('只在使用 Claude 订阅时提供')}</div>}
                       </div>
                     </div>
                   );

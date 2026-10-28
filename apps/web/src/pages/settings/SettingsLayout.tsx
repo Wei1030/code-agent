@@ -5,6 +5,7 @@ import { Icon } from '../../components/Icon';
 import { useT } from '../../lib/i18n';
 
 const NAV = [
+  { to: '/settings/general', label: '常规', icon: 'gear' },
   { to: '/settings/profiles', label: '配置方案', icon: 'layers' },
   { to: '/settings/permissions', label: '权限规则', icon: 'shield' },
   { to: '/settings/collaboration', label: '会话协作', icon: 'link' },

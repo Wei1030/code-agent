@@ -1,4 +1,5 @@
 /** Panels docked above the composer: approval, questions, plan review, read-only bar, queue. */
+import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import type { PendingRequest, QueuedMessage, RuleDestination } from '../api/types';
 import { describeRule } from '../lib/rules';
@@ -269,6 +270,21 @@ export function PlanReviewBar({ sid, req }: { sid: string; req: Extract<PendingR
           <Button disabled={!feedback.trim()} onClick={() => api.respondPlan(sid, req.id, { approve: false, feedback: feedback.trim() })}>{t('继续规划')}</Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The running-session limit is reached and every running session is busy. */
+export function WaitingBar({ sid }: { sid: string }) {
+  const t = useT();
+  const nav = useNavigate();
+  const max = useApp((s) => s.maxRunning);
+  return (
+    <div className="readonly-bar waiting">
+      <Icon name="clock" size={16} />
+      <span className="grow">{t('排队等待空位：同时运行的会话已达上限（{n} 个），而且都在工作或等你处理。有会话空闲后，会自动保存最久没有活动的那个，然后开始这个会话。', { n: max })}</span>
+      <Button onClick={() => nav('/settings/general')}>{t('调整上限')}</Button>
+      <Button onClick={() => api.cancelWaiting(sid)}>{t('不等了')}</Button>
     </div>
   );
 }

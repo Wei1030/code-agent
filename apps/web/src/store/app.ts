@@ -59,6 +59,8 @@ interface AppState {
   jobs: JobTemplate[];
   jobRuns: JobRun[];
   peer: PeerSettings;
+  /** Claude Code processes running at once, across all workspaces. */
+  maxRunning: number;
   /** Messages between sessions waiting for the user to release them. */
   held: HeldMessage[];
   provider: Provider;
@@ -70,6 +72,7 @@ interface AppState {
   inspector: { open: boolean; width: number; tab: InspectorTab; eventsSub: 'events' | 'stderr' | 'hooks' };
   mockConsoleOpen: boolean;
   folderPickerOpen: boolean;
+  inboxOpen: boolean;
   /** Text pushed into a session's composer (suggestions, fork-and-edit). */
   fill: { sid: string; text: string; n: number } | null;
 
@@ -100,6 +103,9 @@ export const useApp = create<AppState>((set, get) => ({
     numberStyle: 'intl',
     showRawSdkText: false,
     browserNotifications: true,
+    notifyRequests: true,
+    notifyTurnDone: true,
+    notifyBackground: true,
   },
   profiles: PROFILES,
   rules: RULES,
@@ -114,7 +120,8 @@ export const useApp = create<AppState>((set, get) => ({
   hookLog: HOOK_LOG,
   jobs: JOBS,
   jobRuns: JOB_RUNS,
-  peer: { inbound: 'parity', maxHops: 6, maxRunning: 4, idleSaveMinutes: 30 },
+  peer: { inbound: 'parity', maxHops: 6 },
+  maxRunning: 4,
   held: [],
   provider: {
     kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',
@@ -128,6 +135,7 @@ export const useApp = create<AppState>((set, get) => ({
   inspector: { open: true, width: 340, tab: 'tasks', eventsSub: 'events' },
   mockConsoleOpen: false,
   folderPickerOpen: false,
+  inboxOpen: false,
   fill: null,
 
   set: (patch) => set(patch),

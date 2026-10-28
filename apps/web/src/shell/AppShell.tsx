@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Button, ConfirmHost, Popover, Select, Toasts, Toggle } from '../components/ui';
@@ -11,6 +11,7 @@ import { MockConsole } from './MockConsole';
 import { FolderPicker } from './FolderPicker';
 import { api } from '../api';
 import { useGoToSessions, useOpenWorkspace } from '../components/SessionRow';
+import { requestNotificationPermission } from '../lib/notify';
 
 export function AppShell() {
   const t = useT();
@@ -115,7 +116,7 @@ function SearchBox() {
     const pages = [
       { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则'), to: '/settings/permissions' },
       { label: t('MCP 服务器'), to: '/mcp' }, { label: t('技能、命令与插件'), to: '/skills' }, { label: t('钩子'), to: '/hooks' }, { label: t('作业'), to: '/jobs' },
-      { label: t('设置 · 会话协作'), to: '/settings/collaboration' }, { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
+      { label: t('设置 · 常规（同时运行的会话、通知）'), to: '/settings/general' }, { label: t('设置 · 会话协作'), to: '/settings/collaboration' }, { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
     ].filter((p) => p.label.toLowerCase().includes(k));
     const ss = sessions.filter((s) => !s.draft && (s.title.toLowerCase().includes(k) || s.firstPrompt.toLowerCase().includes(k))).slice(0, 6);
     return [...ss.map((s) => ({ label: s.title, sub: `${workspaces.find((w) => w.id === s.workspaceId)?.name ?? ''} · ${relTime(s.lastActive)}`, to: `/s/${s.id}`, icon: 'chat' })), ...pages.map((p) => ({ ...p, sub: t('页面'), icon: 'chevRight' }))];
@@ -175,13 +176,18 @@ function ApprovalsInbox() {
   const held = useApp((s) => s.held);
   const maxHops = useApp((s) => s.peer.maxHops);
   const notify = useApp((s) => s.prefs.browserNotifications);
-  const [open, setOpen] = useState(false);
+  const open = useApp((s) => s.inboxOpen);
+  const setOpen = (v: boolean) => useApp.getState().set({ inboxOpen: v });
   const ref = useRef<HTMLButtonElement>(null);
   const pending = Object.values(runtimes)
     .filter((r) => r.request)
     .map((r) => ({ rt: r, sum: sessions.find((s) => s.id === r.id) }))
     .filter((x) => x.sum)
     .sort((a, b) => a.rt.request!.since - b.rt.request!.since);
+  const count = pending.length + held.length;
+  useEffect(() => {
+    document.title = count > 0 ? `(${count}) Code Agent` : 'Code Agent';
+  }, [count]);
   return (
     <>
       <button ref={ref} className="top-icon" onClick={() => setOpen(!open)} title={t('等你处理')}>
@@ -226,7 +232,8 @@ function ApprovalsInbox() {
           </div>
         ))}
         <div className="foot">
-          <Toggle on={notify} onChange={(v) => useApp.getState().setPrefs({ browserNotifications: v })} label={t('等待时发送浏览器通知')} />
+          <Toggle on={notify} onChange={(v) => { useApp.getState().setPrefs({ browserNotifications: v }); if (v) void requestNotificationPermission(); }} label={t('标签页不在前台时发送系统通知')} />
+          <button className="link-btn" style={{ marginTop: 6 }} onClick={() => { setOpen(false); nav('/settings/general'); }}>{t('提醒设置 →')}</button>
         </div>
       </Popover>
     </>

@@ -13,7 +13,7 @@ export function parseRule(rule: string): { tool: string; spec: string | null } {
 }
 
 const TOOL_LABEL: Record<string, string> = {
-  Bash: '命令', PowerShell: 'PowerShell 命令', Read: '读取文件', Edit: '修改文件', Write: '新建文件', WebFetch: '抓取网页',
+  Bash: '命令', PowerShell: 'PowerShell 命令', Read: '读取文件', Edit: '修改文件', Write: '新建文件', WebFetch: '抓取网页', WebSearch: '网页搜索',
   Glob: '按名称找文件', Grep: '搜索文件内容', Agent: '子代理', Skill: '技能', NotebookEdit: '编辑笔记本',
 };
 
