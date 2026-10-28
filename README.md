@@ -13,23 +13,29 @@ Phase 1 integrates the Claude Agent SDK only.
 
 ## Status
 
-Design stage. `apps/web` holds a front-end-only interaction mock: every screen and interaction is
-clickable, but the backend is mocked in the browser (`apps/web/src/mock`) and nothing talks to
-Claude Code yet. It is the reference for the interaction design while it is being revised; the SVG
-prototype predates the latest round of changes.
+Working app. `apps/server` runs one Claude Code process per session through the Agent SDK and
+serves the web app; `apps/web` is the browser UI. Besides what the SDK offers, Code Agent adds
+peer sessions (sessions of a workspace read, message and create each other), a code review loop
+(checks run by Code Agent, a read-only reviewer subagent, up to 5 rounds) and a workspace board
+(features, issues and notes, recorded in the background after each turn).
 
-### Running the interaction mock
+### Running
+
+Node.js 22 or later. Log in to Claude Code yourself first (`claude`, then `/login`), or configure a
+compatible endpoint in Settings.
 
 ```
 npm install
-npm run dev        # http://127.0.0.1:5180
+npm run dev        # server + Vite dev middleware: http://127.0.0.1:5180
+npm start          # builds the web app, then serves it: http://127.0.0.1:5180
 ```
 
-The flask icon at the bottom of the left rail opens a mock console that plays scripted scenarios
-(approvals, questions, plan review, subagents, high-risk commands) and injects error states.
-Messages typed into a session also pick a scenario by keyword (计划, 提问, 子代理, 删除, 修复).
+- Data lives in `~/.code-agent/` (set `CODE_AGENT_HOME` to move it); the port is `CODE_AGENT_PORT`.
+- The server listens on 127.0.0.1 only and accepts WebSocket connections only from its own origin.
+- Workspaces, permission rules, MCP servers, skills, commands and hooks are Claude Code's own
+  files; changes made here show up in the `claude` CLI and the other way round.
 
-`npm run typecheck` and `npm run build` check and build the web app.
+`npm run typecheck` checks all three packages; `npm run build` builds the web app.
 
 | Document | Contents |
 | --- | --- |
@@ -37,33 +43,26 @@ Messages typed into a session also pick a scenario by keyword (计划, 提问, �
 | [docs/requirements.zh-CN.md](docs/requirements.zh-CN.md) | The same specification in Simplified Chinese (kept in sync) |
 | [docs/prototype/index.html](docs/prototype/index.html) | Interaction prototype (Chinese UI): 25 screens drawn in SVG, each with numbered interaction notes |
 
-Open the prototype by loading `docs/prototype/index.html` in a browser; it needs no build step or
-server.
+The SVG prototype predates the last rounds of design changes; the web app is the reference.
 
-## Planned layout
+## Layout
 
 ```
 code-agent/
-├── docs/
-│   ├── requirements.md      # requirements specification (English)
-│   ├── requirements.zh-CN.md # requirements specification (Simplified Chinese)
-│   └── prototype/           # SVG interaction prototype (static page)
+├── docs/                    # requirements (English, Simplified Chinese) and the SVG prototype
 ├── apps/
-│   ├── server/              # Node.js: REST + WebSocket API, session manager, SDK adapter
-│   └── web/                 # browser single-page app (currently the interaction mock)
+│   ├── server/              # Node.js: WebSocket RPC, session engine on the Agent SDK, Code Agent features
+│   └── web/                 # browser single-page app
 └── packages/
-    └── protocol/            # shared types for the REST / WebSocket protocol
+    └── shared/              # protocol types, catalogs and helpers used by both
 ```
 
-`apps/server` and `packages/` are created with the first server code.
+## Stack
 
-## Planned stack
-
-- Node.js 22 LTS or later, TypeScript, npm workspaces
-- Server: Fastify with WebSocket support, `@anthropic-ai/claude-agent-sdk`
+- Node.js 22 LTS or later, TypeScript (run with tsx), npm workspaces
+- Server: Node `http` + `ws`, `@anthropic-ai/claude-agent-sdk`; JSON files in `~/.code-agent/`
 - Web: React 19, Vite, Zustand, React Router; plain CSS
-- Local storage: SQLite in `~/.code-agent/`
-- UI languages: Simplified Chinese and English
+- UI languages: Simplified Chinese (English prepared, not enabled yet)
 
 ## Authentication
 
