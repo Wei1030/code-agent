@@ -19,7 +19,7 @@
 .sdot.idle { background: var(--muted); }
 
 /* ---------------------------------------------------------------- center */
-.scenter { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--page); position: relative; }
+.scenter { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); position: relative; }
 .shead { display: flex; align-items: center; gap: 12px; padding: 0 16px 0 20px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; }
 .shead .title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .shead .title .edit { color: var(--muted); cursor: pointer; }
