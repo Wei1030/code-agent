@@ -114,8 +114,7 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
   return (
     <div className="scol">
       <div className="scol-top">
-        <Link to="/sessions" className="scol-all"><Icon name="list" size={15} />{t('全部会话')}<Icon name="chevRight" size={14} className="muted" /></Link>
-        <div className="row" style={{ margin: '10px 0' }}>
+        <div className="row" style={{ marginBottom: 10 }}>
           <Icon name="folder" size={15} className="muted" />
           <b className="truncate grow" title={ws?.path}>{ws?.name ?? t('未选择工作区')}</b>
         </div>
@@ -128,6 +127,7 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
         {saved.map(item)}
         {mine.length === 0 && <div className="empty" style={{ padding: 16 }}>{t('这个工作区还没有会话')}</div>}
       </div>
+      <div className="scol-foot"><Link to="/sessions">{t('全部会话 →')}</Link></div>
     </div>
   );
 }
@@ -135,6 +135,8 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
 function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime }) {
   const t = useT();
   const ws = useApp((s) => s.workspaces.find((w) => w.id === sum.workspaceId));
+  const allDirs = useApp((s) => s.dirs);
+  const dirs = allDirs.filter((d) => d.scope === 'global' || (d.scope === 'workspace' && d.workspaceId === sum.workspaceId) || (d.scope === 'session' && d.sessionId === sum.id));
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(sum.title);
   useEffect(() => setTitle(sum.title), [sum.title]);
@@ -162,6 +164,7 @@ function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime })
           {ws?.name}{sum.branch ? ` · ${sum.branch}` : ''}
           {sum.forkedFrom ? ` · ${t('分叉自「{f}」', { f: sum.forkedFrom })}` : ''}
           {rt.tokens > 0 ? ` · ${t('第 {n} 轮', { n: rt.turn })} · ${fmtTokens(rt.tokens)} tokens` : ''}
+          {dirs.length > 0 && <span title={dirs.map((d) => `${d.path}（${d.scope === 'session' ? t('仅本会话') : d.scope === 'workspace' ? t('这个工作区') : t('所有工作区')}）`).join('\n')}> · {t('额外目录 {n} 个', { n: dirs.length })}</span>}
         </div>
       </div>
     </div>

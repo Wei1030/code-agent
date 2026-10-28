@@ -1,5 +1,5 @@
 /** Small UI primitives shared by every page. */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { cx } from '../lib/util';
@@ -169,6 +169,8 @@ export interface MenuOption<T> {
   right?: ReactNode;
   disabled?: boolean;
   danger?: boolean;
+  /** Draw a separator line above this option. */
+  dividerBefore?: boolean;
 }
 
 /** Dropdown select built on Popover. */
@@ -188,20 +190,22 @@ export function Select<T extends string>({ value, options, onChange, icon, size,
       </button>
       <Popover anchor={btn.current} open={open} onClose={() => setOpen(false)} placement={placement} width={width}>
         {options.map((o) => (
-          <button
-            key={o.value}
-            className={cx('menu-item', o.value === value && 'on', o.danger && 'danger')}
-            disabled={o.disabled}
-            onClick={() => { setOpen(false); onChange(o.value); }}
-          >
-            {o.icon && <Icon name={o.icon} size={15} />}
-            <span className="grow">
-              {o.label}
-              {o.desc && <span className="desc">{o.desc}</span>}
-            </span>
-            {o.right && <span className="right">{o.right}</span>}
-            {o.value === value && <Icon name="check" size={14} />}
-          </button>
+          <Fragment key={o.value}>
+            {o.dividerBefore && <div className="menu-sep" />}
+            <button
+              className={cx('menu-item', o.value === value && 'on', o.danger && 'danger')}
+              disabled={o.disabled}
+              onClick={() => { setOpen(false); onChange(o.value); }}
+            >
+              {o.icon && <Icon name={o.icon} size={15} />}
+              <span className="grow">
+                {o.label}
+                {o.desc && <span className="desc">{o.desc}</span>}
+              </span>
+              {o.right && <span className="right">{o.right}</span>}
+              {o.value === value && <Icon name="check" size={14} />}
+            </button>
+          </Fragment>
         ))}
       </Popover>
     </>

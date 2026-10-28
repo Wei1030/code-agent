@@ -16,7 +16,7 @@ import {
 } from './engine';
 import {
   bootAuth, bootDocs, bootFlaky, footer, pickScenario, scenarioAck,
-  scenarioCommand, scenarioFix, scenarioHighRisk, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
+  scenarioCommand, scenarioFix, scenarioHighRisk, scenarioOutside, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
 } from './scenarios';
 
 const MODEL_ID: Record<string, string> = { opus: 'claude-opus-5-5', fable: 'claude-fable-5-1', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5' };
@@ -45,6 +45,12 @@ export function openSession(sid: string) {
 export function createDraft(workspaceId: string): string {
   const app = useApp.getState();
   const ws = app.workspaces.find((w) => w.id === workspaceId) ?? app.workspaces[0];
+  // One unsent session per workspace is enough: reuse it.
+  const unsent = app.sessions.find((s) => s.workspaceId === ws.id && s.draft);
+  if (unsent) {
+    app.set({ currentWorkspaceId: ws.id });
+    return unsent.id;
+  }
   const def = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
   const id = uid('s');
   app.upsertSession({
@@ -237,16 +243,20 @@ export function runningWork(sid: string): RunningWork {
   };
 }
 
-/** The session to open for a workspace: the most recently active one, if any. */
+/**
+ * The session to open for a workspace: the most recently active running session, else an unsent
+ * new session, else the most recent saved one. Null when the workspace has no sessions.
+ */
 export function latestSession(workspaceId: string): string | null {
-  const list = useApp.getState().sessions.filter((s) => s.workspaceId === workspaceId && !s.draft);
-  if (list.length === 0) return null;
-  return list.reduce((a, b) => (b.lastActive > a.lastActive ? b : a)).id;
+  const list = useApp.getState().sessions.filter((s) => s.workspaceId === workspaceId);
+  const newest = (xs: typeof list) => (xs.length ? xs.reduce((a, b) => (b.lastActive > a.lastActive ? b : a)).id : null);
+  return newest(list.filter((s) => s.live && !s.draft)) ?? newest(list.filter((s) => s.draft)) ?? newest(list);
 }
 
 /** End the Claude Code process; the session becomes a saved, read-only session. Running work is killed. */
 export function stop(sid: string) {
   cancelRun(sid);
+  useApp.getState().set({ dirs: useApp.getState().dirs.filter((d) => d.sessionId !== sid) });
   const r = rt(sid);
   if (r?.request) emit(sid, { t: 'request', request: null });
   if (r?.background.some((b) => b.status === 'running')) {
@@ -418,15 +428,15 @@ export function exportMarkdown(sid: string): string {
 
 // ------------------------------------------------------------------ mock console
 
-export type Scenario = 'fix' | 'question' | 'plan' | 'subagents' | 'highRisk';
+export type Scenario = 'fix' | 'question' | 'plan' | 'subagents' | 'highRisk' | 'outside';
 
 export function runScenario(sid: string, s: Scenario) {
   if (isRunning(sid)) return;
   const sum = useApp.getState().sessions.find((x) => x.id === sid);
   if (sum?.draft) useApp.getState().patchSession(sid, { draft: false, live: true, title: '模拟场景' });
-  const text = { fix: 'CI 上结账测试偶尔失败，帮我修复。', question: '给 /orders 接口加上限流，有选择就问我。', plan: '用 Redis 给 /orders 限流，先出计划。', subagents: '找出所有用到 CartTimer 的地方，同时在后台跑 e2e。', highRisk: '把旧的构建目录删掉。' }[s];
+  const text = { fix: 'CI 上结账测试偶尔失败，帮我修复。', question: '给 /orders 接口加上限流，有选择就问我。', plan: '用 Redis 给 /orders 限流，先出计划。', subagents: '找出所有用到 CartTimer 的地方，同时在后台跑 e2e。', highRisk: '把旧的构建目录删掉。', outside: '金额是负数时显示不对，问题可能在共享库 shared-lib 里。' }[s];
   userItem(sid, text);
-  const fn = { fix: scenarioFix, question: scenarioQuestion, plan: scenarioPlan, subagents: scenarioSubagents, highRisk: scenarioHighRisk }[s];
+  const fn = { fix: scenarioFix, question: scenarioQuestion, plan: scenarioPlan, subagents: scenarioSubagents, highRisk: scenarioHighRisk, outside: scenarioOutside }[s];
   void startRun(sid, fn);
 }
 

@@ -4,6 +4,7 @@
 .scol { background: var(--surface-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
 .scol-top { padding: 12px; }
 .scol-list { flex: 1; overflow: auto; padding: 0 6px 8px; }
+.scol-foot { padding: 10px 14px; border-top: 1px solid var(--border); }
 .scol h5 { margin: 12px 8px 6px; font-size: 11px; font-weight: 700; color: var(--muted); }
 .scol-item { display: flex; gap: 10px; padding: 7px 8px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
 .scol-item:hover { background: var(--surface-3); }
@@ -24,9 +25,14 @@
 .shead .title .edit { color: var(--muted); cursor: pointer; }
 .shead .title .edit:hover { color: var(--accent); }
 .shead .meta { color: var(--muted); font-size: 11.5px; }
-.transcript { flex: 1; overflow: auto; padding: 16px 24px 12px; }
+/* The conversation sits in a sunken well so it reads as the main area at a glance. */
+.transcript {
+  flex: 1; overflow: auto; margin: 14px 24px 12px; padding: 18px 20px 14px;
+  min-height: 180px; background: #e9ecf1; border: 1px solid var(--border-strong); border-radius: 14px;
+  box-shadow: inset 0 2px 8px rgba(15, 23, 42, 0.12), inset 0 1px 2px rgba(15, 23, 42, 0.08);
+}
 .transcript-inner { max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
-.dock { flex: none; padding: 0 24px 14px; }
+.dock { flex: 0 1 auto; min-height: 0; overflow: auto; padding: 0 24px 14px; }
 .dock-inner { max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
 
 /* messages */
@@ -120,7 +126,7 @@
 .dpanel.approval .dpanel-head { background: var(--warn-soft); }
 .dpanel.approval.risky .dpanel-head { background: var(--crit-soft); }
 .dpanel-head b { font-size: 15px; }
-.dpanel-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow: auto; }
+.dpanel-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; max-height: 40vh; overflow: auto; }
 .dpanel-foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); }
 .dpanel-foot .grow { flex: 1; }
 .opt { border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
@@ -249,10 +255,9 @@
 .rewind-files .rf { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #eef0f4; font-size: 12.5px; }
 .rewind-files .rf:last-child { border-bottom: 0; }
 .qitem .select-btn { width: auto; flex: none; }
-.scol-all { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; color: var(--ink); font-weight: 500; border: 1px solid var(--border); background: var(--surface); }
-.scol-all:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-.scol-all .muted { margin-left: auto; }
 .scol-item { position: relative; }
 .scol-acts { display: none; gap: 2px; align-items: center; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: var(--surface-3); border-radius: 6px; }
 .scol-item.on .scol-acts { background: var(--surface); }
 .scol-item:hover .scol-acts { display: flex; }
+.outside-path { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; background: var(--warn-soft); border: 1px solid var(--warn-line); color: var(--warn-ink); }
+.outside-path .mono { font-size: 12.5px; color: var(--ink); word-break: break-all; }

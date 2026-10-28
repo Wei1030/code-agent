@@ -1,4 +1,5 @@
 /** P02 — workspaces and recent sessions. */
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Button, Chip } from '../components/ui';
@@ -16,6 +17,8 @@ export function Home() {
   const openPicker = () => useApp.getState().set({ folderPickerOpen: true });
 
   const openWorkspace = useOpenWorkspace();
+  // The overview is what "All workspaces" in the top bar shows.
+  useEffect(() => useApp.getState().set({ currentWorkspaceId: '' }), []);
 
   return (
     <div className="page">

@@ -1,7 +1,7 @@
 /** App-wide state: registries, preferences and UI chrome. Sessions live in ./sessions. */
 import { create } from 'zustand';
 import type {
-  EnvVar, PermissionRule, Prefs, Profile, ProviderKind, SessionSummary, Workspace,
+  EnvVar, ExtraDir, PermissionRule, Prefs, Profile, ProviderKind, SessionSummary, Workspace,
 } from '../api/types';
 import { ENV_VARS, PROFILES, RULES, SESSIONS, WORKSPACES } from '../mock/data';
 import { uid } from '../lib/util';
@@ -44,6 +44,7 @@ interface AppState {
   prefs: Prefs;
   profiles: Profile[];
   rules: PermissionRule[];
+  dirs: ExtraDir[];
   provider: Provider;
   env: EnvVar[];
   runtime: { debugLog: boolean; otel: boolean; otelEndpoint: string; otelMetrics: boolean; otelLogs: boolean; otelTraces: boolean; otelPrompts: boolean; otelTools: boolean };
@@ -85,6 +86,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   profiles: PROFILES,
   rules: RULES,
+  dirs: [{ id: 'dir-1', path: 'D:\\src\\design-tokens', scope: 'workspace', workspaceId: 'ws-shop-web' }],
   provider: {
     kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',
     envConflict: false, compatibleUrl: '', compatibleModel: '',

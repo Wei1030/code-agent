@@ -88,11 +88,8 @@ export function Profiles() {
                   <Select value={draft.model} onChange={(v) => { const efforts = MODELS.find((m) => m.id === v)!.efforts; set({ model: v, effort: efforts.includes(draft.effort) ? draft.effort : efforts[efforts.length - 1] }); }}
                     options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
                 </Field>
-                <Field label={t('思考强度')} hint={t('使用第三方端点时可能不生效')}>
+                <Field label={t('思考强度')} hint={t('模型回答前想得多深；使用兼容端点时可能不生效')}>
                   <Select<Effort> value={draft.effort} onChange={(v) => set({ effort: v })} options={model.efforts.map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
-                </Field>
-                <Field label={t('扩展思考')} hint={t('回答前先在内部推理。自适应：由模型决定想多少，深浅由思考强度控制')}>
-                  <Seg value={draft.thinking} onChange={(v) => set({ thinking: v })} items={[{ value: 'adaptive', label: t('自适应') }, { value: 'budget', label: t('固定预算') }, { value: 'off', label: t('关闭') }]} />
                 </Field>
               </div>
             </Section>

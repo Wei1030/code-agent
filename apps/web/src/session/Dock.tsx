@@ -29,7 +29,9 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
   const t = useT();
   const waited = useSince(req.since);
   const showRaw = useApp((s) => s.prefs.showRawSdkText);
-  const [choice, setChoice] = useState<'once' | 'remember' | 'edit' | 'deny'>(req.defaultToNo ? 'deny' : 'once');
+  const [choice, setChoice] = useState<'once' | 'remember' | 'edit' | 'deny' | 'dir'>(req.defaultToNo ? 'deny' : 'once');
+  const candidates = req.outside?.candidates ?? [];
+  const [dir, setDir] = useState(candidates.find((c) => c.split('\\').length === 3) ?? candidates[0] ?? '');
   const [rule, setRule] = useState(req.suggestions[0] ?? '');
   const [dest, setDest] = useState<RuleDestination>('workspace');
   const [command, setCommand] = useState(req.command ?? '');
@@ -41,9 +43,10 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
     if (choice === 'deny') api.respondApproval(sid, req.id, { behavior: 'deny', message: message.trim() || undefined });
     else if (choice === 'remember') api.respondApproval(sid, req.id, { behavior: 'allow', remember: { rule, destination: dest } });
     else if (choice === 'edit') api.respondApproval(sid, req.id, { behavior: 'allow', command });
+    else if (choice === 'dir') api.respondApproval(sid, req.id, { behavior: 'allow', addDir: { dir, destination: dest } });
     else api.respondApproval(sid, req.id, { behavior: 'allow' });
   };
-  const primaryLabel = { once: t('允许'), remember: t('允许并记住'), edit: t('修改后允许'), deny: message.trim() ? t('拒绝并发送说明') : t('拒绝') }[choice];
+  const primaryLabel = { once: t('允许'), remember: t('允许并记住'), edit: t('修改后允许'), dir: t('允许并加入目录'), deny: message.trim() ? t('拒绝并发送说明') : t('拒绝') }[choice];
 
   if (req.defaultToNo) {
     return (
@@ -71,7 +74,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
   return (
     <div className="dpanel approval">
       <div className="dpanel-head">
-        <Icon name="shield" size={20} className="ink2" />
+        <Icon name={req.outside ? 'folder' : 'shield'} size={20} className="ink2" />
         <b>{req.title}</b>
         {req.agent && <Chip icon="agent" tone="outline">{t('由子代理 {a} 发起', { a: req.agent })}</Chip>}
         <span className="grow" />
@@ -90,6 +93,13 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
             {req.description && <div className="hint" style={{ fontStyle: 'italic', marginTop: 4 }}>{req.description}</div>}
           </div>
         )}
+        {req.outside && (
+          <div className="outside-path">
+            <Icon name="folder" size={15} />
+            <span className="mono grow">{req.outside.path}</span>
+            <Chip tone="warn">{t('工作区外')}</Chip>
+          </div>
+        )}
         {req.diff && (
           <div className="diff">
             {req.diff.lines.map((l, i) => <div key={i} className={l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}>{l}</div>)}
@@ -98,6 +108,20 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
         <div className={cx('opt', choice === 'once' && 'on')} onClick={() => setChoice('once')}>
           <div className="opt-row"><Radio on={choice === 'once'} onChange={() => setChoice('once')} /><span className="grow">{t('仅允许这一次')}</span></div>
         </div>
+        {req.outside && (
+          <div className={cx('opt', choice === 'dir' && 'on')} onClick={() => setChoice('dir')}>
+            <div className="opt-row"><Radio on={choice === 'dir'} onChange={() => setChoice('dir')} /><span className="grow">{t('允许，并把目录加为额外目录')}</span></div>
+            {choice === 'dir' && (
+              <div className="extra" onClick={(e) => e.stopPropagation()}>
+                <span className="ink2">{t('目录')}</span>
+                <Select size="sm" value={dir} onChange={setDir} width={340} options={candidates.map((c) => ({ value: c, label: <span className="mono">{c}</span> }))} />
+                <span className="ink2">{t('适用范围')}</span>
+                <Select<RuleDestination> size="sm" value={dest} onChange={setDest} width={260} options={DESTINATIONS.map((d) => ({ value: d.value, label: t(d.label), desc: t(d.desc) }))} />
+                <span className="hint" style={{ flexBasis: '100%' }}>{t('目录里的文件以后可以直接读取，修改按当前权限模式处理。保存后可以在「设置 → 权限规则」里管理。')}</span>
+              </div>
+            )}
+          </div>
+        )}
         {req.suggestions.length > 0 && (
           <div className={cx('opt', choice === 'remember' && 'on')} onClick={() => setChoice('remember')}>
             <div className="opt-row"><Radio on={choice === 'remember'} onChange={() => setChoice('remember')} /><span className="grow">{t('允许，并且以后不再询问')}</span></div>

@@ -34,11 +34,10 @@ export function useSessionActions() {
   const t = useT();
   const here = useMatch('/s/:id')?.params.id;
 
-  /** After the session on screen goes away, show the workspace's next session or the home page. */
+  const openWorkspace = useOpenWorkspace();
+  /** After the session on screen goes away, show the workspace's next session (or a new one). */
   const leave = (s: SessionSummary) => {
-    if (here !== s.id) return;
-    const next = api.latestSession(s.workspaceId);
-    nav(next ? `/s/${next}` : '/');
+    if (here === s.id) openWorkspace(s.workspaceId);
   };
 
   return {
@@ -87,7 +86,7 @@ export function useSessionActions() {
   };
 }
 
-/** Open a workspace: its most recently active session, or a new one when it has none. */
+/** Open a workspace: its latest running session (see api.latestSession), or a new one when it has none. */
 export function useOpenWorkspace() {
   const nav = useNavigate();
   return (workspaceId: string) => {
@@ -183,4 +182,18 @@ export function SessionRow({ s, wsName, detailed }: { s: SessionSummary; wsName:
       </Popover>
     </div>
   );
+}
+
+/**
+ * The "Sessions" entry (left rail, brand): the selected workspace's latest session, or the
+ * overview page when "All workspaces" is selected.
+ */
+export function useGoToSessions() {
+  const nav = useNavigate();
+  const openWorkspace = useOpenWorkspace();
+  return () => {
+    const ws = useApp.getState().currentWorkspaceId;
+    if (ws && useApp.getState().workspaces.some((w) => w.id === ws)) openWorkspace(ws);
+    else nav('/');
+  };
 }

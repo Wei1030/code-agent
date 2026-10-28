@@ -147,6 +147,8 @@ export type PendingRequest =
     agent?: string;
     suggestions: string[];
     defaultToNo?: boolean;
+    /** The file is outside the workspace and its extra directories; `candidates` are directories that would cover it. */
+    outside?: { path: string; candidates: string[] };
     since: number;
   }
   | { kind: 'question'; id: string; toolItemId: string; questions: Question[]; since: number }
@@ -156,7 +158,7 @@ export type PendingRequest =
 export type RuleDestination = 'session' | 'workspace' | 'global';
 
 export type ApprovalAnswer =
-  | { behavior: 'allow'; command?: string; remember?: { rule: string; destination: RuleDestination } }
+  | { behavior: 'allow'; command?: string; remember?: { rule: string; destination: RuleDestination }; addDir?: { dir: string; destination: RuleDestination } }
   | { behavior: 'deny'; message?: string; interrupt?: boolean };
 
 export interface QuestionAnswer {
@@ -279,7 +281,6 @@ export interface Profile {
   allowBypass: boolean;
   model: string;
   effort: Effort;
-  thinking: 'adaptive' | 'budget' | 'off';
   mode: PermissionMode;
   prompts: 'host' | 'none';
   /** Built-in tools Claude can use; the others are hidden from it (SDK `tools`). */
@@ -303,6 +304,19 @@ export interface PermissionRule {
   rule: string;
   scope: 'global' | 'workspace' | 'repo';
   workspaceId?: string;
+}
+
+/**
+ * A directory outside the workspace Claude may use like the workspace itself (Claude Code
+ * `additionalDirectories`): reads need no approval, edits follow the permission mode.
+ * global / workspace are saved in settings files; session lasts as long as the session's process.
+ */
+export interface ExtraDir {
+  id: string;
+  path: string;
+  scope: 'global' | 'workspace' | 'session';
+  workspaceId?: string;
+  sessionId?: string;
 }
 
 export type ProviderKind = 'subscription' | 'compatible';

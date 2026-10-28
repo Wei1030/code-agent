@@ -10,16 +10,21 @@ import { cx } from '../lib/util';
 import { MockConsole } from './MockConsole';
 import { FolderPicker } from './FolderPicker';
 import { api } from '../api';
-import { useOpenWorkspace } from '../components/SessionRow';
+import { useGoToSessions, useOpenWorkspace } from '../components/SessionRow';
 
 export function AppShell() {
   const t = useT();
   const connection = useApp((s) => s.connection);
+  const goToSessions = useGoToSessions();
+  const atHome = useMatch('/');
+  const atSession = useMatch('/s/:id');
+  const atList = useMatch('/sessions');
+  const onSessions = !!(atHome || atSession || atList);
   return (
     <div className="app">
       <TopBar />
       <nav className="navrail" aria-label={t('主导航')}>
-        <NavLink to="/" end className={({ isActive }) => cx(isActive && 'active')}><Icon name="chat" size={22} />{t('会话')}</NavLink>
+        <button className={cx(onSessions && 'active')} onClick={goToSessions} title={t('进入所选工作区最近的会话；选择「所有工作区」时进入总览')}><Icon name="chat" size={22} />{t('会话')}</button>
         <NavLink to="/usage" className={({ isActive }) => cx(isActive && 'active')}><Icon name="chart" size={22} />{t('用量')}</NavLink>
         <NavLink to="/settings" className={({ isActive }) => cx(isActive && 'active')}><Icon name="gear" size={22} />{t('设置')}</NavLink>
         <button className="bottom mock-btn" title={t('模拟控制台：触发场景和异常状态')} onClick={() => useApp.getState().set({ mockConsoleOpen: !useApp.getState().mockConsoleOpen })}>
@@ -50,10 +55,11 @@ function TopBar() {
   const current = useApp((s) => s.currentWorkspaceId);
   const provider = useApp((s) => s.provider);
   const openWorkspace = useOpenWorkspace();
+  const goToSessions = useGoToSessions();
   const authKind = provider.kind === 'subscription' ? t('Claude 订阅') : t('兼容端点');
   return (
     <header className="topbar">
-      <div className="brand" onClick={() => nav('/')}>
+      <div className="brand" onClick={goToSessions}>
         <span className="logo"><Icon name="chevRight" size={16} strokeWidth={2.4} /></span>
         Code Agent<span className="by">{t('由 Claude 驱动')}</span>
       </div>
@@ -61,15 +67,17 @@ function TopBar() {
         <Select
           className="ws-switch"
           icon="folder"
-          value={current}
-          width={300}
+          value={current || '__all'}
+          width={320}
           options={[
             ...workspaces.map((w) => ({ value: w.id, label: w.path, icon: 'folder' })),
+            { value: '__all', label: t('所有工作区'), desc: t('工作区与最近会话总览'), icon: 'home', dividerBefore: true },
             { value: '__open', label: t('打开文件夹…'), icon: 'plus' },
           ]}
           renderValue={(o) => o?.label}
           onChange={(v) => {
             if (v === '__open') useApp.getState().set({ folderPickerOpen: true });
+            else if (v === '__all') { useApp.getState().set({ currentWorkspaceId: '' }); nav('/'); }
             else openWorkspace(v);
           }}
         />

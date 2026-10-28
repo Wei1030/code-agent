@@ -91,6 +91,8 @@ export function Permissions() {
             <RuleEditor onAdd={add} />
           </div>
 
+          <DirsPanel scope={scope} wsId={wsId} wsPath={ws?.path ?? ''} />
+
           {scope === 'workspace' && (
             <div className="panel">
               <div className="panel-head">
@@ -103,11 +105,12 @@ export function Permissions() {
             </div>
           )}
           <div className="hint" style={{ marginTop: 10 }}>
-            {t('审批时选「允许，并且以后不再询问」也会在这里添加规则；选「仅本会话」的不写入文件，会话结束就失效。')}
+            {t('审批时选「以后不再询问」或「把目录加为额外目录」也会添加到这里；选「仅本会话」的不写入文件，会话结束就失效。')}
           </div>
         </div>
 
-        <TryIt rules={effective} scopeLabel={scope === 'global' ? t('全局规则') : t('全局 + {w} 的规则', { w: ws?.name ?? '' })} />
+        <TryIt rules={effective} dirs={scope === 'workspace' && ws ? [ws.path, ...app.dirs.filter((d) => d.scope === 'global' || (d.scope === 'workspace' && d.workspaceId === wsId)).map((d) => d.path)] : null}
+          scopeLabel={scope === 'global' ? t('全局规则') : t('全局 + {w} 的规则', { w: ws?.name ?? '' })} />
       </div>
     </>
   );
@@ -182,7 +185,14 @@ function RuleEditor({ onAdd }: { onAdd: (behavior: Behavior, rule: string) => vo
   );
 }
 
-function TryIt({ rules, scopeLabel }: { rules: PermissionRule[]; scopeLabel: string }) {
+const isAbsolute = (p: string) => /^[a-z]:[\\/]|^\\\\|^\//i.test(p.trim());
+const within = (p: string, dir: string) => {
+  const a = p.trim().replace(/\//g, '\\').toLowerCase();
+  const d = dir.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+  return a === d || a.startsWith(`${d}\\`);
+};
+
+function TryIt({ rules, dirs, scopeLabel }: { rules: PermissionRule[]; dirs: string[] | null; scopeLabel: string }) {
   const t = useT();
   const [tool, setTool] = useState('Bash');
   const [input, setInput] = useState('');
@@ -211,12 +221,57 @@ function TryIt({ rules, scopeLabel }: { rules: PermissionRule[]; scopeLabel: str
             ) : (
               <div className="hint">
                 {o.unmatched && <>{t('「{p}」没有允许规则，所以整条命令不能直接执行。', { p: o.unmatched })} </>}
-                {t('交给权限模式：「编辑前询问」会问你；「自动接受编辑」会直接修改工作区内的文件；只读命令和工作区内的读取不需要询问。')}
+                {(tool === 'Read' || tool === 'Edit') && isAbsolute(input) && dirs && !dirs.some((d) => within(input, d))
+                  ? t('这个路径在工作区和额外目录之外：读取和修改都会先问你，那时可以顺手把目录加为额外目录。')
+                  : t('交给权限模式：「编辑前询问」会问你；「自动接受编辑」会直接修改工作区（含额外目录）内的文件；只读命令和工作区内的读取不需要询问。')}
               </div>
             )}
           </div>
         )}
         <div className="hint">{t('这里按 Claude Code 的规则做近似判断，实际以 Claude Code 为准。')}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Directories outside the workspace that Claude may use like the workspace itself. */
+function DirsPanel({ scope, wsId, wsPath }: { scope: 'global' | 'workspace'; wsId: string; wsPath: string }) {
+  const t = useT();
+  const app = useApp();
+  const [path, setPath] = useState('');
+  const own = app.dirs.filter((d) => (scope === 'global' ? d.scope === 'global' : d.scope === 'workspace' && d.workspaceId === wsId));
+  const globalCount = app.dirs.filter((d) => d.scope === 'global').length;
+  const valid = isAbsolute(path) && !own.some((d) => d.path.toLowerCase() === path.trim().toLowerCase());
+  const add = () => {
+    app.set({ dirs: [...app.dirs, { id: uid('dir'), path: path.trim().replace(/[\\/]+$/, ''), scope, workspaceId: scope === 'workspace' ? wsId : undefined }] });
+    setPath('');
+  };
+  return (
+    <div className="panel" style={{ marginBottom: 14 }}>
+      <div className="panel-head">
+        <h3>{t('额外可访问的目录')}</h3>
+        <span className="grow" />
+        {scope === 'workspace' && globalCount > 0 && <span className="hint">{t('另有 {n} 个全局目录同时生效', { n: globalCount })}</span>}
+      </div>
+      <div className="panel-body col">
+        <div className="hint">
+          {scope === 'workspace'
+            ? t('除了工作区 {w}，Claude 还可以使用这些目录：里面的文件直接读取，修改按权限模式处理。只授予文件访问，不加载那里的 CLAUDE.md 和设置。', { w: wsPath })
+            : t('对所有工作区生效。里面的文件直接读取，修改按权限模式处理。')}
+        </div>
+        {own.length === 0 && <div className="muted">{t('还没有添加目录。对话中 Claude 访问工作区外的文件时，也可以在审批里直接添加。')}</div>}
+        {own.map((d) => (
+          <div key={d.id} className="dir-row">
+            <Icon name="folder" size={15} className="muted" />
+            <span className="mono grow">{d.path}</span>
+            <Button size="sm" variant="ghost" icon="trash" title={t('移除')} onClick={() => app.set({ dirs: app.dirs.filter((x) => x.id !== d.id) })} />
+          </div>
+        ))}
+        <div className="row">
+          <input className="input sm mono grow" placeholder="D:\src\shared-lib" value={path} onChange={(e) => setPath(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && valid) add(); }} />
+          <Button size="sm" icon="plus" disabled={!valid} onClick={add}>{t('添加目录')}</Button>
+        </div>
       </div>
     </div>
   );

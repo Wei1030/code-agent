@@ -1,9 +1,9 @@
 /** "Open folder…" browser over the server's file system (mocked). */
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Button, Modal } from '../components/ui';
 import { useApp } from '../store/app';
+import { useOpenWorkspace } from '../components/SessionRow';
 import { SERVER_FOLDERS, type FsNode } from '../mock/data';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
@@ -11,7 +11,7 @@ import { useT } from '../lib/i18n';
 export function FolderPicker() {
   const t = useT();
   const open = useApp((s) => s.folderPickerOpen);
-  const nav = useNavigate();
+  const openWorkspace = useOpenWorkspace();
   const [sel, setSel] = useState('');
   const [typed, setTyped] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['D:\\', 'D:\\src']));
@@ -46,9 +46,9 @@ export function FolderPicker() {
       width={560}
       footer={<><Button onClick={close}>{t('取消')}</Button><Button variant="primary" disabled={!path} onClick={() => {
         const ws = useApp.getState().addWorkspace(path);
-        useApp.getState().set({ currentWorkspaceId: ws.id, folderPickerOpen: false });
+        useApp.getState().set({ folderPickerOpen: false });
         useApp.getState().toast(t('已添加工作区 {name}', { name: ws.name }), 'good');
-        nav('/');
+        openWorkspace(ws.id);
       }}>{t('添加为工作区')}</Button></>}
     >
       <div className="folder-tree">{render(SERVER_FOLDERS, '', 0)}</div>

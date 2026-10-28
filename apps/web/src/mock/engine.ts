@@ -183,6 +183,29 @@ export function answer(sid: string, requestId: string, a: ApprovalAnswer | Quest
 
 export type Decision = { allowed: true; provenance: string } | { allowed: false; reason: 'deny-rule' | 'dont-ask'; rule?: string } | { ask: true };
 
+const norm = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+const isAbsolute = (p: string) => /^[a-z]:\\|^\\\\|^\//i.test(p);
+
+/** The session's working directories: its workspace plus every extra directory that applies. */
+export function workingDirs(sid: string): string[] {
+  const app = useApp.getState();
+  const sum = app.sessions.find((s) => s.id === sid);
+  const ws = app.workspaces.find((w) => w.id === sum?.workspaceId);
+  const extra = app.dirs.filter((d) => d.scope === 'global' || (d.scope === 'workspace' && d.workspaceId === ws?.id) || (d.scope === 'session' && d.sessionId === sid));
+  return [...(ws ? [ws.path] : []), ...extra.map((d) => d.path)];
+}
+
+/** For a path outside every working directory, the directories that would cover it (nearest first); else null. */
+export function outsideOf(sid: string, path: string): string[] | null {
+  if (!isAbsolute(path)) return null;
+  const p = norm(path);
+  if (workingDirs(sid).some((d) => p === norm(d) || p.startsWith(`${norm(d)}\\`))) return null;
+  const parts = path.replace(/\//g, '\\').split('\\');
+  const out: string[] = [];
+  for (let i = parts.length - 1; i >= 2; i--) out.push(parts.slice(0, i).join('\\'));
+  return out;
+}
+
 /** Rules "remembered" for one session only; they live as long as its process. */
 const sessionRules = new Map<string, string[]>();
 
@@ -214,9 +237,20 @@ export function decide(sid: string, mode: PermissionMode, tool: string, command?
 export async function authorize(run: Run, tool: ToolItem, opts: {
   command?: string; description?: string; diff?: { path: string; lines: string[] }; agent?: string;
   reason?: string; title?: string; defaultToNo?: boolean;
+  /** Absolute path for file tools; outside the working directories it always asks (reads too). */
+  path?: string;
 }): Promise<{ provenance: string; command?: string } | null> {
   const r = rt(run.sid)!;
-  const d = opts.defaultToNo ? { ask: true as const } : decide(run.sid, r.mode, tool.tool, opts.command);
+  const candidates = opts.path ? outsideOf(run.sid, opts.path) : null;
+  let d: Decision;
+  if (opts.defaultToNo) d = { ask: true };
+  else if (candidates) {
+    const o = evaluate(rulesFor(run.sid), tool.tool, opts.path);
+    if (o.kind === 'deny') d = { allowed: false, reason: 'deny-rule', rule: o.rule.rule };
+    else if (r.mode === 'bypassPermissions') d = { allowed: true, provenance: '模式：跳过权限检查' };
+    else if (o.kind === 'allow') d = { allowed: true, provenance: `规则 ${o.rule.rule}` };
+    else d = r.mode === 'dontAsk' ? { allowed: false, reason: 'dont-ask' } : { ask: true };
+  } else d = decide(run.sid, r.mode, tool.tool, opts.command ?? opts.path);
   if ('allowed' in d && d.allowed) return { provenance: d.provenance };
   if ('allowed' in d && !d.allowed) {
     const why = d.reason === 'deny-rule' ? `被拒绝规则 ${d.rule} 拦截` : '「不询问」模式下未预先授权';
@@ -227,7 +261,13 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
   patch(run.sid, tool.id, { status: 'waiting', right: '等待审批' });
   const reqId = uid('req');
   const rule = opts.command ? suggestRule(opts.command) : tool.tool === 'Edit' || tool.tool === 'Write' ? `Edit(${dirOf(opts.diff?.path)})` : tool.tool;
-  const a = await waitFor<ApprovalAnswer>(run, {
+  const ws = workingDirs(run.sid)[0] ?? '';
+  const a = await waitFor<ApprovalAnswer>(run, candidates ? {
+    kind: 'approval', id: reqId, toolItemId: tool.id, tool: tool.tool,
+    title: tool.tool === 'Read' ? '允许读取工作区外的文件？' : '允许修改工作区外的文件？',
+    reason: `这个文件不在工作区 ${ws} 内，也不在已添加的额外目录里。`,
+    diff: opts.diff, agent: opts.agent, suggestions: [], outside: { path: opts.path!, candidates }, since: Date.now(),
+  } : {
     kind: 'approval', id: reqId, toolItemId: tool.id, tool: tool.tool,
     title: opts.title ?? (opts.command ? '允许执行这条命令？' : `允许修改 ${opts.diff?.path ?? '文件'}？`),
     reason: opts.reason ?? (opts.command ? '没有匹配这条命令的允许规则；当前会话对未授权的操作会先询问。' : '当前会话在编辑文件前会先询问。'),
@@ -252,10 +292,20 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
       app.set({ rules: [...app.rules, { id: uid('rule'), behavior: 'allow', rule: remembered, scope: destination, workspaceId: destination === 'workspace' ? workspaceId : undefined }] });
     }
   }
+  if (a.addDir) {
+    const app = useApp.getState();
+    const { dir, destination } = a.addDir;
+    const workspaceId = app.sessions.find((s) => s.id === run.sid)?.workspaceId;
+    app.set({ dirs: [...app.dirs, {
+      id: uid('dir'), path: dir, scope: destination,
+      workspaceId: destination === 'workspace' ? workspaceId : undefined, sessionId: destination === 'session' ? run.sid : undefined,
+    }] });
+  }
   const edited = a.command && a.command !== opts.command;
   if (edited) patch(run.sid, tool.id, { detail: a.command });
   patch(run.sid, tool.id, { status: 'running', right: undefined });
-  return { provenance: a.remember ? `已记住：${a.remember.rule}` : edited ? '已由你修改后批准' : '已由你批准', command: a.command };
+  const provenance = a.addDir ? `已加入额外目录：${a.addDir.dir}` : a.remember ? `已记住：${a.remember.rule}` : edited ? '已由你修改后批准' : '已由你批准';
+  return { provenance, command: a.command };
 }
 
 function dirOf(path?: string): string {

@@ -298,8 +298,8 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
             value: m, icon: MODE_INFO[m].icon, label: t(MODE_INFO[m].label), desc: t(MODE_INFO[m].desc),
             right: m === 'bypassPermissions' && !profile.allowBypass ? <Icon name="lock" size={13} /> : undefined,
           }))} />
-        <div className="ctx-meter" title={t('上下文 {u} / {m}，点击查看明细', { u: fmtTokens(ctxUsed), m: fmtTokens(rt.context.max) })}
-          onClick={() => app.setInspector({ open: true, tab: 'context' })}>
+        <div className="ctx-meter" title={t('上下文 {u} / {m}，点击展开或收起明细', { u: fmtTokens(ctxUsed), m: fmtTokens(rt.context.max) })}
+          onClick={() => app.setInspector(app.inspector.open && app.inspector.tab === 'context' ? { open: false } : { open: true, tab: 'context' })}>
           <div className="l"><span>{t('上下文')}</span><span>{Math.round(ctxPct)}%</span></div>
           <Progress value={ctxPct} color={ctxPct > 80 ? 'var(--warn)' : undefined} />
         </div>

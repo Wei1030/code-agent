@@ -392,6 +392,38 @@ export async function scenarioHighRisk(run: Run) {
   footer(sid, 1, (Date.now() - t0) / 1000);
 }
 
+/** Claude needs a file outside the workspace: reads and edits there ask, and the directory can be added. */
+export async function scenarioOutside(run: Run) {
+  const sid = run.sid;
+  const t0 = Date.now();
+  const path = 'D:\\src\\shared-lib\\src\\money.ts';
+  await streamText(run, '金额格式化来自共享库 shared-lib，我先看一下那边的实现。');
+  const read = newTool(sid, 'Read', path);
+  const r1 = await authorize(run, read, { path });
+  if (!r1) {
+    await streamText(run, '好的，不读取共享库。我在 shop-api 里加一个本地的格式化函数，先绕过这个问题。');
+    footer(sid, 1, (Date.now() - t0) / 1000);
+    return;
+  }
+  await sleep(run, 400);
+  finishTool(sid, read, { provenance: r1.provenance, seconds: 0.1, output: { type: 'code', lines: [
+    'export function formatMoney(cents: number) {', '  return `¥${(cents / 100).toFixed(2)}`;', '}',
+  ] } });
+  await streamText(run, '问题在 formatMoney 没有处理负数：-150 会显示成 ¥-1.50。我直接在共享库里修。');
+  const diff = ['@@ -1,3 +1,4 @@', ' export function formatMoney(cents: number) {', '-  return `¥${(cents / 100).toFixed(2)}`;', '+  const sign = cents < 0 ? "-" : "";', '+  return `${sign}¥${(Math.abs(cents) / 100).toFixed(2)}`;', ' }'];
+  const edit = newTool(sid, 'Edit', path, { right: '+2 −1' });
+  const r2 = await authorize(run, edit, { path, diff: { path, lines: diff } });
+  if (!r2) {
+    await streamText(run, '好的，共享库不动。修复方法写在上面了，你可以转给维护共享库的人。');
+    footer(sid, 2, (Date.now() - t0) / 1000);
+    return;
+  }
+  await sleep(run, 400);
+  finishTool(sid, edit, { provenance: r2.provenance, output: { type: 'diff', lines: diff }, seconds: 0.3, right: '+2 −1' });
+  await streamText(run, '已修复：负数金额现在显示为 -¥1.50。');
+  footer(sid, 2, (Date.now() - t0) / 1000);
+}
+
 export async function scenarioCommand(run: Run, cmd: string) {
   const t0 = Date.now();
   await streamText(run, `已运行 ${cmd}。（模拟：这里会显示该命令或技能的实际输出。）`);
@@ -407,6 +439,7 @@ export async function scenarioAck(run: Run, text: string) {
 }
 
 export function pickScenario(text: string, mode: string): (run: Run) => Promise<void> {
+  if (/共享库|工作区外|外部目录|shared-lib/i.test(text)) return scenarioOutside;
   if (mode === 'plan' || /计划|规划|plan/i.test(text)) return scenarioPlan;
   if (/提问|选项|选择|问我|问题/.test(text)) return scenarioQuestion;
   if (/子代理|后台|subagent|并行/i.test(text)) return scenarioSubagents;
