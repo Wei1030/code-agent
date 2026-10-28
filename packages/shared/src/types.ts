@@ -782,6 +782,8 @@ export interface Provider {
 
 export interface McpBehavior {
   strict: boolean;
+  /** Load the connectors of the claude.ai account (only with a Claude subscription login). */
+  claudeAiConnectors?: boolean;
   toolSearch: 'auto' | 'on' | 'off';
   firstTurnWait: number;
 }

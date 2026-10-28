@@ -216,7 +216,7 @@ function ToolTable({ s, wsId }: { s: McpServer; wsId: string }) {
     <div className="panel">
       <div className="panel-head">
         <h3>{t('工具')}</h3>
-        <span className="sub">{s.tools.length ? t('{n} 个 · 定义共约 {k} tokens', { n: s.tools.length, k: fmtTokens(total) }) : ''}</span>
+        <span className="sub">{!s.tools.length ? '' : total ? t('{n} 个 · 定义共约 {k} tokens', { n: s.tools.length, k: fmtTokens(total) }) : t('{n} 个', { n: s.tools.length })}</span>
       </div>
       {s.tools.length === 0 ? <div className="empty">{t('连接成功后会列出它的工具')}</div> : (
         <div className="panel-body" style={{ padding: 0 }}>
@@ -227,7 +227,7 @@ function ToolTable({ s, wsId }: { s: McpServer; wsId: string }) {
                 <tr key={x.name}>
                   <td style={{ paddingLeft: 16 }}><div className="mono">{x.name}</div><div className="muted" style={{ fontSize: 11.5 }}>{x.desc}</div></td>
                   <td>{x.annotations.map((a) => <span key={a} className={cx('ann', a === 'destructive' && 'destructive')}>{t(ANN_LABEL[a])}</span>)}</td>
-                  <td className="num">{fmtTokens(x.tokens)}</td>
+                  <td className="num">{x.tokens ? fmtTokens(x.tokens) : '—'}</td>
                   <td><Seg value={get(x.name)} onChange={(v) => setApproval(x.name, v)} items={[
                     { value: 'allow', label: t('允许') }, { value: 'ask', label: t('询问') }, { value: 'deny', label: t('拒绝') }, { value: 'default', label: t('默认') },
                   ]} /></td>
@@ -254,6 +254,8 @@ function Behavior() {
       <div className="panel-head"><h3>{t('会话行为')}</h3><span className="sub">{t('对所有服务器生效')}</span></div>
       <div className="panel-body col">
         <Toggle on={b.strict} onChange={(v) => set({ strict: v })} label={t('只用这里登记的服务器')} hint={t('忽略仓库 .mcp.json 和插件里的服务器')} />
+        <Toggle on={b.claudeAiConnectors !== false} onChange={(v) => set({ claudeAiConnectors: v })} label={t('加载 claude.ai 账号里的连接器')}
+          hint={t('使用 Claude 订阅登录时，Claude Code 会自动加载你在 claude.ai 上连接的服务（如 Claude Docs）。关掉后只对 Code Agent 启动的会话生效')} />
         <div className="row">
           <span style={{ width: 70 }}>{t('工具搜索')}</span>
           <Select value={b.toolSearch} onChange={(v) => set({ toolSearch: v })} width={340} className="w-240" options={[

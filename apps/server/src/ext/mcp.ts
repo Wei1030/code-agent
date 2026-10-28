@@ -29,6 +29,8 @@ const norm = (p: string) => path.resolve(p).replace(/\\/g, '/').replace(/\/+$/, 
 const raws = new Map<string, Raw>();
 /** Last probe result by `${workspaceId}|${name}`. */
 const statuses = new Map<string, McpServerStatus>();
+/** Servers only running sessions report (claude.ai connectors load after a probe has answered). */
+const fromSessions = new Set<string>();
 /** Sessions where the user switched a server off, by server name. */
 const offIn = new Map<string, string[]>();
 
@@ -68,7 +70,8 @@ function toServer(id: string, name: string, raw: Raw, scope: McpServer['scope'],
     tools: (st?.tools ?? []).map((t) => ({
       name: t.name, desc: t.description?.split('\n')[0]?.slice(0, 200) ?? '',
       annotations: [...(t.annotations?.readOnly ? ['readOnly' as const] : []), ...(t.annotations?.destructive ? ['destructive' as const] : []), ...(t.annotations?.openWorld ? ['openWorld' as const] : [])],
-      tokens: Math.round(((t.name.length + (t.description?.length ?? 0)) / 4) + 80),
+      // Only an estimate, and only when the server describes the tool.
+      tokens: t.description ? Math.round(((t.name.length + t.description.length) / 4) + 80) : 0,
     })),
     prompts: [],
     offIn: offIn.get(name) ?? [],
@@ -118,6 +121,7 @@ export function noteSessionMcp(workspaceId: string, list: McpServerStatus[]) {
     const prev = statuses.get(key);
     if (prev && prev.status === st.status && (prev.tools?.length ?? 0) === (st.tools?.length ?? 0)) continue;
     statuses.set(key, st);
+    fromSessions.add(key);
     changed = true;
   }
   if (changed) reloadMcp();
@@ -143,7 +147,7 @@ export function probeMcp(): Promise<void> {
           }
           return st;
         }, 90_000);
-        for (const k of [...statuses.keys()]) if (k.startsWith(`${t.id}|`)) statuses.delete(k);
+        for (const k of [...statuses.keys()]) if (k.startsWith(`${t.id}|`) && !fromSessions.has(k)) statuses.delete(k);
         for (const s of list) statuses.set(`${t.id}|${s.name}`, s);
       } catch (e) {
         console.error('[mcp] probe failed:', e instanceof Error ? e.message : e);

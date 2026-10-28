@@ -110,6 +110,7 @@ export function processEnv(extra: Record<string, string> = {}): Record<string, s
     }
   }
   const mb = app.mcpBehavior;
+  if (mb.claudeAiConnectors === false) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
   env.ENABLE_TOOL_SEARCH = mb.toolSearch === 'auto' ? 'auto' : mb.toolSearch === 'on' ? 'true' : 'false';
   if (mb.firstTurnWait) env.MCP_TIMEOUT = String(mb.firstTurnWait * 1000);
   const r = app.runtime;
