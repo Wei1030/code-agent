@@ -7,6 +7,7 @@ import type { McpServer, PermissionRule } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Modal, Seg, Select, Status, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
+import { api } from '../api';
 import { tokens as fmtTokens } from '../lib/format';
 import { cx, uid } from '../lib/util';
 import { useT } from '../lib/i18n';
@@ -90,15 +91,16 @@ function ServerDetail({ s, wsId, wsName, onEdit, onRemoved }: { s: McpServer; ws
   const [token, setToken] = useState('');
   const editable = s.scope === 'global' || s.scope === 'workspace';
   const patch = (p: Partial<McpServer>) => app.set({ mcp: useApp.getState().mcp.map((x) => (x.id === s.id ? { ...x, ...p } : x)) });
-  const reconnect = () => {
-    const before = s.status;
-    patch({ status: 'pending' });
-    setTimeout(() => {
-      // A server with a startup error stays failed; one that still lacks a token still needs login.
-      const next = s.error ? 'failed' : before === 'needs-auth' ? 'needs-auth' : 'connected';
-      app.set({ mcp: useApp.getState().mcp.map((x) => (x.id === s.id ? { ...x, status: next } : x)) });
-      app.toast(next === 'connected' ? t('{n} 已重新连接', { n: s.name }) : t('{n} 仍然无法连接', { n: s.name }), next === 'connected' ? 'good' : 'warn');
-    }, 1000);
+  const [busy, setBusy] = useState(false);
+  const reconnect = async () => {
+    setBusy(true);
+    try {
+      await api.testMcp(s.id);
+      const now = useApp.getState().mcp.find((x) => x.name === s.name && x.scope === s.scope);
+      app.toast(now?.status === 'connected' ? t('{n} 已连接', { n: s.name }) : t('{n} 仍然无法连接', { n: s.name }), now?.status === 'connected' ? 'good' : 'warn');
+    } finally {
+      setBusy(false);
+    }
   };
   const live = app.sessions.filter((x) => x.live && !x.draft && (s.scope === 'global' || s.scope === 'plugin' || x.workspaceId === s.workspaceId));
   const sourceText = { global: t('所有工作区 · ~/.claude.json'), workspace: t('{w} · 仅本机', { w: wsName }), repo: t('{w} · 仓库 .mcp.json', { w: wsName }), plugin: t('插件 {p}', { p: s.plugin ?? '' }) }[s.scope];
@@ -110,7 +112,7 @@ function ServerDetail({ s, wsId, wsName, onEdit, onRemoved }: { s: McpServer; ws
         <Chip>{s.type}</Chip>
         <Status tone={STATUS[s.status].tone}>{t(STATUS[s.status].label)}{s.version ? ` · ${s.version}` : ''}</Status>
         <span className="grow" />
-        <Button size="sm" icon="refresh" disabled={s.status === 'pending'} onClick={reconnect}>{t('重新连接')}</Button>
+        <Button size="sm" icon="refresh" disabled={busy} onClick={() => void reconnect()}>{busy ? t('连接中…') : t('重新连接')}</Button>
         {editable && <Button size="sm" icon="pencil" onClick={onEdit}>{t('编辑')}</Button>}
         {editable && (
           <Button size="sm" icon="trash" variant="danger-outline" onClick={() => app.ask({
@@ -129,13 +131,9 @@ function ServerDetail({ s, wsId, wsName, onEdit, onRemoved }: { s: McpServer; ws
             <div>{t('可以在对话中按服务器的提示在浏览器里完成登录（信息征询），或者直接粘贴访问令牌，作为请求头 Authorization 发送。')}</div>
             <div className="row" style={{ marginTop: 8 }}>
               <input className="input sm mono grow" type="password" placeholder={t('访问令牌')} value={token} onChange={(e) => setToken(e.target.value)} />
-              <Button size="sm" variant="primary" disabled={!token} onClick={() => {
-                patch({ headers: [{ key: 'Authorization', value: `Bearer ${token.slice(0, 4)}••••••••${token.slice(-4)}` }], status: 'pending' });
-                setToken('');
-                setTimeout(() => app.set({ mcp: useApp.getState().mcp.map((x) => (x.id === s.id ? { ...x, status: 'connected', version: 'atlassian-mcp 2.0.1', instructionsTokens: 400, tools: [
-                  { name: 'search_issues', desc: 'Search Jira issues with JQL', annotations: ['readOnly', 'openWorld'], tokens: 480 },
-                  { name: 'create_issue', desc: 'Create a Jira issue', annotations: ['openWorld'], tokens: 520 },
-                ] } : x)) }), 1000);
+              <Button size="sm" variant="primary" disabled={!token || busy} onClick={() => {
+                setBusy(true);
+                void api.setMcpHeader(s.id, s.type === 'stdio' ? 'TOKEN' : 'Authorization', s.type === 'stdio' ? token : `Bearer ${token}`).finally(() => { setBusy(false); setToken(''); });
               }}>{t('保存并连接')}</Button>
             </div>
           </div>
@@ -174,7 +172,7 @@ function ServerDetail({ s, wsId, wsName, onEdit, onRemoved }: { s: McpServer; ws
                 <div key={x.id} className="row">
                   <Toggle on={on} onChange={(v) => patch({ offIn: v ? s.offIn.filter((i) => i !== x.id) : [...s.offIn, x.id] })} />
                   <span className={cx('grow truncate', !on && 'muted')}>{x.title}</span>
-                  <Button size="sm" variant="ghost" icon="refresh" title={t('在这个会话里重新连接')} disabled={!on} onClick={() => app.toast(t('已在「{n}」中重新连接 {s}', { n: x.title, s: s.name }), 'good')} />
+                  <Button size="sm" variant="ghost" icon="refresh" title={t('在这个会话里重新连接')} disabled={!on} onClick={() => void api.reconnectMcpInSession(x.id, s.name).then(() => app.toast(t('已在「{n}」中重新连接 {s}', { n: x.title, s: s.name }), 'good'))} />
                 </div>
               );
             })}
@@ -292,7 +290,7 @@ function ServerForm({ server, wsId, wsName, onClose }: { server: McpServer | nul
   const save = () => {
     const [cmd, ...args] = command.trim().split(/\s+/);
     const data: McpServer = {
-      id: server?.id ?? uid('mcp'), name, type, scope, workspaceId: scope === 'workspace' ? wsId : undefined,
+      id: scope === 'global' ? `global::${name}` : `workspace:${wsId}:${name}`, name, type, scope, workspaceId: scope === 'workspace' ? wsId : undefined,
       command: type === 'stdio' ? cmd : undefined, args: type === 'stdio' ? args : undefined,
       env: env.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => ({ key: l.split('=')[0], value: l.slice(l.indexOf('=') + 1) })),
       url: type === 'stdio' ? undefined : url.trim(),
@@ -300,14 +298,8 @@ function ServerForm({ server, wsId, wsName, onClose }: { server: McpServer | nul
       timeout: Number(timeout) || 60, status: 'pending', instructionsTokens: server?.instructionsTokens ?? 0,
       tools: server?.tools ?? [], prompts: server?.prompts ?? [], offIn: server?.offIn ?? [],
     };
+    // The server writes Claude Code's config, then connects to the server to list its tools.
     app.set({ mcp: server ? app.mcp.map((x) => (x.id === server.id ? data : x)) : [...app.mcp, data] });
-    setTimeout(() => app.set({ mcp: useApp.getState().mcp.map((x) => (x.id === data.id ? {
-      ...x, status: 'connected', version: `${name} 1.0.0`, instructionsTokens: x.instructionsTokens || 200,
-      tools: x.tools.length ? x.tools : [
-        { name: 'search', desc: 'Search', annotations: ['readOnly'], tokens: 300 },
-        { name: 'update', desc: 'Update an item', annotations: [], tokens: 360 },
-      ],
-    } : x)) }), 1200);
     onClose(data.id);
   };
 

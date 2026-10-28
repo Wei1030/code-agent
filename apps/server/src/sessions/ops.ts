@@ -31,11 +31,17 @@ export function enqueue(sid: string, m: Outgoing, priority: QueuedMessage['prior
   return id;
 }
 
+/** Things that keep queued messages waiting although no turn runs (a review running its checks…). */
+const blockers: Array<(sid: string) => boolean> = [];
+export function addQueueBlocker(fn: (sid: string) => boolean) {
+  blockers.push(fn);
+}
+
 /** Send the next queued message when the session is free. */
 export function pumpQueue(sid: string): boolean {
   const r = rt(sid);
   const l = live(sid);
-  if (!r || !l || l.turn || r.request || !r.queue.length) return false;
+  if (!r || !l || l.turn || r.request || !r.queue.length || blockers.some((f) => f(sid))) return false;
   const [first, ...rest] = r.queue;
   emit(sid, { t: 'queue', queue: rest });
   const m = queued.get(first.id) ?? { text: first.text };

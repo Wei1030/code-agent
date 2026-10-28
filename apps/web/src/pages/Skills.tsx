@@ -4,6 +4,7 @@ import type { CommandFile, PluginInfo, SkillInfo } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Modal, Seg, Select, Status, Tabs, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
+import { api } from '../api';
 import { BUILTIN_COMMANDS } from '../lib/catalog';
 import { cx, uid } from '../lib/util';
 import { useT } from '../lib/i18n';
@@ -156,7 +157,7 @@ function SkillEditor({ skill, wsId }: { skill: SkillInfo; wsId: string }) {
           <div className="row">
             <span className="grow" />
             <Button size="sm" icon="refresh" disabled={dirty || live === 0} title={dirty ? t('先保存') : undefined}
-              onClick={() => app.toast(t('已在 {n} 个运行中的会话里重新加载技能', { n: live }), 'good')}>{t('在运行中的会话里重新加载（{n}）', { n: live })}</Button>
+              onClick={() => void api.reloadInSessions('skills', skill.source === 'workspace' ? wsId : undefined).then((n) => app.toast(t('已在 {n} 个运行中的会话里重新加载技能', { n }), 'good'))}>{t('在运行中的会话里重新加载（{n}）', { n: live })}</Button>
             <Button size="sm" onClick={() => setText(skill.content)} disabled={!dirty}>{t('还原')}</Button>
             <Button size="sm" variant="primary" disabled={!dirty || problems.length > 0} onClick={save}>{t('保存')}</Button>
           </div>
@@ -177,7 +178,7 @@ function NewFileDialog({ kind, wsId, wsName, onClose }: { kind: 'skill' | 'comma
   const base = where === 'workspace' ? '.claude' : '~/.claude';
   const path = kind === 'skill' ? `${base}/skills/${name || '名称'}/SKILL.md` : `${base}/commands/${name || '名称'}.md`;
   const create = () => {
-    const id = uid(kind);
+    const id = `${where}:${where === 'workspace' ? wsId : ''}:${name}`;
     if (kind === 'skill') {
       const content = `---\nname: ${name}\ndescription: ${desc.trim()}\n---\n\n# ${name}\n\n写下这项工作的具体做法。\n`;
       app.set({ skills: [...app.skills, { id, name, description: desc.trim(), source: where, workspaceId: where === 'workspace' ? wsId : undefined, invocable: 'both', enabled: true, path, content }] });
@@ -280,15 +281,15 @@ function PluginsTab() {
   const add = () => {
     const id = uid('pl');
     const name = path.trim().split(/[\\/]/).filter(Boolean).pop() ?? path.trim();
+    // The server reads the folder (manifest, skills, commands…) and reports it as loaded or failed.
     app.set({ plugins: [...app.plugins, { id, name, path: path.trim(), status: 'loading', contents: { skills: 0, commands: 0, agents: 0, mcp: 0, hooks: 0 }, enabled: true, skipMcp: false }] });
     setPath('');
-    setTimeout(() => patch(id, { status: 'loaded', version: '1.0.0', contents: { skills: 2, commands: 1, agents: 0, mcp: 0, hooks: 1 } }), 1000);
   };
   const reload = () => app.ask({
     title: t('在运行中的会话里重新加载插件？'),
     body: t('{n} 个运行中的会话会重新加载插件。插件里的技能和工具有变化时，这些会话的提示缓存会失效，下一轮会多消耗一些 token。', { n: live }),
     confirmLabel: t('重新加载'),
-    onConfirm: () => app.toast(t('已在 {n} 个会话里重新加载插件', { n: live }), 'good'),
+    onConfirm: () => void api.reloadInSessions('plugins').then((n) => app.toast(t('已在 {n} 个会话里重新加载插件', { n }), 'good')),
   });
 
   return (

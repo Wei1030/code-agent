@@ -31,10 +31,13 @@ export function SessionPage() {
   useEffect(() => {
     api.openSession(id);
     if (sum) useApp.getState().set({ currentWorkspaceId: sum.workspaceId });
-    if (sum?.peerUnread) useApp.getState().patchSession(id, { peerUnread: 0 });
     setReceipt(0);
     setRewindAt(null);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Messages from other sessions count as read while this session is open.
+  useEffect(() => {
+    if (sum?.peerUnread) void api.markRead(id);
+  }, [id, sum?.peerUnread]);
 
   if (!sum) {
     return (

@@ -19,7 +19,12 @@ import { onWorkspacesChanged, refreshBranches } from './workspaces';
 import { checkLogin } from './provider';
 import { reloadRules } from './claude/permissions';
 import { reloadFileHooks } from './ext/hooks';
+import { probeMcp, reloadMcp } from './ext/mcp';
+import { recheckPlugins, reloadSkills } from './ext/skills';
+import { startScheduler } from './ext/jobs';
 import './peer';
+import './review';
+import './board';
 import { closeProcess, liveIds } from './sessions/live';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -34,10 +39,13 @@ onHello(() => ({ t: 'hello', slices: app, sessions: allSummaries(), version: VER
 function reloadDisk() {
   reloadRules();
   reloadFileHooks();
+  reloadMcp();
+  reloadSkills();
 }
 onWorkspacesChanged(() => {
   reloadDisk();
   void scanExternal();
+  void probeMcp();
 });
 
 const MIME: Record<string, string> = {
@@ -47,6 +55,7 @@ const MIME: Record<string, string> = {
 
 async function main() {
   sessionsOnBoot();
+  recheckPlugins();
   reloadDisk();
   const server = http.createServer();
   let vite: { middlewares: (req: http.IncomingMessage, res: http.ServerResponse, next: () => void) => void } | null = null;
@@ -90,8 +99,9 @@ async function main() {
     console.log(`Code Agent ${VERSION} · http://${HOST}:${PORT} · data ${HOME}${DEV ? ' · dev' : ''}`);
   });
 
-  void checkLogin();
+  void checkLogin().then(() => probeMcp());
   void scanExternal();
+  startScheduler();
   setInterval(() => void refreshBranches(), 30_000);
   setInterval(reloadDisk, 15_000);
 

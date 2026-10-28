@@ -40,7 +40,7 @@ export function addPromptPart(fn: PromptPart) {
 /** Built-in tool names behind each checkbox of the profile's tool list. */
 const TOOL_GROUPS: Record<string, string[]> = {
   TaskCreate: ['TaskCreate', 'TaskGet', 'TaskList', 'TaskUpdate', 'TodoWrite'],
-  Agent: ['Agent'],
+  Agent: ['Agent', 'Task'],
   Edit: ['Edit', 'MultiEdit'],
 };
 
@@ -114,6 +114,8 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
     onElicitation: ctx.onElicitation,
     hooks: ctx.hooks,
     disallowedTools: disallowed,
+    // Code Agent's own tools; their effects are guarded by Code Agent (holds, caps, read-only checks).
+    allowedTools: ['mcp__workspace'],
     settingSources: sources,
     systemPrompt,
     additionalDirectories: dirs,

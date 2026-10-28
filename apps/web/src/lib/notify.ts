@@ -6,7 +6,7 @@ import { useApp, type Toast } from '../store/app';
 
 export type NotifyKind = 'request' | 'turnDone' | 'background';
 
-/** The mock's seeded sessions raise their requests right at startup; those are not news. */
+/** Requests still open when the page loads are shown in the inbox, not announced again. */
 const quietUntil = Date.now() + 2500;
 
 function go(path: string) {
@@ -24,8 +24,10 @@ export function notify(kind: NotifyKind, n: {
   const app = useApp.getState();
   const p = app.prefs;
   if ((kind === 'request' && !p.notifyRequests) || (kind === 'turnDone' && !p.notifyTurnDone) || (kind === 'background' && !p.notifyBackground)) return;
-  const path = n.path ?? (n.sid ? `/s/${n.sid}` : undefined);
-  const open = n.open ?? (path ? () => go(path) : undefined);
+  // '#inbox' means the inbox in the top bar rather than a page.
+  const inbox = n.path === '#inbox';
+  const path = inbox ? undefined : n.path ?? (n.sid ? `/s/${n.sid}` : undefined);
+  const open = n.open ?? (inbox ? () => useApp.getState().set({ inboxOpen: true }) : path ? () => go(path) : undefined);
   if (!path || window.location.pathname !== path) {
     app.toast(n.body ? `${n.title}：${n.body}` : n.title, n.tone ?? 'info', open ? { label: n.action ?? '打开', run: open } : undefined);
   }

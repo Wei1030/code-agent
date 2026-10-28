@@ -34,8 +34,10 @@ export async function withProbe<T>(cwd: string, fn: (q: Query) => Promise<T>, ti
   }
 }
 
-export function noteInit(init: SDKControlInitializeResponse) {
+/** `probe`: from a probe, which sees every skill (sessions only see the enabled ones). */
+export function noteInit(init: SDKControlInitializeResponse, probe = false) {
   const p = app.provider;
+  if (probe) void import('./ext/skills').then((m) => m.noteCommands(init.commands ?? []));
   if (p.kind === 'subscription') {
     // Aliases (opus, sonnet…) only; Claude Code also lists pinned model ids.
     const list = (init.models ?? []).filter((m) => m.value !== 'default');
@@ -65,7 +67,7 @@ export function checkLogin(): Promise<void> {
   if (checking) return checking;
   checking = withProbe(os.homedir(), async (q) => {
     const init = await q.initializationResult();
-    noteInit(init);
+    noteInit(init, true);
     if (app.provider.kind === 'subscription' && app.provider.loggedIn) {
       try {
         recordLimits(await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }));

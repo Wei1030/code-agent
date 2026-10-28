@@ -94,6 +94,8 @@ export interface ServerApi {
   stopReview(sid: string): void;
   decideReview(sid: string, choice: 'accept' | 'more' | 'takeover'): void;
   reviewMarkdown(ticketId: string): string;
+  /** Check commands that fit the workspace (from package.json, Cargo.toml…), for its first review. */
+  suggestChecks(workspaceId: string): string[];
 
   createItem(wsId: string, p: Partial<BoardItem> & Pick<BoardItem, 'kind' | 'title'>, source: BoardSource): BoardItem;
   updateItem(wsId: string, id: string, p: Partial<BoardItem>, logText?: string): void;
@@ -111,7 +113,12 @@ export interface ServerApi {
   refreshMcp(): void;
   testMcp(id: string): void;
   toggleMcpInSession(sid: string, server: string, on: boolean): void;
+  reconnectMcpInSession(sid: string, server: string): void;
+  /** Set a header (http) or environment variable (stdio) of a server, e.g. an access token. */
+  setMcpHeader(id: string, key: string, value: string): void;
   refreshExtensions(): void;
+  /** Reload skills or plugins in running sessions; resolves with how many. */
+  reloadInSessions(kind: 'skills' | 'plugins', workspaceId?: string): number;
 }
 
 /** What the UI holds: every method returns a promise. */

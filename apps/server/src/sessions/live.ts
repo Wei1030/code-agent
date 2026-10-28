@@ -42,6 +42,18 @@ interface Turn {
   startedAt: number;
   toolCalls: number;
   interrupted: boolean;
+  /** What the message that started the turn carried (peer chain, receipt…). */
+  meta?: TurnMeta;
+}
+
+/** Bookkeeping that travels with a message into the turn it starts. */
+export interface TurnMeta {
+  /** Peer messages in this chain since a human wrote. */
+  hops?: number;
+  /** Send this session a receipt when the turn is done. */
+  receiptTo?: string;
+  /** The sender's tool call to mark as handled. */
+  senderToolId?: string;
 }
 
 export interface Live {
@@ -91,12 +103,30 @@ export interface TurnInfo {
   text: string;
   userId: string;
   structured?: unknown;
+  meta?: TurnMeta;
+  /** The result's subtype (success, error_max_structured_output_retries…) and errors. */
+  subtype?: string;
+  errors?: string[];
+  turns?: number;
 }
 type TurnEndFn = (sid: string, info: TurnInfo) => void;
 const turnEndFns: TurnEndFn[] = [];
 /** Runs after every finished turn (queue, peer receipts, reviews, the board recorder…). */
 export function onTurnEnd(fn: TurnEndFn) {
   turnEndFns.push(fn);
+}
+
+type Decorator = (sid: string, name: string, input: Input, item: ToolItem) => void;
+const decorators: Decorator[] = [];
+/** Adjust how a tool call is shown when it starts (peer cards, review steps…). */
+export function decorateTool(fn: Decorator) {
+  decorators.push(fn);
+}
+
+const sendFns: Array<(sid: string, m: Outgoing) => void> = [];
+/** Runs when a message starts a turn. */
+export function onSendTurn(fn: (sid: string, m: Outgoing) => void) {
+  sendFns.push(fn);
 }
 
 const processEndFns: Array<(sid: string) => void> = [];
@@ -250,6 +280,7 @@ export interface Outgoing {
   verbatim?: boolean;
   /** Peer origin for the model. */
   origin?: SDKUserMessage['origin'];
+  meta?: TurnMeta;
 }
 
 function contentOf(m: Outgoing): SDKUserMessage['message']['content'] {
@@ -296,7 +327,8 @@ export function sendTurn(sid: string, m: Outgoing): string {
   if (!l) throw new Error('会话没有在运行');
   const id = randomUUID();
   showUser(sid, m, id);
-  l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false };
+  l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false, meta: m.meta };
+  for (const fn of sendFns) fn(sid, m);
   l.group = null;
   emit(sid, { t: 'state', state: 'running' });
   emit(sid, { t: 'status', status: { kind: 'working', label: '正在思考' } });
@@ -382,6 +414,15 @@ export function answerRequest(sid: string, requestId: string, a: unknown): boole
   raw(sid, 'control_response', `回复 ${requestId.slice(0, 8)}`, { request_id: requestId, response: a });
   fn(a);
   return true;
+}
+
+/** The tool_use id of the latest call of `name` (main thread) that matches, for tools that need to patch their own card. */
+export function findToolUse(sid: string, name: string, pred: (input: Input) => boolean = () => true): string | undefined {
+  const l = lives.get(sid);
+  if (!l) return undefined;
+  let found: string | undefined;
+  for (const [id, t] of l.tools) if (t.name === name && !t.parent && pred(t.input)) found = id;
+  return found;
 }
 
 // ------------------------------------------------------------------ messages → items
@@ -601,6 +642,7 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
     item.background = !!input.run_in_background;
   }
   if ((name === 'Bash' || name === 'PowerShell') && input.run_in_background) item.background = true;
+  for (const d of decorators) d(sid, name, input, item);
   // Consecutive read-only calls share one group.
   if (READ_ONLY.has(name)) {
     if (l.group) {
@@ -765,7 +807,8 @@ function onResult(l: Live, m: Extract<SDKMessage, { type: 'result' }>) {
       body: lastText ? lastText.text.replace(/\s+/g, ' ').slice(0, 60) : undefined,
     } });
   }
-  const info: TurnInfo = { ok: m.subtype === 'success', interrupted, text: m.subtype === 'success' ? m.result : '', userId: turn?.userId ?? '', structured: (m as { structured_output?: unknown }).structured_output };
+  const info: TurnInfo = { ok: m.subtype === 'success', interrupted, text: m.subtype === 'success' ? m.result : '', userId: turn?.userId ?? '', structured: (m as { structured_output?: unknown }).structured_output, meta: turn?.meta,
+    subtype: m.subtype, errors: (m as { errors?: string[] }).errors, turns: m.num_turns };
   for (const fn of turnEndFns) {
     try {
       fn(sid, info);

@@ -45,6 +45,31 @@ function ensureToolItem(l: Live, id: string, name: string, input: Input): ToolIt
   return item;
 }
 
+/** Rules to offer under "don't ask again" when Claude Code suggests none. */
+function suggestRules(name: string, input: Input, cwd: string): string[] {
+  if ((name === 'Bash' || name === 'PowerShell') && typeof input.command === 'string') {
+    const cmd = input.command.trim();
+    if (/[;&|<>`$\n]/.test(cmd)) return [];
+    const words = cmd.split(/\s+/);
+    return [...new Set([`${name}(${cmd})`, ...(words.length > 2 ? [`${name}(${words.slice(0, 2).join(' ')} *)`] : []), ...(words.length > 1 ? [`${name}(${words[0]} *)`] : [])])];
+  }
+  if ((name === 'Edit' || name === 'Write' || name === 'NotebookEdit') && typeof (input.file_path ?? input.notebook_path) === 'string') {
+    const r = rel(cwd, String(input.file_path ?? input.notebook_path));
+    const dir = path.posix.dirname(r.replace(/\\/g, '/'));
+    return path.isAbsolute(r) ? ['Edit'] : [dir === '.' ? 'Edit(/*)' : `Edit(/${dir}/**)`, 'Edit'];
+  }
+  if (name === 'WebFetch' && typeof input.url === 'string') {
+    try {
+      return [`WebFetch(domain:${new URL(input.url).hostname})`];
+    } catch {
+      return [];
+    }
+  }
+  const mcp = mcpParts(name);
+  if (mcp) return [name, `mcp__${mcp.server}`];
+  return [name];
+}
+
 export async function canUseTool(l: Live, name: string, input: Input, o: CanUseOpts): Promise<PermissionResult> {
   if (name === 'AskUserQuestion') return askQuestion(l, input, o);
   if (name === 'ExitPlanMode') return reviewPlan(l, input, o);
@@ -66,7 +91,8 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
   const reason = outside
     ? `这个位置不在工作区 ${ws?.path ?? cwd} 内，也不在已添加的额外目录里。`
     : o.decisionReason ? `Claude Code 的判断：${o.decisionReason}` : '没有匹配的允许规则；当前会话对未授权的操作会先询问。';
-  const suggestions = o.suppressAlwaysAllowRule ? [] : (o.suggestions ?? []).flatMap((s) => (s.type === 'addRules' ? s.rules.map(ruleString) : []));
+  const fromCli = (o.suggestions ?? []).flatMap((s) => (s.type === 'addRules' ? s.rules.map(ruleString) : []));
+  const suggestions = o.suppressAlwaysAllowRule || o.defaultToNo ? [] : fromCli.length ? fromCli : suggestRules(name, input, cwd);
   const agentType = o.agentID ? l.taskTypes.get(o.agentID) ?? '子代理' : undefined;
   const req: PendingRequest = {
     kind: 'approval', id: randomUUID(), toolItemId: item.id, tool: toolName(name), title, reason,

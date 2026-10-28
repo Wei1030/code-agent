@@ -1,5 +1,5 @@
 /** Code review in a session: the 提交审核 button and dialog, the decision panel, transcript cards and the review record. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Effort, ReviewFinding, ReviewRound, ReviewTicket, SessionRuntime, SessionSummary } from '../api/types';
 import { api } from '../api';
@@ -96,7 +96,10 @@ function ReviewDialog({ sum, rt, onClose }: { sum: SessionSummary; rt: SessionRu
   const nav = useNavigate();
   const saved = useApp((s) => s.reviewChecks[sum.workspaceId]);
   const profile = useApp((s) => s.reviewProfile);
-  const [checks, setChecks] = useState((saved ?? ['npm test']).join('\n'));
+  const [checks, setChecks] = useState((saved ?? []).join('\n'));
+  useEffect(() => {
+    if (!saved) void api.suggestChecks(sum.workspaceId).then((s) => setChecks((cur) => cur || s.join('\n')));
+  }, [saved, sum.workspaceId]);
   const [model, setModel] = useState(profile.model);
   const [effort, setEffort] = useState<Effort>(profile.effort);
   const un = useUnreviewed(rt);
