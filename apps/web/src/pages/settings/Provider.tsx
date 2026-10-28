@@ -4,8 +4,10 @@
  * subscription, the user logs in to Claude Code themselves and we only point at its config dir.
  */
 import { useState } from 'react';
+import { api } from '../../api';
+import { relTime } from '../../lib/format';
 import type { EnvVar, ProviderKind } from '../../api/types';
-import { COMMON_ENV } from '../../mock/data';
+import { COMMON_ENV } from '../../lib/catalog';
 import { Icon } from '../../components/Icon';
 import { Button, Chip, Field, Radio, Seg, Select, Status, Toggle } from '../../components/ui';
 import { useApp } from '../../store/app';
@@ -23,15 +25,21 @@ export function Provider() {
   const app = useApp();
   const p = app.provider;
   const [checking, setChecking] = useState(false);
-  const recheck = () => {
+  const recheck = async () => {
     setChecking(true);
-    setTimeout(() => {
+    try {
+      await api.checkLogin();
+      const now = useApp.getState().provider;
+      if (now.loggedIn) app.toast(t('已检测到登录状态：Claude {p}', { p: now.plan }), 'good');
+      else app.toast(now.error ? t('检测失败：{e}', { e: now.error }) : t('仍未检测到登录，请先在终端完成 /login'), 'warn');
+    } finally {
       setChecking(false);
-      app.setProvider({ loggedIn: true });
-      app.toast(t('已检测到登录状态：Claude {p}', { p: p.plan }), 'good');
-    }, 900);
+    }
   };
-  const dir = p.configDir === 'default' ? '~/.claude' : p.configDir === 'env' ? '$CLAUDE_CONFIG_DIR → D:\\claude-config' : p.customDir || t('（未填写）');
+  const envDir = p.envConfigDir || t('（服务进程没有设置这个变量）');
+  const dir = p.configDir === 'default' ? '~/.claude' : p.configDir === 'env' ? `$CLAUDE_CONFIG_DIR → ${envDir}` : p.customDir || t('（未填写）');
+  const loginCmd = p.configDir === 'default' ? 'claude' : `CLAUDE_CONFIG_DIR=${p.configDir === 'env' ? p.envConfigDir ?? '' : p.customDir} claude`;
+  const [key, setKey] = useState('');
 
   return (
     <>
@@ -59,7 +67,7 @@ export function Provider() {
               <div className="banner-warn" style={{ marginBottom: 14 }}>
                 <Icon name="warning" size={16} />
                 <div className="grow">
-                  <b>{t('环境变量 ANTHROPIC_API_KEY 已设置')}</b>
+                  <b>{t('环境变量 {v} 已设置', { v: p.envVar ?? 'ANTHROPIC_API_KEY' })}</b>
                   <div>{t('它的优先级高于订阅登录，Claude Code 会改用 API 密钥并按 token 计费。')}</div>
                 </div>
                 <Button size="sm" onClick={() => app.setProvider({ envConflict: false })}>{t('启动时忽略这个变量')}</Button>
@@ -68,7 +76,7 @@ export function Provider() {
             <Section title={t('配置目录')}>
               <div className="col">
                 <div className="option-card" onClick={() => app.setProvider({ configDir: 'default' })}><Radio on={p.configDir === 'default'} onChange={() => app.setProvider({ configDir: 'default' })} /><div><b>{t('默认位置')}</b><div className="d mono">~/.claude</div></div></div>
-                <div className="option-card" onClick={() => app.setProvider({ configDir: 'env' })}><Radio on={p.configDir === 'env'} onChange={() => app.setProvider({ configDir: 'env' })} /><div><b>{t('使用环境变量 CLAUDE_CONFIG_DIR')}</b><div className="d mono">D:\claude-config</div></div></div>
+                <div className="option-card" onClick={() => app.setProvider({ configDir: 'env' })}><Radio on={p.configDir === 'env'} onChange={() => app.setProvider({ configDir: 'env' })} /><div><b>{t('使用环境变量 CLAUDE_CONFIG_DIR')}</b><div className="d mono">{envDir}</div></div></div>
                 <div className="option-card" onClick={() => app.setProvider({ configDir: 'custom' })}>
                   <Radio on={p.configDir === 'custom'} onChange={() => app.setProvider({ configDir: 'custom' })} />
                   <div className="grow"><b>{t('指定目录')}</b>
@@ -83,21 +91,21 @@ export function Provider() {
             <Section title={t('登录')}>
               {p.loggedIn ? (
                 <dl className="kv">
-                  <dt>{t('账号')}</dt><dd>w***@example.com</dd>
+                  <dt>{t('账号')}</dt><dd>{p.account ?? '—'}</dd>
                   <dt>{t('订阅')}</dt><dd>Claude {p.plan}</dd>
                   <dt>{t('配置目录')}</dt><dd className="mono">{dir}</dd>
                 </dl>
               ) : (
                 <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.9 }}>
-                  <li>{t('打开终端，运行')} <code className="mono">{p.configDir === 'default' ? 'claude' : `CLAUDE_CONFIG_DIR=${p.configDir === 'env' ? 'D:\\claude-config' : p.customDir} claude`}</code></li>
+                  <li>{t('打开终端，运行')} <code className="mono">{loginCmd}</code></li>
                   <li>{t('在 Claude Code 中输入')} <code className="mono">/login</code> {t('并按提示完成登录')}</li>
                   <li>{t('回到这里点「重新检测」')}</li>
                 </ol>
               )}
               <div className="row" style={{ marginTop: 12 }}>
-                <Button size="sm" icon="copy" onClick={() => { void navigator.clipboard?.writeText('claude'); app.toast(t('已复制登录命令'), 'good'); }}>{t('复制命令')}</Button>
-                <Button size="sm" icon="refresh" disabled={checking} onClick={recheck}>{checking ? t('检测中…') : t('重新检测')}</Button>
-                {p.loggedIn && <Button size="sm" variant="ghost" onClick={() => app.setProvider({ loggedIn: false })}>{t('模拟：退出登录')}</Button>}
+                <Button size="sm" icon="copy" onClick={() => { void navigator.clipboard?.writeText(loginCmd); app.toast(t('已复制登录命令'), 'good'); }}>{t('复制命令')}</Button>
+                <Button size="sm" icon="refresh" disabled={checking} onClick={() => void recheck()}>{checking ? t('检测中…') : t('重新检测')}</Button>
+                {p.checkedAt && <span className="hint">{t('上次检测 {t}', { t: relTime(p.checkedAt) })}</span>}
               </div>
             </Section>
           </div>
@@ -111,7 +119,10 @@ export function Provider() {
             <div className="form-grid">
               <Field label="Base URL" hint="ANTHROPIC_BASE_URL"><input className="input mono" placeholder="https://gateway.example.com" value={p.compatibleUrl} onChange={(e) => app.setProvider({ compatibleUrl: e.target.value })} /></Field>
               <Field label={t('模型名')} hint="ANTHROPIC_MODEL"><input className="input mono" placeholder="vendor/model-name" value={p.compatibleModel} onChange={(e) => app.setProvider({ compatibleModel: e.target.value })} /></Field>
-              <Field label={t('认证令牌')} hint="ANTHROPIC_AUTH_TOKEN"><input className="input mono" type="password" placeholder="••••••••" /></Field>
+              <Field label={t('认证令牌')} hint={p.compatibleKeySet ? t('已保存在服务端（不会发到浏览器）；输入新的会替换它') : 'ANTHROPIC_AUTH_TOKEN'}>
+                <div className="row"><input className="input mono grow" type="password" placeholder={p.compatibleKeySet ? '••••••••' : ''} value={key} onChange={(e) => setKey(e.target.value)} />
+                  <Button size="sm" disabled={!key} onClick={() => void api.setCompatibleKey(key).then(() => { setKey(''); app.toast(t('已保存认证令牌'), 'good'); })}>{t('保存')}</Button></div>
+              </Field>
             </div>
             <div className="banner-warn" style={{ marginTop: 14 }}>
               <Icon name="warning" size={16} />

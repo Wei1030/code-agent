@@ -1,5 +1,5 @@
 /** Transcript items: messages, thinking, tool cards, plans, banners and notices. */
-import { Fragment, useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Item, PeerCall, PlanDoc, SessionRef, SessionRuntime, ToolItem } from '../api/types';
 import { Icon } from '../components/Icon';
@@ -11,6 +11,7 @@ import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { ReviewCard } from './Review';
 import { BoardLink, linkify } from '../components/BoardLink';
+import { Markdown } from '../components/Markdown';
 
 const TOOL_ICON: Record<string, string> = {
   Bash: 'terminal', PowerShell: 'terminal', Read: 'file', Write: 'file', Edit: 'pencil', Grep: 'search', Glob: 'search',
@@ -60,7 +61,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
     case 'text':
       return (
         <div className="atext">
-          {renderInline(it.text, wsId)}
+          <Markdown text={it.text} wsId={wsId} />
           {it.streaming && <span className="caret" />}
           {it.aborted && <span className="aborted-tag">{t('（已中断）')}</span>}
         </div>
@@ -86,7 +87,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
     case 'notice':
       return <Notice tone={it.tone} text={it.text} action={it.action} sid={rt.id} />;
     case 'banner':
-      return <Banner kind={it.banner} id={it.id} resolved={it.resolved} sid={rt.id} />;
+      return <Banner kind={it.banner} id={it.id} resolved={it.resolved} sid={rt.id} detail={it.detail} />;
     case 'review':
       return <ReviewCard ticketId={it.ticketId} round={it.round} what={it.what} />;
     case 'board':
@@ -94,11 +95,6 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
   }
 }
 
-/** Very small inline renderer: `code` spans and board ids (F-3, I-12, N-4). */
-function renderInline(text: string, wsId?: string): ReactNode {
-  const parts = text.split(/(`[^`]+`)/g);
-  return parts.map((p, i) => (p.startsWith('`') && p.endsWith('`') ? <code key={i}>{p.slice(1, -1)}</code> : <Fragment key={i}>{linkify(p, wsId)}</Fragment>));
-}
 
 /** Board changes from the recorder or Claude's board tools, with one-click undo. */
 function BoardRecord({ it, sid, wsId }: { it: Extract<Item, { kind: 'board' }>; sid: string; wsId: string }) {
@@ -340,7 +336,8 @@ function PlanCard({ plan, version, status }: { plan: PlanDoc; version: number; s
         {status === 'revised' && <Chip>{t('已退回修改')}</Chip>}
         <Icon name={open ? 'chevUp' : 'chevDown'} size={14} />
       </div>
-      {open && (
+      {open && plan.markdown && <div className="plan-body"><Markdown text={plan.markdown} /></div>}
+      {open && !plan.markdown && (
         <div className="plan-body">
           <h3>{plan.title}</h3>
           <div className="ink2">{plan.summary}</div>
@@ -374,16 +371,21 @@ function Notice({ tone, text, action, sid }: { tone: 'good' | 'info' | 'warn'; t
   );
 }
 
-const BANNERS: Record<string, { tone: 'warn' | 'crit' | 'info'; icon: string; title: string; d: string; acts: string[] }> = {
-  crash: { tone: 'crit', icon: 'x', title: '会话意外结束', d: 'Claude Code 以退出码 1 结束（error_during_execution）。对话记录已保存。', acts: ['恢复会话', '查看 stderr'] },
-  rateLimit: { tone: 'warn', icon: 'warning', title: '5 小时限额已用 90%', d: '21:30 重置。之后的请求可能被拒绝。', acts: ['查看用量'] },
-  startupFailure: { tone: 'crit', icon: 'x', title: '会话无法启动', d: '工作目录 D:\\old\\shop-api 已不存在（cwd_unavailable）。', acts: ['选择其他文件夹', '查看原文'] },
-  workerShutdown: { tone: 'warn', icon: 'warning', title: 'Claude Code 正在退出', d: '原因：已安装更新。对话记录已保存。', acts: ['恢复会话'] },
-  denials: { tone: 'warn', icon: 'warning', title: '本轮有 2 次工具调用被拒绝', d: 'Bash rm -rf dist（规则 Bash(rm -rf *)） · WebFetch pastebin.com（规则 WebFetch(domain:pastebin.com)）', acts: ['查看权限规则'] },
-  notLoggedIn: { tone: 'crit', icon: 'x', title: 'Claude Code 尚未登录', d: '请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」（authentication_failed）。Code Agent 不提供登录，也不读取你的凭据。', acts: ['复制登录命令', '重新检测'] },
+const STARTUP: Record<string, string> = {
+  cwd_unavailable: '工作目录已不存在或无法访问', shell_tool_missing: '找不到可用的 shell', cli_version_too_old: 'Claude Code 版本太旧',
+  proxy_invalid: '代理设置无效', temp_dir_unusable: '临时目录不可用', managed_settings_invalid: '托管设置文件无效',
 };
 
-function Banner({ kind, id, resolved, sid }: { kind: string; id: string; resolved?: boolean; sid: string }) {
+const BANNERS: Record<string, { tone: 'warn' | 'crit' | 'info'; icon: string; title: (d?: string) => string; d: (d?: string) => string; acts: string[] }> = {
+  crash: { tone: 'crit', icon: 'x', title: () => '会话意外结束', d: (d) => `Claude Code 进程异常结束${d ? `：${d}` : ''}。对话记录已保存。`, acts: ['恢复会话', '查看 stderr'] },
+  rateLimit: { tone: 'warn', icon: 'warning', title: () => '已达到用量限额', d: (d) => (d ? `${d} 重置。在那之前的请求会被拒绝。` : '在限额重置前，请求会被拒绝。'), acts: ['查看用量'] },
+  startupFailure: { tone: 'crit', icon: 'x', title: () => '会话无法启动', d: (d) => `${(d && STARTUP[d]) || '启动失败'}${d ? `（${d}）` : ''}。`, acts: ['选择其他文件夹', '查看原文'] },
+  workerShutdown: { tone: 'warn', icon: 'warning', title: () => 'Claude Code 正在退出', d: (d) => `原因：${d || '未说明'}。对话记录已保存。`, acts: ['恢复会话'] },
+  denials: { tone: 'warn', icon: 'warning', title: (d) => `本轮有 ${d ?? '多'} 次工具调用被拒绝`, d: () => '被拒绝的调用在上面标出了原因。可以调整权限规则，或切换权限模式。', acts: ['查看权限规则'] },
+  notLoggedIn: { tone: 'crit', icon: 'x', title: () => 'Claude Code 尚未登录', d: (d) => `请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」${d ? `（${d}）` : ''}。Code Agent 不提供登录，也不读取你的凭据。`, acts: ['复制登录命令', '重新检测'] },
+};
+
+function Banner({ kind, id, resolved, sid, detail }: { kind: string; id: string; resolved?: boolean; sid: string; detail?: string }) {
   const t = useT();
   const nav = useNavigate();
   const b = BANNERS[kind];
@@ -398,18 +400,20 @@ function Banner({ kind, id, resolved, sid }: { kind: string; id: string; resolve
     else if (a === '查看权限规则') nav('/settings/permissions');
     else if (a === '复制登录命令') { void navigator.clipboard?.writeText('claude'); useApp.getState().toast(t('已复制：claude（在终端里运行后输入 /login）'), 'good'); }
     else if (a === '重新检测') {
-      const ok = useApp.getState().provider.loggedIn;
-      useApp.getState().toast(ok ? t('已检测到登录 · Max 订阅') : t('仍未检测到登录，请先在终端完成 /login'), ok ? 'good' : 'warn');
-      if (ok) api.retryBanner(sid, id);
+      void api.checkLogin().then(() => {
+        const p = useApp.getState().provider;
+        useApp.getState().toast(p.loggedIn ? t('已检测到登录 · Claude {p}', { p: p.plan }) : t('仍未检测到登录，请先在终端完成 /login'), p.loggedIn ? 'good' : 'warn');
+        if (p.loggedIn) api.retryBanner(sid, id);
+      });
     }
   };
   return (
     <div className={cx('banner', b.tone, resolved && 'resolved')}>
       <Icon name={b.icon} size={18} strokeWidth={2} />
       <div className="body">
-        <b>{t(b.title)}</b>
-        <div className="d">{t(b.d)}</div>
-        {showRaw && <pre className="code-block" style={{ marginTop: 8 }}>{`{ "type": "result", "subtype": "error_during_execution", "startup_failure_reason": "cwd_unavailable" }`}</pre>}
+        <b>{t(b.title(detail))}</b>
+        <div className="d">{t(b.d(detail))}</div>
+        {showRaw && <pre className="code-block" style={{ marginTop: 8 }}>{JSON.stringify({ banner: kind, detail }, null, 2)}</pre>}
         {!resolved && <div className="acts">{b.acts.map((a, i) => <Button key={a} size="sm" variant={i === 0 && b.tone !== 'info' ? 'primary' : 'default'} onClick={() => act(a)}>{t(a)}</Button>)}</div>}
       </div>
     </div>

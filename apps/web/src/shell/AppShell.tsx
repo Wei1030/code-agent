@@ -7,7 +7,6 @@ import { useSessions } from '../store/sessions';
 import { useT } from '../lib/i18n';
 import { relTime } from '../lib/format';
 import { cx } from '../lib/util';
-import { MockConsole } from './MockConsole';
 import { FolderPicker } from './FolderPicker';
 import { api } from '../api';
 import { useGoToSessions, useOpenWorkspace } from '../components/SessionRow';
@@ -16,6 +15,8 @@ import { requestNotificationPermission } from '../lib/notify';
 export function AppShell() {
   const t = useT();
   const connection = useApp((s) => s.connection);
+  const attempt = useApp((s) => s.reconnectAttempt);
+  const booted = useApp((s) => s.booted);
   const goToSessions = useGoToSessions();
   const atHome = useMatch('/');
   const atSession = useMatch('/s/:id');
@@ -33,22 +34,18 @@ export function AppShell() {
         <NavLink to="/jobs" className={({ isActive }) => cx(isActive && 'active')}><Icon name="braces" size={22} />{t('作业')}</NavLink>
         <NavLink to="/usage" className={({ isActive }) => cx(isActive && 'active')}><Icon name="chart" size={22} />{t('用量')}</NavLink>
         <NavLink to="/settings" className={({ isActive }) => cx(isActive && 'active')}><Icon name="gear" size={22} />{t('设置')}</NavLink>
-        <button className="bottom mock-btn" title={t('模拟控制台：触发场景和异常状态')} onClick={() => useApp.getState().set({ mockConsoleOpen: !useApp.getState().mockConsoleOpen })}>
-          <Icon name="flask" size={22} />{t('模拟')}
-        </button>
       </nav>
       <main className="main">
         {connection !== 'online' && (
           <div className={cx('conn-bar', connection)}>
-            {connection === 'offline' ? <><span className="spinner" />{t('与 Code Agent 服务的连接已断开 —— 正在重连（第 3 次）… 会话仍在服务端运行。')}</>
-              : <><Icon name="check" size={15} />{t('已重连 · 重放了 214 条事件，待处理的请求已重新出现。')}</>}
+            {connection === 'offline' ? <><span className="spinner" />{t('与 Code Agent 服务的连接已断开 —— 正在重连（第 {n} 次）… 会话仍在服务端运行。', { n: attempt })}</>
+              : <><Icon name="check" size={15} />{t('已重连 · 已重新载入会话状态，待处理的请求已重新出现。')}</>}
           </div>
         )}
-        <Outlet />
+        {booted ? <Outlet /> : <div className="boot"><span className="spinner" />{t('正在连接 Code Agent 服务…')}</div>}
       </main>
       <ConfirmHost />
       <Toasts />
-      <MockConsole />
       <FolderPicker />
     </div>
   );

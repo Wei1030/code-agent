@@ -44,13 +44,13 @@ export function useSessionActions() {
   return {
     open: (s: SessionSummary) => { api.openSession(s.id); nav(`/s/${s.id}`); },
     resume: (s: SessionSummary) => { api.resume(s.id); nav(`/s/${s.id}`); },
-    fork: (s: SessionSummary) => {
-      const id = api.forkAt(s.id);
+    fork: async (s: SessionSummary) => {
+      const id = await api.forkAt(s.id);
       useApp.getState().toast(t('已分叉出新会话'), 'good');
       nav(`/s/${id}`);
     },
-    exportMd: (s: SessionSummary) => {
-      download(`${s.title}.md`, api.exportMarkdown(s.id), 'text/markdown;charset=utf-8');
+    exportMd: async (s: SessionSummary) => {
+      download(`${s.title}.md`, await api.exportMarkdown(s.id), 'text/markdown;charset=utf-8');
       useApp.getState().toast(t('已导出 Markdown'), 'good');
     },
     /** Save = end the Claude Code process. The transcript is already on disk; it can be resumed later. */

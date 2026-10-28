@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { SessionRuntime } from '../api/types';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
-import { Button, Chip, Tabs } from '../components/ui';
+import { Button, Chip, Modal, Tabs } from '../components/ui';
 import { useApp, type InspectorTab } from '../store/app';
 import { clock, duration, relTime, tokens as fmtTokens, pct } from '../lib/format';
 import { cx, download } from '../lib/util';
@@ -111,13 +111,18 @@ function TasksTab({ rt }: { rt: SessionRuntime }) {
 
 function BackgroundTab({ rt }: { rt: SessionRuntime }) {
   const t = useT();
-  const app = useApp();
   const canBackground = rt.items.some((it) => it.kind === 'tool' && it.backgroundable && it.status === 'running');
   const kindLabel = { agent: '子代理', bash: '命令', workflow: '工作流', monitor: '监控' } as const;
   const statusTone = { running: 'accent', completed: 'good', failed: 'crit', stopped: 'outline' } as const;
   const statusLabel = { running: '运行中', completed: '已完成', failed: '失败', stopped: '已停止' } as const;
+  const [output, setOutput] = useState<{ name: string; text: string } | null>(null);
   return (
     <>
+      {output && (
+        <Modal title={t('输出 · {n}', { n: output.name })} width={760} onClose={() => setOutput(null)} footer={<Button onClick={() => setOutput(null)}>{t('关闭')}</Button>}>
+          <pre className="code-block" style={{ maxHeight: 480, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{output.text}</pre>
+        </Modal>
+      )}
       <div className="row" style={{ marginBottom: 12 }}>
         <Button size="sm" icon="layers" disabled={!canBackground} onClick={() => api.backgroundAll(rt.id)}>{t('把当前工作转入后台')}</Button>
         <span className="hint">{canBackground ? t('长时间运行的命令会继续执行，Claude 可以先做别的') : t('当前没有可转入后台的工作')}</span>
@@ -138,7 +143,7 @@ function BackgroundTab({ rt }: { rt: SessionRuntime }) {
             </div>
             {b.summary && <div className="sum">{b.summary}</div>}
             <div className="row" style={{ marginTop: 6 }}>
-              <Button size="sm" variant="ghost" icon="eye" onClick={() => app.toast(t('模拟：在事件页中查看「{n}」的输出', { n: b.name }), 'info')}>{t('查看输出')}</Button>
+              <Button size="sm" variant="ghost" icon="eye" onClick={() => void api.taskOutput(rt.id, b.id).then((text) => setOutput({ name: b.name, text }))}>{t('查看输出')}</Button>
               {b.status === 'running' && <Button size="sm" variant="danger-outline" icon="stop" onClick={() => api.stopTask(rt.id, b.id)}>{t('停止')}</Button>}
             </div>
           </div>

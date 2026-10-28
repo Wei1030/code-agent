@@ -411,8 +411,8 @@ export function ElicitationPanel({ sid, req }: { sid: string; req: Extract<Pendi
             <div className="row">
               <Button variant="primary" icon="link" disabled={opened} onClick={() => {
                 setOpened(true);
+                if (req.url) window.open(req.url, '_blank', 'noopener');
                 api.openElicitationUrl(sid, req.id);
-                useApp.getState().toast(t('模拟：已在新标签页打开登录页面'), 'info');
               }}>{t('打开页面')}</Button>
               {opened && <span className="row ink2"><span className="spinner" />{t('等待 {s} 确认…', { s: req.server })}</span>}
             </div>

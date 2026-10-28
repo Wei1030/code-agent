@@ -7,7 +7,7 @@ import type { HookAction, HookRule } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Seg, Select, Status, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
-import { HOOK_EVENTS } from '../mock/extensions';
+import { HOOK_EVENTS } from '../lib/catalog';
 import { ACTION_INFO, actionLabel, actionsFor, condFieldsFor, hookOutput, isToolEvent, ruleMatches, sampleInput } from '../lib/hooks';
 import { cx, uid } from '../lib/util';
 import { useT } from '../lib/i18n';

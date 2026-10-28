@@ -9,8 +9,8 @@ import { api } from '../api';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Seg, Select, Status, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
-import { EFFORT_LABEL, MODE_INFO, MODELS } from '../mock/data';
-import { NEW_JOB_SCHEMA } from '../mock/jobs';
+import { EFFORT_LABEL, MODE_INFO, MODELS } from '../lib/catalog';
+import { NEW_JOB_SCHEMA } from '../lib/catalog';
 import { describeSchedule, fillVars, nextRun, parseCron, promptVars } from '../lib/schedule';
 import { dateTime, relTime, tokens as fmtTokens } from '../lib/format';
 import { cx, download, uid } from '../lib/util';
@@ -248,7 +248,7 @@ function RunPanel({ job }: { job: JobTemplate }) {
           <div className="banner-warn">
             <Icon name="warning" size={16} />
             <div className="grow">{t('有 {n} 次定时运行因为 Code Agent 服务没有运行而错过。', { n: job.missedRuns ?? 0 })}</div>
-            <Button size="sm" onClick={() => setSelId(api.catchUpJob(job.id))}>{t('补跑一次')}</Button>
+            <Button size="sm" onClick={() => void api.catchUpJob(job.id).then(setSelId)}>{t('补跑一次')}</Button>
             <Button size="sm" variant="ghost" onClick={() => app.set({ jobs: app.jobs.map((j) => (j.id === job.id ? { ...j, missedRuns: 0 } : j)) })}>{t('忽略')}</Button>
           </div>
         )}
@@ -258,7 +258,7 @@ function RunPanel({ job }: { job: JobTemplate }) {
         ))}
         <div className="row">
           <span className="hint grow truncate" title={fillVars(job.prompt, values)}>{fillVars(job.prompt, values) || t('（提示词为空）')}</span>
-          <Button variant="primary" icon="play" disabled={missing || !job.prompt.trim()} onClick={() => setSelId(api.runJob(job.id, values, 'manual'))}>{t('运行作业')}</Button>
+          <Button variant="primary" icon="play" disabled={missing || !job.prompt.trim()} onClick={() => void api.runJob(job.id, values, 'manual').then(setSelId)}>{t('运行作业')}</Button>
         </div>
 
         <div className="divider-line" />

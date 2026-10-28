@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Attachment, Effort, PermissionMode, SessionRef, SessionRuntime } from '../api/types';
 import { api } from '../api';
-import { COMMANDS, EFFORT_LABEL, fsTree, MODE_INFO, MODELS, type CommandInfo, type FsNode } from '../mock/data';
+import { COMMANDS, EFFORT_LABEL, MODE_INFO, MODELS, type CommandInfo, type FsNode } from '../lib/catalog';
 import { Icon } from '../components/Icon';
 import { Button, MenuButton, Popover, Progress, Select } from '../components/ui';
 import { useApp } from '../store/app';
@@ -91,20 +91,37 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   }, [text]);
 
   // ------------------------------------------------------------ palette data
-  const tree = useMemo(() => fsTree(workspaceId), [workspaceId]);
+  const [tree, setTree] = useState<FsNode[]>([]);
+  const [sdkCommands, setSdkCommands] = useState<CommandInfo[]>([]);
+  const paletteKind = palette?.kind;
+  useEffect(() => {
+    if (paletteKind !== 'mention') return;
+    let live = true;
+    void api.listFiles(workspaceId).then((t) => live && setTree(t));
+    return () => { live = false; };
+  }, [paletteKind, workspaceId]);
+  useEffect(() => {
+    if (paletteKind !== 'command') return;
+    let live = true;
+    void api.listCommands(sid).then((c) => live && setSdkCommands(c));
+    return () => { live = false; };
+  }, [paletteKind, sid]);
   const allPaths = useMemo(() => flatten(tree), [tree]);
   // Built-in commands, then skills you can invoke, command files and MCP prompts for this workspace.
   const allCommands = useMemo<CommandInfo[]>(() => {
     const inWs = <T extends { source: string; workspaceId?: string }>(x: T) => x.source !== 'workspace' || x.workspaceId === workspaceId;
     const where = (src: string, plugin?: string) => (src === 'plugin' ? `插件 · ${plugin}` : src === 'workspace' ? '这个工作区' : src === 'bundled' ? '内置包' : '所有工作区');
-    return [
+    const base: CommandInfo[] = [
       ...COMMANDS,
       ...app.skills.filter((k) => inWs(k) && k.invocable !== 'model').map((k) => ({ name: `/${k.name}`, hint: k.description, origin: `技能 · ${where(k.source, k.plugin)}`, icon: 'spark' })),
       ...app.commandFiles.filter(inWs).map((c) => ({ name: `/${c.name}`, hint: [c.argHint, c.desc].filter(Boolean).join(' '), origin: `命令 · ${where(c.source, c.plugin)}`, icon: c.source === 'plugin' ? 'box' : 'file' })),
       ...app.mcp.filter((m) => (m.scope === 'global' || m.scope === 'plugin' || m.workspaceId === workspaceId) && m.status === 'connected')
         .flatMap((m) => m.prompts.map((p) => ({ name: `/mcp__${m.name}__${p.name}`, hint: p.desc, origin: `MCP · ${m.name}`, icon: 'plug' }))),
     ];
-  }, [app.skills, app.commandFiles, app.mcp, workspaceId]);
+    // Claude Code's own commands that the lists above do not cover.
+    const known = new Set(base.map((c) => c.name));
+    return [...base, ...sdkCommands.filter((c) => !known.has(c.name))];
+  }, [app.skills, app.commandFiles, app.mcp, workspaceId, sdkCommands]);
   const commandItems = useMemo(() => {
     if (palette?.kind !== 'command') return [];
     const q = palette.query.toLowerCase();
@@ -175,19 +192,24 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const addFiles = (files: FileList | File[]) => {
     Array.from(files).forEach((f) => {
       const isImage = f.type.startsWith('image/');
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
       const att: Attachment = { id: uid('att'), kind: isImage ? 'image' : 'file', name: f.name, meta: `${Math.max(1, Math.round(f.size / 1024))} KB` };
-      if (isImage) {
-        const r = new FileReader();
+      const r = new FileReader();
+      if (isImage || isPdf) {
         r.onload = () => setAtts((a) => a.map((x) => (x.id === att.id ? { ...x, content: String(r.result) } : x)));
         r.readAsDataURL(f);
+      } else if (f.size <= 2 * 1024 * 1024) {
+        // Text files go in as text; binary ones only by name.
+        r.onload = () => {
+          const text = String(r.result);
+          setAtts((a) => a.map((x) => (x.id === att.id ? (text.includes('\u0000') ? { ...x, meta: `${x.meta} · ${t('二进制，只发送文件名')}` } : { ...x, content: text }) : x)));
+        };
+        r.readAsText(f);
+      } else {
+        att.meta = `${att.meta} · ${t('太大，只发送文件名')}`;
       }
       setAtts((a) => [...a, att]);
     });
-  };
-  const addSample = (kind: 'image' | 'file') => {
-    setAtts((a) => [...a, kind === 'image'
-      ? { id: uid('att'), kind: 'image', name: `截图 ${a.length + 1}.png`, meta: '182 KB' }
-      : { id: uid('att'), kind: 'file', name: 'error.log', meta: '24 KB' }]);
   };
 
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -295,9 +317,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
             { value: 'image', icon: 'image', label: t('图片…'), desc: t('从本机选择图片'), onSelect: () => imageInput.current?.click() },
             { value: 'file', icon: 'file', label: t('文件…'), desc: t('任意文件，作为附件发送'), onSelect: () => fileInput.current?.click() },
             { value: 'mention', icon: 'at', label: t('引用会话或文件'), desc: t('等同于输入 @'), onSelect: () => { const v = `${text}${text && !text.endsWith(' ') ? ' ' : ''}@`; update(v, v.length); ta.current?.focus(); } },
-            'sep',
-            { value: 'sample-image', icon: 'image', label: t('模拟：添加一张截图'), onSelect: () => addSample('image') },
-            { value: 'sample-file', icon: 'file', label: t('模拟：添加一个日志文件'), onSelect: () => addSample('file') },
           ]} />
         </span>
         <input ref={imageInput} type="file" accept="image/*" multiple hidden onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
@@ -339,7 +358,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
         <div className="c-right">
           {running ? (
             <>
-              <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => onInterrupt(api.interrupt(sid).length)}>{t('中断')}</Button>
+              <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => void api.interrupt(sid).then((q) => onInterrupt(q.length))}>{t('中断')}</Button>
               <span className="split">
                 <Button size="sm" variant="primary" icon="queue" disabled={!canSend} onClick={() => doSend()}>{t('排队')}</Button>
                 <MenuButton icon="chevDown" variant="primary" size="sm" placement="top-end" width={300} items={[

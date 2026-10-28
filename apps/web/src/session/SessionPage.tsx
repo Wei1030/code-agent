@@ -46,9 +46,9 @@ export function SessionPage() {
   }
   if (!rt) return <div className="session-layout"><SessionColumn current={sum} /><div className="scenter" /></div>;
 
-  const onFork = (userId: string) => {
+  const onFork = async (userId: string) => {
     const msg = rt.items.find((x) => x.id === userId);
-    const newId = api.forkAt(id, userId);
+    const newId = await api.forkAt(id, userId);
     nav(`/s/${newId}`);
     if (msg?.kind === 'user') setTimeout(() => useApp.getState().fillComposer(newId, msg.text), 0);
     useApp.getState().toast(t('已分叉：新会话停在这条消息之前，消息已放进输入框'), 'good');
@@ -74,7 +74,7 @@ export function SessionPage() {
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
             {sum.waiting && <WaitingBar sid={id} />}
             {rt.readOnly ? (
-              !sum.waiting && <ReadOnlyBar sid={id} onFork={() => { const nid = api.forkAt(id); nav(`/s/${nid}`); }} />
+              !sum.waiting && <ReadOnlyBar sid={id} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />

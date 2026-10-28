@@ -5,14 +5,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { BoardItem, BoardKind, BoardStatus, Effort } from '../api/types';
-import type { ImportRow } from '../mock/board';
+import type { ImportRow } from '../api';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
 import { Button, Check, Chip, Field, Modal, Seg, Select, Tabs, Toggle } from '../components/ui';
 import { linkify } from '../components/BoardLink';
 import { SessionLink } from '../session/Transcript';
 import { useApp } from '../store/app';
-import { EFFORT_LABEL, MODELS } from '../mock/data';
+import { EFFORT_LABEL, MODELS } from '../lib/catalog';
 import { CLOSED, KIND_ICON, KIND_LABEL, STATUSES, STATUS_LABEL, STATUS_TONE } from '../lib/board';
 import { relTime } from '../lib/format';
 import { cx, download, uid } from '../lib/util';
@@ -73,7 +73,7 @@ export function Board() {
             <input className="input" placeholder={t('搜索编号、标题、内容')} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <span className="grow" />
-          <Button icon="download" onClick={() => download(`board-${app.workspaces.find((w) => w.id === wsId)?.name ?? wsId}.md`, api.boardMarkdown(wsId), 'text/markdown;charset=utf-8')}>{t('导出')}</Button>
+          <Button icon="download" onClick={() => void api.boardMarkdown(wsId).then((md) => download(`board-${app.workspaces.find((w) => w.id === wsId)?.name ?? wsId}.md`, md, 'text/markdown;charset=utf-8'))}>{t('导出')}</Button>
           <Button icon="upload" onClick={() => setDialog('import')}>{t('导入')}</Button>
           <Button icon="gear" title={t('自动记录、识别用的模型和思考强度')} onClick={() => setDialog('settings')}>{t('设置')}</Button>
           <Button variant="primary" icon="plus" onClick={() => setDialog('new')}>{t('新建')}</Button>
@@ -256,14 +256,14 @@ function NewItemDialog({ wsId, kind: initial, onClose, onCreated }: { wsId: stri
   const [kind, setKind] = useState<BoardKind>(initial);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const create = () => {
-    const it = api.createItem(wsId, { kind, title: title.trim(), body }, { kind: 'manual' });
+  const create = async () => {
+    const it = await api.createItem(wsId, { kind, title: title.trim(), body }, { kind: 'manual' });
     onClose();
     onCreated(it);
   };
   return (
     <Modal title={t('新建看板条目')} width={520} onClose={onClose}
-      footer={<><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!title.trim()} onClick={create}>{t('新建')}</Button></>}>
+      footer={<><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!title.trim()} onClick={() => void create()}>{t('新建')}</Button></>}>
       <div className="col" style={{ gap: 12 }}>
         <Seg value={kind} onChange={setKind} items={(['feature', 'issue', 'note'] as BoardKind[]).map((k) => ({ value: k, label: t(KIND_LABEL[k]) }))} />
         <Field label={t('标题')}><input className="input" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
@@ -279,29 +279,30 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
   const t = useT();
   const app = useApp();
   const recorder = `${MODELS.find((m) => m.id === app.boardSettings.recorderModel)?.label ?? ''} · ${t('思考')}${t(EFFORT_LABEL[app.boardSettings.recorderEffort])}`;
-  const jiraOk = app.mcp.some((m) => m.name === 'jira' && m.status === 'connected');
+  const jiraOk = app.mcp.some((m) => /jira|atlassian/i.test(m.name) && m.status === 'connected' && (m.scope !== 'workspace' || m.workspaceId === wsId));
   const [source, setSource] = useState<Source>('github');
-  const [repo, setRepo] = useState('acme/shop-api');
+  const [repo, setRepo] = useState('');
   const [query, setQuery] = useState('is:open');
-  const [jql, setJql] = useState('project = SHOP AND status != Done');
+  const [jql, setJql] = useState('status != Done ORDER BY updated DESC');
   const [text, setText] = useState('');
   const [fileName, setFileName] = useState('');
   const [step, setStep] = useState<'source' | 'working' | 'preview'>('source');
   const [rows, setRows] = useState<ImportRow[]>([]);
   const items = app.board.filter((x) => x.workspaceId === wsId);
 
-  const ready = source === 'github' ? !!repo.trim() : source === 'jira' ? jiraOk : !!text.trim();
-  const run = () => {
+  const ready = source === 'github' ? true : source === 'jira' ? jiraOk && !!jql.trim() : !!text.trim();
+  const run = async () => {
     setStep('working');
-    setTimeout(() => {
-      setRows(source === 'jira'
-        ? api.importPreview(wsId, 'jira', 'SHOP-1432 限流上线后观察 429 比例\nSHOP-1440 支付回调偶尔超时，需要修复\nSHOP-1441 订单导出需要支持 Excel')
-        : api.importPreview(wsId, source, source === 'github' ? repo : text));
+    try {
+      const input = source === 'github' ? JSON.stringify({ repo: repo.trim(), query: query.trim() }) : source === 'jira' ? jql : text;
+      setRows(await api.importPreview(wsId, source, input));
       setStep('preview');
-    }, 1600);
+    } catch {
+      setStep('source');
+    }
   };
-  const apply = () => {
-    const created = api.applyImport(wsId, rows);
+  const apply = async () => {
+    const created = await api.applyImport(wsId, rows);
     const merged = rows.filter((r) => r.action !== 'create' && r.action !== 'skip').length;
     app.toast(t('导入完成：新建 {c} 条，合并 {m} 条', { c: created.length, m: merged }), 'good');
     onClose();
@@ -315,8 +316,8 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
     <Modal title={t('导入到看板')} sub={step === 'preview' ? t('Claude 整理好了，确认后才写入') : t('Claude 读取来源，整理成条目，并和看板上已有的条目查重')} width={step === 'preview' ? 980 : 600} onClose={onClose}
       footLeft={step === 'preview' ? <span className="hint">{t('将新建 {c} 条，合并 {m} 条，跳过 {s} 条', { c: nCreate, m: rows.length - nCreate - nSkip, s: nSkip })}</span> : undefined}
       footer={step === 'preview'
-        ? <><Button onClick={() => setStep('source')}>{t('返回')}</Button><Button variant="primary" disabled={nCreate + (rows.length - nCreate - nSkip) === 0} onClick={apply}>{t('导入')}</Button></>
-        : <><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!ready || step === 'working'} onClick={run}>{t('读取并整理')}</Button></>}>
+        ? <><Button onClick={() => setStep('source')}>{t('返回')}</Button><Button variant="primary" disabled={nCreate + (rows.length - nCreate - nSkip) === 0} onClick={() => void apply()}>{t('导入')}</Button></>
+        : <><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!ready || step === 'working'} onClick={() => void run()}>{t('读取并整理')}</Button></>}>
       {step === 'source' && (
         <div className="col" style={{ gap: 12 }}>
           <Seg value={source} onChange={setSource} items={[
@@ -325,7 +326,7 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
           {source === 'github' && (
             <>
               <div className="form-grid">
-                <Field label={t('仓库')}><input className="input mono" value={repo} onChange={(e) => setRepo(e.target.value)} /></Field>
+                <Field label={t('仓库')} hint={t('owner/repo；留空时用工作区的 git 远程仓库')}><input className="input mono" placeholder="owner/repo" value={repo} onChange={(e) => setRepo(e.target.value)} /></Field>
                 <Field label={t('筛选')}><input className="input mono" value={query} onChange={(e) => setQuery(e.target.value)} /></Field>
               </div>
               <div className="hint">{t('通过 gh 命令读取，需要先在你的终端里登录 gh。')}</div>
@@ -333,7 +334,7 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
           )}
           {source === 'jira' && (jiraOk
             ? <Field label="JQL"><input className="input mono" value={jql} onChange={(e) => setJql(e.target.value)} /></Field>
-            : <div className="banner-warn"><Icon name="warning" size={15} /><span>{t('通过 jira 的 MCP 服务器读取。它还没有登录：先在 MCP 页面登录 jira。')}</span></div>)}
+            : <div className="banner-warn"><Icon name="warning" size={15} /><span>{t('通过 Jira（Atlassian）的 MCP 服务器读取。还没有已连接的 Jira MCP 服务器：先在 MCP 页面添加并登录。')}</span></div>)}
           {source === 'paste' && (
             <Field label={t('内容')} hint={t('每行一条，可以直接粘贴待办清单、会议记录或 issue 列表')}>
               <textarea className="textarea" rows={7} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('- 支付回调偶尔超时，需要修复\n- 订单列表需要支持按日期筛选')} />

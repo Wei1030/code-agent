@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { Effort, PermissionMode, Profile, ReviewProfile } from '../../api/types';
-import { BUILTIN_TOOLS, EFFORT_LABEL, MODE_INFO, MODELS } from '../../mock/data';
+import { BUILTIN_TOOLS, EFFORT_LABEL, MODE_INFO, MODELS } from '../../lib/catalog';
 import { Button, Check, Field, Seg, Select, Toggle } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { cx } from '../../lib/util';

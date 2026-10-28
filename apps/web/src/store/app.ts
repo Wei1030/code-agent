@@ -1,14 +1,13 @@
 /** App-wide state: registries, preferences and UI chrome. Sessions live in ./sessions. */
 import { create } from 'zustand';
 import type {
-  BoardItem, BoardSettings, CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PeerSettings, PermissionRule,
-  PluginInfo, Prefs, Profile, ProviderKind, ReviewProfile, ReviewTicket, SessionSummary, SkillInfo, Workspace,
+  BoardItem, BoardSettings, CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpBehavior, McpServer, ModelInfo,
+  PeerSettings, PermissionRule, PluginInfo, Prefs, Profile, Provider, ReviewProfile, ReviewTicket, RuntimeSettings, SessionSummary, SkillInfo, UsageData, Workspace,
 } from '../api/types';
-import { COMMAND_FILES, FILE_HOOKS, HOOK_LOG, HOOK_RULES, MCP_SERVERS, PLUGINS, SKILLS } from '../mock/extensions';
-import { JOB_RUNS, JOBS } from '../mock/jobs';
-import { BOARD_ITEMS } from '../mock/boardSeed';
-import { ENV_VARS, PROFILES, RULES, SESSIONS, WORKSPACES } from '../mock/data';
+import { MODELS } from '../lib/catalog';
 import { uid } from '../lib/util';
+
+export type { Provider };
 
 export interface Toast {
   id: string;
@@ -27,21 +26,11 @@ export interface ConfirmRequest {
   onConfirm: () => void;
 }
 
-export interface Provider {
-  kind: ProviderKind;
-  configDir: 'default' | 'env' | 'custom';
-  customDir: string;
-  executable: 'bundled' | 'system';
-  loggedIn: boolean;
-  plan: string;
-  envConflict: boolean;
-  compatibleUrl: string;
-  compatibleModel: string;
-}
-
 export type InspectorTab = 'tasks' | 'background' | 'changes' | 'checkpoints' | 'context' | 'events';
 
 interface AppState {
+  /** The server's state has arrived. */
+  booted: boolean;
   workspaces: Workspace[];
   sessions: SessionSummary[];
   currentWorkspaceId: string;
@@ -50,7 +39,7 @@ interface AppState {
   rules: PermissionRule[];
   dirs: ExtraDir[];
   mcp: McpServer[];
-  mcpBehavior: { strict: boolean; toolSearch: 'auto' | 'on' | 'off'; firstTurnWait: number };
+  mcpBehavior: McpBehavior;
   skills: SkillInfo[];
   commandFiles: CommandFile[];
   plugins: PluginInfo[];
@@ -76,12 +65,14 @@ interface AppState {
   held: HeldMessage[];
   provider: Provider;
   env: EnvVar[];
-  runtime: { debugLog: boolean; otel: boolean; otelEndpoint: string; otelMetrics: boolean; otelLogs: boolean; otelTraces: boolean; otelPrompts: boolean; otelTools: boolean };
+  runtime: RuntimeSettings;
+  models: ModelInfo[];
+  usage: UsageData;
   connection: 'online' | 'offline' | 'restored';
+  reconnectAttempt: number;
   toasts: Toast[];
   confirm: ConfirmRequest | null;
   inspector: { open: boolean; width: number; tab: InspectorTab; eventsSub: 'events' | 'stderr' | 'hooks' };
-  mockConsoleOpen: boolean;
   folderPickerOpen: boolean;
   inboxOpen: boolean;
   /** Text pushed into a session's composer (suggestions, fork-and-edit). */
@@ -97,16 +88,16 @@ interface AppState {
   upsertSession: (s: SessionSummary) => void;
   patchSession: (id: string, p: Partial<SessionSummary>) => void;
   removeSession: (id: string) => void;
-  addWorkspace: (path: string) => Workspace;
   saveProfile: (p: Profile) => void;
   fillComposer: (sid: string, text: string) => void;
   logHook: (e: Omit<HookLogEntry, 'id' | 'ts'>) => void;
 }
 
 export const useApp = create<AppState>((set, get) => ({
-  workspaces: WORKSPACES,
-  sessions: SESSIONS,
-  currentWorkspaceId: WORKSPACES[0].id,
+  booted: false,
+  workspaces: [],
+  sessions: [],
+  currentWorkspaceId: localStorage.getItem('ca.workspace') ?? '',
   prefs: {
     uiLanguage: 'auto',
     responseLanguage: 'ui',
@@ -118,45 +109,50 @@ export const useApp = create<AppState>((set, get) => ({
     notifyTurnDone: true,
     notifyBackground: true,
   },
-  profiles: PROFILES,
-  rules: RULES,
-  dirs: [{ id: 'dir-1', path: 'D:\\src\\design-tokens', scope: 'workspace', workspaceId: 'ws-shop-web' }],
-  mcp: MCP_SERVERS,
+  profiles: [],
+  rules: [],
+  dirs: [],
+  mcp: [],
   mcpBehavior: { strict: false, toolSearch: 'auto', firstTurnWait: 30 },
-  skills: SKILLS,
-  commandFiles: COMMAND_FILES,
-  plugins: PLUGINS,
-  hookRules: HOOK_RULES,
-  fileHooks: FILE_HOOKS,
-  hookLog: HOOK_LOG,
-  jobs: JOBS,
-  jobRuns: JOB_RUNS,
+  skills: [],
+  commandFiles: [],
+  plugins: [],
+  hookRules: [],
+  fileHooks: [],
+  hookLog: [],
+  jobs: [],
+  jobRuns: [],
   peer: { inbound: 'parity', maxHops: 6 },
   maxRunning: 4,
-  board: BOARD_ITEMS,
+  board: [],
   boardSettings: { recorder: true, recorderModel: 'haiku', recorderEffort: 'low', startContext: true },
   reviews: [],
-  reviewChecks: { 'ws-shop-api': ['npm run typecheck', 'npm test'] },
+  reviewChecks: {},
   reviewProfile: { model: 'opus', effort: 'high', tools: [], claudeMd: true, extraPrompt: '' },
   reviewRecord: null,
   reviewed: {},
   held: [],
   provider: {
-    kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',
+    kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: false, plan: '',
     envConflict: false, compatibleUrl: '', compatibleModel: '',
   },
-  env: ENV_VARS,
+  env: [],
   runtime: { debugLog: false, otel: false, otelEndpoint: '', otelMetrics: false, otelLogs: false, otelTraces: false, otelPrompts: false, otelTools: false },
+  models: MODELS,
+  usage: { fiveHour: null, weekly: null, checkedAt: null, days: {} },
   connection: 'online',
+  reconnectAttempt: 0,
   toasts: [],
   confirm: null,
   inspector: { open: true, width: 340, tab: 'tasks', eventsSub: 'events' },
-  mockConsoleOpen: false,
   folderPickerOpen: false,
   inboxOpen: false,
   fill: null,
 
-  set: (patch) => set(patch),
+  set: (patch) => {
+    if (patch.currentWorkspaceId) localStorage.setItem('ca.workspace', patch.currentWorkspaceId);
+    set(patch);
+  },
   toast: (text, tone = 'info', action) => {
     const id = uid('toast');
     set({ toasts: [...get().toasts, { id, text, tone, action }] });
@@ -174,14 +170,6 @@ export const useApp = create<AppState>((set, get) => ({
   },
   patchSession: (id, p) => set({ sessions: get().sessions.map((x) => (x.id === id ? { ...x, ...p } : x)) }),
   removeSession: (id) => set({ sessions: get().sessions.filter((x) => x.id !== id) }),
-  addWorkspace: (path) => {
-    const existing = get().workspaces.find((w) => w.path.toLowerCase() === path.toLowerCase());
-    if (existing) return existing;
-    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
-    const ws: Workspace = { id: uid('ws'), name, path, branch: 'main', lastActive: Date.now() };
-    set({ workspaces: [ws, ...get().workspaces] });
-    return ws;
-  },
   logHook: (e) => set({ hookLog: [{ ...e, id: uid('hl'), ts: Date.now() }, ...get().hookLog].slice(0, 200) }),
   fillComposer: (sid, text) => set({ fill: { sid, text, n: (get().fill?.n ?? 0) + 1 } }),
   saveProfile: (p) => set({ profiles: get().profiles.map((x) => (x.id === p.id ? p : p.isDefault ? { ...x, isDefault: false } : x)) }),

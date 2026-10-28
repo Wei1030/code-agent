@@ -1,5 +1,6 @@
 /** Rewind files to before a user message, with a dry-run preview. */
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { DryRun } from '../api';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
@@ -10,11 +11,16 @@ import { useT } from '../lib/i18n';
 export function RewindDialog({ sid, userId, n, onClose }: { sid: string; userId: string; n: number; onClose: () => void }) {
   const t = useT();
   const nav = useNavigate();
-  const dry = useMemo(() => api.dryRun(sid, userId), [sid, userId]);
+  const [dry, setDry] = useState<DryRun | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api.dryRun(sid, userId).then((d) => live && setDry(d));
+    return () => { live = false; };
+  }, [sid, userId]);
   const [mode, setMode] = useState<'files' | 'fork'>('files');
 
-  const run = () => {
-    const forkId = api.rewind(sid, userId, mode === 'fork');
+  const run = async () => {
+    const forkId = await api.rewind(sid, userId, mode === 'fork');
     onClose();
     if (forkId) {
       useApp.getState().toast(t('已回退文件并新建分叉会话'), 'good');
@@ -33,11 +39,15 @@ export function RewindDialog({ sid, userId, n, onClose }: { sid: string; userId:
       footer={
         <>
           <Button onClick={onClose}>{t('取消')}</Button>
-          <Button variant="primary" icon="rewind" disabled={!dry.canRewind} onClick={run}>{mode === 'fork' ? t('回退并分叉') : t('回退文件')}</Button>
+          <Button variant="primary" icon="rewind" disabled={!dry?.canRewind} onClick={() => void run()}>{mode === 'fork' ? t('回退并分叉') : t('回退文件')}</Button>
         </>
       }
     >
-      {dry.files.length === 0 ? (
+      {!dry ? (
+        <div className="banner-info"><span className="spinner" />{t('正在预演…')}</div>
+      ) : !dry.canRewind ? (
+        <div className="banner-warn"><Icon name="warning" size={16} />{dry.error ?? t('无法回退：这条消息没有文件检查点。')}</div>
+      ) : dry.files.length === 0 ? (
         <div className="banner-info"><Icon name="info" size={16} />{t('这条消息之后没有文件变更，回退不会改动任何文件。')}</div>
       ) : (
         <>

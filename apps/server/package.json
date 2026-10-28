@@ -1,0 +1,24 @@
+{
+  "name": "@code-agent/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/main.ts --dev",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.312",
+    "@code-agent/shared": "*",
+    "diff": "^8.0.2",
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

@@ -4,7 +4,7 @@ import type { CommandFile, PluginInfo, SkillInfo } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Modal, Seg, Select, Status, Tabs, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
-import { BUILTIN_COMMANDS } from '../mock/extensions';
+import { BUILTIN_COMMANDS } from '../lib/catalog';
 import { cx, uid } from '../lib/util';
 import { useT } from '../lib/i18n';
 
