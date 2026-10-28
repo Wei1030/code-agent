@@ -8,7 +8,7 @@ import { emptyRuntime } from '@code-agent/shared/runtime';
 import { MODELS } from '@code-agent/shared/catalog';
 import { register } from '../hub';
 import { app } from '../state';
-import { addItem, allSummaries, dropSession, emit, initRuntime, patchItem, patchSummary, rt, summary, upsert } from './registry';
+import { addItem, allSummaries, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
 import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onTurnEnd, refreshContext, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
 import { cwdOf } from './options';
@@ -346,6 +346,11 @@ register({
   },
   markRead: (sid) => patchSummary(sid, { peerUnread: 0 }),
   exportMarkdown,
+  searchSessions: (query) => {
+    const seen = new Map<string, string>();
+    for (const h of searchTranscripts(query, 100)) if (!seen.has(h.session) && summary(h.session)) seen.set(h.session, h.snippet.replace(/\s+/g, ' '));
+    return [...seen].slice(0, 100).map(([sessionId, snippet]) => ({ sessionId, snippet }));
+  },
   retryBanner: (sid, itemId) => patchItem(sid, itemId, { resolved: true }),
   listCommands: (sid) => commandsFor(sid),
   cancelWaiting: (sid) => cancelWaiting(sid),

@@ -69,7 +69,7 @@ function deleteItem(wsId: string, id: string) {
 // ------------------------------------------------------------------ undoable changes shown in the transcript
 
 interface Before { wsId: string; id: string; before: BoardItem | null }
-const undoLog = load<Record<string, Before[]>>('board-undo.json', {});
+const undoLog = load<Record<string, Before[]>>('board-undo', {});
 
 function tracker() {
   const before: Before[] = [];
@@ -94,7 +94,7 @@ function card(sid: string, by: 'recorder' | 'agent', tr: ReturnType<typeof track
   if (!changes.length) return;
   const id = randomUUID();
   undoLog[id] = tr.before;
-  save('board-undo.json', () => undoLog);
+  save('board-undo', () => undoLog);
   addItem(sid, { kind: 'board', id, by, changes, ...(model ? { model } : {}) });
 }
 
@@ -106,7 +106,7 @@ function undoBoardRecord(sid: string, cardId: string) {
     else deleteItem(b.wsId, b.id);
   }
   delete undoLog[cardId];
-  save('board-undo.json', () => undoLog);
+  save('board-undo', () => undoLog);
   patchItem(sid, cardId, { undone: true });
 }
 

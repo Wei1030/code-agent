@@ -50,12 +50,12 @@ const checkProcs = new Map<string, ChildProcess>();
 const snaps = new Map<string, string[]>();
 
 /** Commit each session started from (base of its first review), kept across restarts. */
-const sessionBase = load<Record<string, string>>('review-base.json', {});
+const sessionBase = load<Record<string, string>>('review-base', {});
 
 // Tickets that were running when the server stopped cannot continue.
 if (app.reviews.some((t) => RUNNING.includes(t.status))) {
   app.reviews = app.reviews.map((t) => (RUNNING.includes(t.status) ? { ...t, status: 'stopped', endedAt: Date.now(), note: 'Code Agent 服务重启，审核中断' } : t));
-  save('reviews.json', () => app.reviews);
+  save('slice:reviews', () => app.reviews);
 }
 
 const get = (id: string) => app.reviews.find((t) => t.id === id);
@@ -88,7 +88,7 @@ onSendTurn((sid) => {
   void head(cwd).then((h) => {
     if (h && !sessionBase[sid]) {
       sessionBase[sid] = h;
-      save('review-base.json', () => sessionBase);
+      save('review-base', () => sessionBase);
     }
   });
 });

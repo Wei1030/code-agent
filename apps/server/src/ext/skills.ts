@@ -16,7 +16,7 @@ import { summary } from '../sessions/registry';
 
 /** Absolute file of each skill / command id; the UI only sees display paths. */
 const files = new Map<string, string>();
-let disabled = new Set(load<string[]>('skills-off.json', []));
+let disabled = new Set(load<string[]>('skills-off', []));
 /** Claude Code's own skills and commands (from the last probe), by name. */
 let bundled: Array<{ name: string; description: string; argumentHint: string; builtin?: boolean }> = [];
 
@@ -135,7 +135,7 @@ onWrite('skills', (next, prev) => {
     if (p && p.enabled !== n.enabled) {
       if (n.enabled) disabled.delete(n.id);
       else disabled.add(n.id);
-      save('skills-off.json', () => [...disabled]);
+      save('skills-off', () => [...disabled]);
     }
     if (n.source === 'bundled' || n.source === 'plugin') continue;
     if (!p) writeFile(target(n.path, n.workspaceId), n.content);

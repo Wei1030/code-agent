@@ -17,11 +17,11 @@ import { acquire } from '../sessions/slots';
 
 /** Session id → run id of job runs in progress. */
 const running = new Map<string, string>();
-const meta = load<{ lastAlive?: number; nextAt?: Record<string, number> }>('jobs-meta.json', {});
+const meta = load<{ lastAlive?: number; nextAt?: Record<string, number> }>('jobs-meta', {});
 const nextAt: Record<string, number> = meta.nextAt ?? {};
 
 function persistMeta() {
-  save('jobs-meta.json', () => ({ lastAlive: Date.now(), nextAt }));
+  save('jobs-meta', () => ({ lastAlive: Date.now(), nextAt }));
 }
 
 function patchRun(id: string, p: Partial<JobRun>) {

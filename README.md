@@ -21,7 +21,7 @@ peer sessions (sessions of a workspace read, message and create each other), a c
 
 ### Running
 
-Node.js 22 or later. Log in to Claude Code yourself first (`claude`, then `/login`), or configure a
+Node.js 22.13 or later (it brings the built-in SQLite the server stores its data in; nothing else to install). Log in to Claude Code yourself first (`claude`, then `/login`), or configure a
 compatible endpoint in Settings.
 
 ```
@@ -30,12 +30,12 @@ npm run dev        # server + Vite dev middleware: http://127.0.0.1:5180
 npm start          # builds the web app, then serves it: http://127.0.0.1:5180
 ```
 
-- Data lives in `~/.code-agent/` (set `CODE_AGENT_HOME` to move it); the port is `CODE_AGENT_PORT`.
+- Data lives in `~/.code-agent/code-agent.db` (set `CODE_AGENT_HOME` to move it); the port is `CODE_AGENT_PORT`.
 - The server listens on 127.0.0.1 only and accepts WebSocket connections only from its own origin.
 - Workspaces, permission rules, MCP servers, skills, commands and hooks are Claude Code's own
   files; changes made here show up in the `claude` CLI and the other way round.
 
-`npm run typecheck` checks all three packages; `npm run build` builds the web app.
+`npm run typecheck` checks all three packages, `npm test` runs the tests, `npm run build` builds the web app.
 
 | Document | Contents |
 | --- | --- |
@@ -59,8 +59,8 @@ code-agent/
 
 ## Stack
 
-- Node.js 22 LTS or later, TypeScript (run with tsx), npm workspaces
-- Server: Node `http` + `ws`, `@anthropic-ai/claude-agent-sdk`; JSON files in `~/.code-agent/`
+- Node.js 22.13 or later, TypeScript (run with tsx), npm workspaces
+- Server: Node `http` + `ws`, `@anthropic-ai/claude-agent-sdk`; SQLite (`node:sqlite`, WAL, full-text index for transcripts) in `~/.code-agent/`
 - Web: React 19, Vite, Zustand, React Router; plain CSS
 - UI languages: Simplified Chinese (English prepared, not enabled yet)
 

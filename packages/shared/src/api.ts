@@ -80,6 +80,8 @@ export interface ServerApi {
   remove(sid: string): void;
   markRead(sid: string): void;
   exportMarkdown(sid: string): string;
+  /** Sessions whose transcript contains the words, with a snippet of where. */
+  searchSessions(query: string): Array<{ sessionId: string; snippet: string }>;
   retryBanner(sid: string, itemId: string): void;
 
   releaseHeld(id: string): void;

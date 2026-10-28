@@ -80,13 +80,13 @@ export function envCredentialVar(): string | undefined {
 
 /** The compatible endpoint's token stays in the data directory and never goes to the browser. */
 import { load, save } from '../store';
-let secrets = load<{ compatibleKey?: string }>('secrets.json', {});
+let secrets = load<{ compatibleKey?: string }>('secrets', {});
 export function compatibleKey() {
   return secrets.compatibleKey ?? '';
 }
 export function setCompatibleKey(key: string) {
   secrets = { ...secrets, compatibleKey: key };
-  save('secrets.json', () => secrets, 0);
+  save('secrets', () => secrets, 0);
 }
 
 /** Environment for a Claude Code process: ours plus the provider, user variables and runtime switches. */

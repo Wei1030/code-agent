@@ -1,14 +1,14 @@
 /**
- * The app state the server keeps and pushes to the UI (AppSlices). Plain slices are saved in
- * state.json; slices that mirror files on disk (rules, MCP servers, skills…) are written back by
+ * The app state the server keeps and pushes to the UI (AppSlices). Plain slices are rows of the
+ * database (board items one row each); slices that mirror files on disk (rules, MCP servers, skills…) are written back by
  * the handler registered with onWrite and re-read from disk.
  */
 import type { WebSocket } from 'ws';
-import type { AppSlices, Profile, SliceKey } from '@code-agent/shared/types';
+import type { AppSlices, BoardItem, Profile, SliceKey } from '@code-agent/shared/types';
 import { READONLY_SLICES } from '@code-agent/shared/types';
 import { BUILTIN_TOOLS, MODELS } from '@code-agent/shared/catalog';
 import { broadcast } from './hub';
-import { load, save } from './store';
+import { db, later, load, save, tx } from './store';
 
 export const DEFAULT_PROFILE: Profile = {
   id: 'p-default', name: '默认', desc: '新会话和 Claude 新建的会话使用', isDefault: true, allowBypass: false,
@@ -58,40 +58,44 @@ function defaults(): AppSlices {
   };
 }
 
-/** Slices kept in their own file; the rest of the saved ones go to state.json. */
-const OWN_FILE: Partial<Record<SliceKey, string>> = { board: 'board.json', reviews: 'reviews.json', usage: 'usage.json', jobRuns: 'job-runs.json', hookLog: 'hook-log.json' };
 /** Slices read from disk (Claude Code's files), never saved by us. */
 const FROM_DISK: SliceKey[] = ['rules', 'dirs', 'mcp', 'skills', 'commandFiles', 'fileHooks'];
 
 const def = defaults();
-const saved = load<Partial<AppSlices>>('state.json', {});
 export const app: AppSlices = { ...def };
 for (const k of Object.keys(def) as SliceKey[]) {
-  if (FROM_DISK.includes(k)) continue;
-  const own = OWN_FILE[k];
-  const v = own ? load(own, undefined) : saved[k];
+  if (FROM_DISK.includes(k) || k === 'models' || k === 'board') continue;
+  const v = load<unknown>(`slice:${k}`, undefined);
   if (v !== undefined) (app as unknown as Record<string, unknown>)[k] = v;
 }
+app.board = (db.prepare('SELECT data FROM board_items').all() as Array<{ data: string }>).map((r) => JSON.parse(r.data) as BoardItem);
 // Settings added in later versions get their defaults.
 app.prefs = { ...def.prefs, ...app.prefs };
 app.provider = { ...def.provider, ...app.provider };
 app.runtime = { ...def.runtime, ...app.runtime };
 app.boardSettings = { ...def.boardSettings, ...app.boardSettings };
 app.reviewProfile = { ...def.reviewProfile, ...app.reviewProfile };
+app.mcpBehavior = { ...def.mcpBehavior, ...app.mcpBehavior };
 app.profiles = app.profiles.length ? app.profiles.map((p) => ({ ...DEFAULT_PROFILE, ...p })) : [DEFAULT_PROFILE];
+
+/** Board items as last written, to write only the ones that changed. */
+let savedBoard = new Map(app.board.map((x) => [`${x.workspaceId}\t${x.id}`, x]));
+const putItem = db.prepare('INSERT INTO board_items (workspace, id, data) VALUES (?, ?, ?) ON CONFLICT(workspace, id) DO UPDATE SET data = excluded.data');
+const delItem = db.prepare('DELETE FROM board_items WHERE workspace = ? AND id = ?');
+
+function saveBoard() {
+  const now = new Map(app.board.map((x) => [`${x.workspaceId}\t${x.id}`, x]));
+  tx(() => {
+    for (const [k, x] of now) if (savedBoard.get(k) !== x) putItem.run(x.workspaceId, x.id, JSON.stringify(x));
+    for (const [k, x] of savedBoard) if (!now.has(k)) delItem.run(x.workspaceId, x.id);
+  });
+  savedBoard = now;
+}
 
 function persist(key: SliceKey) {
   if (FROM_DISK.includes(key) || key === 'models') return;
-  const own = OWN_FILE[key];
-  if (own) {
-    save(own, () => app[key]);
-    return;
-  }
-  save('state.json', () => {
-    const out: Record<string, unknown> = {};
-    for (const k of Object.keys(app) as SliceKey[]) if (!FROM_DISK.includes(k) && !OWN_FILE[k] && k !== 'models') out[k] = app[k];
-    return out;
-  });
+  if (key === 'board') later('board', saveBoard);
+  else save(`slice:${key}`, () => app[key]);
 }
 
 /** Change a slice: save it and tell the UI (except the client the change came from). */
