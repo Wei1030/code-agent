@@ -7,6 +7,7 @@ import {
   addItem, authorize, Cancelled, emit, finishTool, lastUserId, newTool, patch, planItem, raw, rt, runHooks, sleep,
   streamText, userItem, waitFor, type Run,
 } from './engine';
+import { scenarioAskPeer, scenarioSpawn } from './peer';
 
 const short = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
@@ -35,9 +36,19 @@ export async function checkpoint(run: Run) {
 function addChange(sid: string, path: string, kind: 'created' | 'modified', add: number, del: number, diff: string[]) {
   const r = rt(sid)!;
   emit(sid, { t: 'changes', changes: [...r.changes, { path, kind, add, del, diff, afterUserId: lastUserId(sid) }] });
+  warnSharedFile(sid, path);
 }
 
-async function editStep(run: Run, path: string, diff: string[], add: number, del: number, created = false): Promise<boolean> {
+/** Two live sessions editing the same file in the same checkout: say so before they overwrite each other. */
+function warnSharedFile(sid: string, path: string) {
+  const app = useApp.getState();
+  const me = app.sessions.find((s) => s.id === sid);
+  if (!me || me.worktree) return;
+  const other = app.sessions.find((s) => s.id !== sid && s.workspaceId === me.workspaceId && s.live && !s.worktree && rt(s.id)?.changes.some((c) => c.path === path));
+  if (other) addItem(sid, { kind: 'notice', id: uid('note'), tone: 'warn', text: `会话「${other.title}」在同一目录里也改过 ${path}，注意不要互相覆盖。` });
+}
+
+export async function editStep(run: Run, path: string, diff: string[], add: number, del: number, created = false): Promise<boolean> {
   const t = newTool(run.sid, created ? 'Write' : 'Edit', path, { right: created ? `+${add}` : `+${add} −${del}` });
   const auth = await authorize(run, t, { diff: { path, lines: diff } });
   if (!auth) {
@@ -107,14 +118,14 @@ export function finishBackground(sid: string, taskId: string, toolId: string | n
   });
 }
 
-function readGroup(sid: string, label: string, tools: Array<[string, string, string?]>): { id: string; tools: ToolItem[] } {
+export function readGroup(sid: string, label: string, tools: Array<[string, string, string?]>): { id: string; tools: ToolItem[] } {
   const id = uid('grp');
   const list: ToolItem[] = tools.map(([tool, detail, right]) => ({ kind: 'tool', id: uid('tool'), tool, detail, status: 'ok', right, seconds: 0.3 }));
   addItem(sid, { kind: 'toolgroup', id, label, tools: [] });
   return { id, tools: list };
 }
 
-async function playGroup(run: Run, g: { id: string; tools: ToolItem[] }, label: string) {
+export async function playGroup(run: Run, g: { id: string; tools: ToolItem[] }, label: string) {
   const shown: ToolItem[] = [];
   for (const t of g.tools) {
     await sleep(run, 260);
@@ -534,6 +545,8 @@ export async function scenarioAck(run: Run, text: string) {
 }
 
 export function pickScenario(text: string, mode: string): (run: Run) => Promise<void> {
+  if (/拆成|拆开|分头|新建会话|并行做/.test(text)) return scenarioSpawn;
+  if (/其他会话|别的会话|会话进展|问问/.test(text)) return scenarioAskPeer;
   if (/共享库|工作区外|外部目录|shared-lib/i.test(text)) return scenarioOutside;
   if (/迁移|migration/i.test(text)) return scenarioElicitForm;
   if (/jira/i.test(text)) return scenarioElicitUrl;

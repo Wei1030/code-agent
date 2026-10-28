@@ -4,7 +4,7 @@
  */
 import type {
   ApprovalAnswer, Attachment, BannerKind, Effort, ElicitationAnswer, Item, PermissionMode, PlanAnswer, QuestionAnswer,
-  QueuedMessage,
+  QueuedMessage, SessionRef,
 } from '../api/types';
 import { useApp } from '../store/app';
 import { emptyRuntime, useSessions } from '../store/sessions';
@@ -20,10 +20,13 @@ import {
   bootAuth, bootDocs, bootFlaky, footer, pickScenario, scenarioAck,
   scenarioCommand, scenarioElicitForm, scenarioElicitUrl, scenarioFix, scenarioHighRisk, scenarioJob, scenarioOutside, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
 } from './scenarios';
+import { humanTurn, scenarioAskPeer, scenarioRefs, scenarioSpawn, takeQueued } from './peer';
+
+export { mockHeld, mockPeerMessage, rejectHeld, releaseHeld } from './peer';
 
 const MODEL_ID: Record<string, string> = { opus: 'claude-opus-5-5', fable: 'claude-fable-5-1', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5' };
 
-function initRaw(sid: string) {
+export function initRaw(sid: string) {
   const r = rt(sid)!;
   raw(sid, 'system/init', `${MODEL_ID[r.model] ?? r.model} · 23 个工具 · 2 个 MCP · ${r.mode}`, {
     model: MODEL_ID[r.model], permissionMode: r.mode, claude_code_version: '2.1.302', tools: 23, mcp_servers: [{ name: 'github', status: 'connected' }, { name: 'postgres', status: 'connected' }],
@@ -74,6 +77,8 @@ export interface SendOptions {
   priority?: 'now' | 'next' | 'later';
   contextOnly?: boolean;
   verbatim?: boolean;
+  /** Sessions @-mentioned in the message. */
+  refs?: SessionRef[];
 }
 
 /** Send a user message. While a turn runs, it is queued (or steers the turn with priority "now"). */
@@ -87,6 +92,7 @@ export function send(sid: string, text: string, opts: SendOptions = {}) {
     initRaw(sid);
   }
   app.patchSession(sid, { lastActive: Date.now() });
+  if (!opts.contextOnly) humanTurn(sid);
 
   if (opts.contextOnly) {
     userItem(sid, text, opts.attachments);
@@ -113,9 +119,10 @@ export function send(sid: string, text: string, opts: SendOptions = {}) {
     emit(sid, { t: 'queue', queue: [...r.queue, { id: uid('q'), text, priority }] });
     return;
   }
-  userItem(sid, text, opts.attachments);
+  const refs = opts.refs?.length ? opts.refs : undefined;
+  userItem(sid, text, opts.attachments, { refs });
   runHooks(sid, 'UserPromptSubmit', { prompt: text }, text.length > 24 ? `${text.slice(0, 24)}…` : text);
-  void startRun(sid, pickScenario(text, r.mode));
+  void startRun(sid, refs ? (run) => scenarioRefs(run, refs, text) : pickScenario(text, r.mode));
 }
 
 function runCommand(sid: string, cmd: string) {
@@ -146,6 +153,8 @@ onAfterTurn((sid) => {
   if (!r || r.queue.length === 0 || r.request) return;
   const [first, ...rest] = r.queue;
   emit(sid, { t: 'queue', queue: rest });
+  if (takeQueued(first.id)) return;
+  humanTurn(sid);
   userItem(sid, first.text);
   void startRun(sid, (run) => scenarioAck(run, first.text));
 });
@@ -195,6 +204,7 @@ export function runQueued(sid: string) {
   if (!r || r.queue.length === 0 || isRunning(sid)) return;
   const [first, ...rest] = r.queue;
   emit(sid, { t: 'queue', queue: rest });
+  if (takeQueued(first.id)) return;
   userItem(sid, first.text);
   void startRun(sid, (run) => scenarioAck(run, first.text));
 }
@@ -499,15 +509,16 @@ export function catchUpJob(jobId: string) {
 
 // ------------------------------------------------------------------ mock console
 
-export type Scenario = 'fix' | 'question' | 'plan' | 'subagents' | 'highRisk' | 'outside' | 'elicitForm' | 'elicitUrl';
+export type Scenario = 'fix' | 'question' | 'plan' | 'subagents' | 'highRisk' | 'outside' | 'elicitForm' | 'elicitUrl' | 'spawn' | 'askPeer';
 
 export function runScenario(sid: string, s: Scenario) {
   if (isRunning(sid)) return;
   const sum = useApp.getState().sessions.find((x) => x.id === sid);
   if (sum?.draft) useApp.getState().patchSession(sid, { draft: false, live: true, title: '模拟场景' });
-  const text = { fix: 'CI 上结账测试偶尔失败，帮我修复。', question: '给 /orders 接口加上限流，有选择就问我。', plan: '用 Redis 给 /orders 限流，先出计划。', subagents: '找出所有用到 CartTimer 的地方，同时在后台跑 e2e。', highRisk: '把旧的构建目录删掉。', outside: '金额是负数时显示不对，问题可能在共享库 shared-lib 里。', elicitForm: '在预发环境执行 orders 表的迁移。', elicitUrl: '在 jira 里建一个跟进任务：限流上线后观察 429 比例。' }[s];
+  const text = { fix: 'CI 上结账测试偶尔失败，帮我修复。', question: '给 /orders 接口加上限流，有选择就问我。', plan: '用 Redis 给 /orders 限流，先出计划。', subagents: '找出所有用到 CartTimer 的地方，同时在后台跑 e2e。', highRisk: '把旧的构建目录删掉。', outside: '金额是负数时显示不对，问题可能在共享库 shared-lib 里。', elicitForm: '在预发环境执行 orders 表的迁移。', elicitUrl: '在 jira 里建一个跟进任务：限流上线后观察 429 比例。', spawn: '订单导出要支持 CSV 和 Excel，拆成几个会话并行做。', askPeer: '看看其他会话里鉴权重构进展到哪了，我们的订单接口依赖它。' }[s];
+  humanTurn(sid);
   userItem(sid, text);
-  const fn = { fix: scenarioFix, question: scenarioQuestion, plan: scenarioPlan, subagents: scenarioSubagents, highRisk: scenarioHighRisk, outside: scenarioOutside, elicitForm: scenarioElicitForm, elicitUrl: scenarioElicitUrl }[s];
+  const fn = { fix: scenarioFix, question: scenarioQuestion, plan: scenarioPlan, subagents: scenarioSubagents, highRisk: scenarioHighRisk, outside: scenarioOutside, elicitForm: scenarioElicitForm, elicitUrl: scenarioElicitUrl, spawn: scenarioSpawn, askPeer: scenarioAskPeer }[s];
   void startRun(sid, fn);
 }
 

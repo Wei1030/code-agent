@@ -43,6 +43,57 @@ export interface SessionSummary {
   draft?: boolean;
   /** Started by a job run; kept out of the normal session lists. */
   jobId?: string;
+  /** Created by another session's create_session call. */
+  createdBy?: SessionRef;
+  /** Branch of its own git worktree, when the creating session asked for one. */
+  worktree?: string;
+  /** Messages from other sessions that arrived while the user was elsewhere. */
+  peerUnread?: number;
+}
+
+/** A session in the same workspace, as other sessions and the composer refer to it. */
+export interface SessionRef {
+  sessionId: string;
+  title: string;
+}
+
+/** Where a message from another session came from (SDK user message origin { kind: 'peer' }). */
+export interface PeerOrigin extends SessionRef {
+  /** receipt: sent automatically when the session finished handling a message that asked for one. */
+  kind: 'message' | 'receipt';
+}
+
+/** A call to one of the workspace tools every session gets (in-process MCP server "workspace"). */
+export interface PeerCall {
+  op: 'list' | 'read' | 'status' | 'send' | 'create';
+  target?: SessionRef;
+  /** For send / create: what happened to the message. */
+  delivery?: 'delivered' | 'queued' | 'held' | 'handled' | 'rejected';
+  message?: string;
+  rows?: NestedRow[];
+  worktree?: string;
+}
+
+/** A message between sessions waiting for the user's release. */
+export interface HeldMessage {
+  id: string;
+  from: SessionRef;
+  to: SessionRef;
+  text: string;
+  /** mode: sender and receiver differ in permission class; hops: chain limit reached; policy: "always hold". */
+  reason: 'mode' | 'hops' | 'policy';
+  since: number;
+}
+
+export interface PeerSettings {
+  /** parity: deliver when both sessions bypass permissions or both don't; otherwise hold. */
+  inbound: 'parity' | 'accept' | 'hold';
+  /** Messages in a chain without a human message in between before the next one is held. */
+  maxHops: number;
+  /** Running sessions per workspace; sessions created beyond it wait for a free slot. */
+  maxRunning: number;
+  /** Save (end the process of) agent-created sessions after this many idle minutes; 0 = never. */
+  idleSaveMinutes: number;
 }
 
 // ------------------------------------------------------------------ transcript
@@ -100,6 +151,8 @@ export interface ToolItem {
   /** Long-running and can be moved to the background. */
   backgroundable?: boolean;
   denialMessage?: string;
+  /** Workspace tool call (list / read / status / send / create sessions). */
+  peer?: PeerCall;
 }
 
 export interface PlanDoc {
@@ -115,7 +168,7 @@ export type BannerKind =
   | 'workerShutdown' | 'denials' | 'notLoggedIn';
 
 export type Item =
-  | { kind: 'user'; id: string; text: string; attachments: Attachment[]; ts: number; files?: number }
+  | { kind: 'user'; id: string; text: string; attachments: Attachment[]; ts: number; files?: number; from?: PeerOrigin; refs?: SessionRef[] }
   | { kind: 'text'; id: string; text: string; streaming?: boolean; aborted?: boolean }
   | { kind: 'thinking'; id: string; text: string; seconds: number; streaming?: boolean }
   | ToolItem
@@ -258,6 +311,8 @@ export interface QueuedMessage {
   id: string;
   text: string;
   priority: 'now' | 'next' | 'later';
+  /** Sent by another session. */
+  from?: PeerOrigin;
 }
 
 export type TransientStatus =

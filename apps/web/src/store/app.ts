@@ -1,8 +1,8 @@
 /** App-wide state: registries, preferences and UI chrome. Sessions live in ./sessions. */
 import { create } from 'zustand';
 import type {
-  CommandFile, EnvVar, ExtraDir, FileHook, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PermissionRule, PluginInfo, Prefs, Profile,
-  ProviderKind, SessionSummary, SkillInfo, Workspace,
+  CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PeerSettings, PermissionRule,
+  PluginInfo, Prefs, Profile, ProviderKind, SessionSummary, SkillInfo, Workspace,
 } from '../api/types';
 import { COMMAND_FILES, FILE_HOOKS, HOOK_LOG, HOOK_RULES, MCP_SERVERS, PLUGINS, SKILLS } from '../mock/extensions';
 import { JOB_RUNS, JOBS } from '../mock/jobs';
@@ -58,6 +58,9 @@ interface AppState {
   hookLog: HookLogEntry[];
   jobs: JobTemplate[];
   jobRuns: JobRun[];
+  peer: PeerSettings;
+  /** Messages between sessions waiting for the user to release them. */
+  held: HeldMessage[];
   provider: Provider;
   env: EnvVar[];
   runtime: { debugLog: boolean; otel: boolean; otelEndpoint: string; otelMetrics: boolean; otelLogs: boolean; otelTraces: boolean; otelPrompts: boolean; otelTools: boolean };
@@ -111,6 +114,8 @@ export const useApp = create<AppState>((set, get) => ({
   hookLog: HOOK_LOG,
   jobs: JOBS,
   jobRuns: JOB_RUNS,
+  peer: { inbound: 'parity', maxHops: 6, maxRunning: 4, idleSaveMinutes: 30 },
+  held: [],
   provider: {
     kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',
     envConflict: false, compatibleUrl: '', compatibleModel: '',

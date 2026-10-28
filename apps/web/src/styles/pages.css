@@ -50,6 +50,7 @@
 .w-180 { width: 180px; }
 .w-140 { width: 140px; flex: none; }
 .w-240 { width: 240px; flex: none; }
+.w-120 { width: 120px; flex: none; }
 
 /* ---------------------------------------------------------------- usage */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
@@ -180,3 +181,4 @@
 .run-row.on { border-color: var(--accent); background: var(--accent-soft); }
 .ext-item .sub.sched { display: block; }
 .ext-item .sub.sched .icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.plain-list { margin: 0; padding-left: 18px; color: var(--ink-2); line-height: 1.8; font-size: 13px; }

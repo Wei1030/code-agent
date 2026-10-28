@@ -1,13 +1,13 @@
-/** Message composer: "+" attachments, "/" commands, "@" file mentions, model / effort / mode, send. */
+/** Message composer: "+" attachments, "/" commands, "@" session and file mentions, model / effort / mode, send. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { Attachment, Effort, PermissionMode, SessionRuntime } from '../api/types';
+import type { Attachment, Effort, PermissionMode, SessionRef, SessionRuntime } from '../api/types';
 import { api } from '../api';
 import { COMMANDS, EFFORT_LABEL, fsTree, MODE_INFO, MODELS, type CommandInfo, type FsNode } from '../mock/data';
 import { Icon } from '../components/Icon';
 import { Button, MenuButton, Popover, Progress, Select } from '../components/ui';
 import { useApp } from '../store/app';
 import { cx, uid } from '../lib/util';
-import { tokens as fmtTokens } from '../lib/format';
+import { relTime, tokens as fmtTokens } from '../lib/format';
 import { useT } from '../lib/i18n';
 
 const PASTE_CHIP_LINES = 12;
@@ -49,6 +49,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const profile = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
   const [text, setText] = useState('');
   const [atts, setAtts] = useState<Attachment[]>([]);
+  const [refs, setRefs] = useState<SessionRef[]>([]);
   const [focus, setFocus] = useState(false);
   const [drag, setDrag] = useState(false);
   const [palette, setPalette] = useState<Palette>(null);
@@ -65,6 +66,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
     const d = drafts.current[sid];
     setText(d?.text ?? '');
     setAtts(d?.atts ?? []);
+    setRefs([]);
     setPalette(null);
     return () => { drafts.current[sid] = { text: ta.current?.value ?? '', atts: [] }; };
   }, [sid]);
@@ -123,7 +125,16 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
     return allPaths.filter((p) => p.toLowerCase().includes(lq)).slice(0, 12)
       .map((p) => ({ path: p, name: p, dir: p.endsWith('/') }));
   }, [palette, tree, allPaths]);
-  const count = palette?.kind === 'command' ? commandItems.length : mentionItems.length;
+  // Other sessions in this workspace, before files; not while browsing into a folder.
+  const sessionItems = useMemo(() => {
+    if (palette?.kind !== 'mention' || palette.query.includes('/')) return [];
+    const q = palette.query.toLowerCase();
+    return app.sessions
+      .filter((s) => s.workspaceId === workspaceId && s.id !== sid && !s.draft && !s.jobId && s.title.toLowerCase().includes(q))
+      .sort((a, b) => b.lastActive - a.lastActive).slice(0, 5);
+  }, [palette, app.sessions, workspaceId, sid]);
+  const nSess = sessionItems.length;
+  const count = palette?.kind === 'command' ? commandItems.length : nSess + mentionItems.length;
   useEffect(() => setActive(0), [palette?.kind, palette?.query]);
 
   const update = (value: string, caret: number) => {
@@ -146,7 +157,13 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
     if (c) replaceToken(`${c.name} `);
   };
   const pickMention = (i: number) => {
-    const m = mentionItems[i];
+    if (i < nSess) {
+      const s = sessionItems[i];
+      replaceToken(`@会话「${s.title}」 `);
+      setRefs((r) => [...r.filter((x) => x.sessionId !== s.id), { sessionId: s.id, title: s.title }]);
+      return;
+    }
+    const m = mentionItems[i - nSess];
     if (!m) return;
     if (m.dir) replaceToken(`@${m.path}`, true);
     else replaceToken(`@${m.path} `);
@@ -190,10 +207,11 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const canSend = (text.trim().length > 0 || atts.length > 0) && !disabled;
   const doSend = (opts: { priority?: 'now' | 'next' | 'later'; contextOnly?: boolean; verbatim?: boolean } = {}) => {
     if (!canSend) return;
-    api.send(sid, text.trim(), { attachments: atts, ...opts });
+    api.send(sid, text.trim(), { attachments: atts, refs: refs.filter((r) => text.includes(`@会话「${r.title}」`)), ...opts });
     if (running && rt.request?.kind !== 'question' && !opts.contextOnly && opts.priority !== 'now') app.toast(t('已加入队列'), 'info');
     setText('');
     setAtts([]);
+    setRefs([]);
     setPalette(null);
     drafts.current[sid] = { text: '', atts: [] };
   };
@@ -242,7 +260,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
       ? t('Claude 在等你处理上面的请求；在这里输入的消息会排队 · Enter 发送 · Shift+Enter 换行')
       : running
       ? t('Claude 正在工作，新消息会排队；也可以立即插入 · Enter 发送 · Shift+Enter 换行')
-      : t('输入问题；/ 调用命令，@ 引用文件 · Enter 发送 · Shift+Enter 换行');
+      : t('输入问题；/ 调用命令，@ 引用会话或文件 · Enter 发送 · Shift+Enter 换行');
 
   return (
     <div
@@ -273,7 +291,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
           <MenuButton icon="plus" variant="ghost" title={t('添加附件')} placement="top-start" width={240} items={[
             { value: 'image', icon: 'image', label: t('图片…'), desc: t('从本机选择图片'), onSelect: () => imageInput.current?.click() },
             { value: 'file', icon: 'file', label: t('文件…'), desc: t('任意文件，作为附件发送'), onSelect: () => fileInput.current?.click() },
-            { value: 'mention', icon: 'at', label: t('引用工作区文件'), desc: t('等同于输入 @'), onSelect: () => { const v = `${text}${text && !text.endsWith(' ') ? ' ' : ''}@`; update(v, v.length); ta.current?.focus(); } },
+            { value: 'mention', icon: 'at', label: t('引用会话或文件'), desc: t('等同于输入 @'), onSelect: () => { const v = `${text}${text && !text.endsWith(' ') ? ' ' : ''}@`; update(v, v.length); ta.current?.focus(); } },
             'sep',
             { value: 'sample-image', icon: 'image', label: t('模拟：添加一张截图'), onSelect: () => addSample('image') },
             { value: 'sample-file', icon: 'file', label: t('模拟：添加一个日志文件'), onSelect: () => addSample('file') },
@@ -359,6 +377,18 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
         )}
         {palette?.kind === 'mention' && (
           <>
+            {nSess > 0 && (
+              <>
+                <div className="ph"><span>{t('会话')}</span><span>{t('同一工作区 · Claude 可以读取它的记录和状态')}</span></div>
+                {sessionItems.map((s, i) => (
+                  <div key={s.id} className={cx('pi', i === active && 'active')} onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); pickMention(i); }}>
+                    <Icon name="chat" size={15} className="accent" />
+                    <span className="grow truncate">{s.title}</span>
+                    <span className="h">{s.live && s.state === 'running' ? t('运行中') : s.live && s.state === 'requires_action' ? t('等你处理') : relTime(s.lastActive)}</span>
+                  </div>
+                ))}
+              </>
+            )}
             <div className="ph">
               <span className="crumb">
                 <span role="button" style={{ cursor: 'pointer' }} onMouseDown={(e) => { e.preventDefault(); replaceToken('@', true); }}>{app.workspaces.find((w) => w.id === workspaceId)?.name ?? '.'}</span>
@@ -375,13 +405,13 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
               </div>
             )}
             {mentionItems.map((m, i) => (
-              <div key={m.path} className={cx('pi', i === active && 'active')} onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); pickMention(i); }}>
+              <div key={m.path} className={cx('pi', i + nSess === active && 'active')} onMouseEnter={() => setActive(i + nSess)} onMouseDown={(e) => { e.preventDefault(); pickMention(i + nSess); }}>
                 <Icon name={m.dir ? 'folder' : 'file'} size={15} className={m.dir ? 'accent' : 'muted'} />
                 <span className="grow mono truncate" style={{ fontSize: 12.5 }}>{m.name}</span>
                 {m.dir && <Icon name="chevRight" size={14} className="muted" />}
               </div>
             ))}
-            <div className="pf">{t('↑↓ 选择 · Enter 引用文件或进入文件夹 · 输入可搜索')}</div>
+            <div className="pf">{t('↑↓ 选择 · Enter 引用会话、文件或进入文件夹 · 输入可搜索')}</div>
           </>
         )}
       </Popover>

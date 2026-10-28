@@ -10,6 +10,7 @@ import { Profiles } from './pages/settings/Profiles';
 import { Permissions } from './pages/settings/Permissions';
 import { Provider } from './pages/settings/Provider';
 import { Language } from './pages/settings/Language';
+import { Collaboration } from './pages/settings/Collaboration';
 import { Mcp } from './pages/Mcp';
 import { Skills } from './pages/Skills';
 import { Hooks } from './pages/Hooks';
@@ -31,6 +32,7 @@ export function App() {
           <Route index element={<Navigate to="profiles" replace />} />
           <Route path="profiles" element={<Profiles />} />
           <Route path="permissions" element={<Permissions />} />
+          <Route path="collaboration" element={<Collaboration />} />
           <Route path="provider" element={<Provider />} />
           <Route path="language" element={<Language />} />
         </Route>

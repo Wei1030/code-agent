@@ -32,6 +32,7 @@ export function MockConsole() {
   const scenarios: Array<[Scenario, string]> = [
     ['fix', '修复 bug（编辑 + 命令审批）'], ['question', '澄清提问（AskUserQuestion）'], ['plan', '规划模式与计划审阅'],
     ['subagents', '子代理与后台任务'], ['highRisk', '高风险审批（默认拒绝）'], ['outside', '访问工作区外的目录'], ['elicitForm', 'MCP 征询（表单）'], ['elicitUrl', 'MCP 征询（登录链接）'],
+    ['spawn', '拆分给新会话（create_session）'], ['askPeer', '查看并联系其他会话'],
   ];
   const banners: Array<[BannerKind, string]> = [
     ['crash', '会话崩溃'], ['apiRetry', 'API 过载重试'], ['rateLimit', '接近速率限制'],
@@ -46,12 +47,18 @@ export function MockConsole() {
       <div className="grid">
         {scenarios.map(([s, label]) => <Button key={s} onClick={() => scenario(s)}>{label}</Button>)}
       </div>
-      <div className="hint" style={{ marginTop: 6 }}>也可以直接在输入框里发消息：含「计划」「提问」「子代理」「删除」「修复」等词会触发对应场景。</div>
+      <div className="hint" style={{ marginTop: 6 }}>也可以直接在输入框里发消息：含「计划」「提问」「子代理」「删除」「修复」「拆成」「其他会话」等词会触发对应场景；用 @ 引用会话也会先读取它。</div>
       <h4>会话状态与提示（P24）</h4>
       <div className="grid">
         {banners.map(([b, label]) => <Button key={b} onClick={() => banner(b)}>{label}</Button>)}
         <Button onClick={() => { const id = ensureSession(); void api.compact(id, ''); }}>自动压缩</Button>
         <Button onClick={() => api.connectionDrop()}>断线后重连</Button>
+      </div>
+      <h4>会话互通</h4>
+      <div className="grid">
+        <Button onClick={() => api.mockPeerMessage(ensureSession())}>其他会话发来消息</Button>
+        <Button onClick={() => api.mockHeld(ensureSession(), 'mode')}>待放行：权限模式不同</Button>
+        <Button onClick={() => api.mockHeld(ensureSession(), 'hops')}>待放行：连续转发超限</Button>
       </div>
       <h4>作业</h4>
       <div className="grid">

@@ -11,7 +11,7 @@ import { useSessions } from '../store/sessions';
 import { relTime, tokens as fmtTokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
-import { Transcript } from './Transcript';
+import { SessionLink, Transcript } from './Transcript';
 import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar } from './Dock';
 import { Composer } from './Composer';
 import { Inspector } from './Inspector';
@@ -29,6 +29,7 @@ export function SessionPage() {
   useEffect(() => {
     api.openSession(id);
     if (sum) useApp.getState().set({ currentWorkspaceId: sum.workspaceId });
+    if (sum?.peerUnread) useApp.getState().patchSession(id, { peerUnread: 0 });
     setReceipt(0);
     setRewindAt(null);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -101,10 +102,12 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
       <span className={cx('sdot', s.live ? s.state : 'idle')} style={!s.live ? { background: 'transparent', border: '1.5px solid var(--border-strong)' } : undefined} />
       <div className="grow">
         <div className="t truncate">{s.title}</div>
-        <div className={cx('m', s.state === 'requires_action' && s.live && 'warn')}>
+        <div className={cx('m truncate', s.state === 'requires_action' && s.live && 'warn')} title={s.createdBy ? t('由会话「{x}」创建', { x: s.createdBy.title }) : undefined}>
           {s.draft ? t('未发送') : s.live && s.state === 'requires_action' ? t('等你处理') : s.live && s.state === 'running' ? t('运行中') : relTime(s.lastActive)}
+          {s.createdBy && <span className="by"> · {t('由「{x}」创建', { x: s.createdBy.title })}</span>}
         </div>
       </div>
+      {!!s.peerUnread && s.id !== current?.id && <span className="peer-badge" title={t('{n} 条来自其他会话的消息', { n: s.peerUnread })}>{s.peerUnread}</span>}
       <div className="scol-acts" onClick={(e) => e.stopPropagation()}>
         {s.live && <Button size="sm" variant="ghost" icon="save" title={t('保存并结束（结束 Claude Code 进程，之后可以恢复）')} onClick={() => actions.save(s)} />}
         <Button size="sm" variant="ghost" icon="trash" title={s.draft ? t('丢弃') : t('删除')} onClick={() => actions.remove(s)} />
@@ -162,8 +165,9 @@ function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime })
           {!sum.draft && <StateBadge s={sum} />}
         </div>
         <div className="meta truncate">
-          {ws?.name}{sum.branch ? ` · ${sum.branch}` : ''}
+          {ws?.name}{sum.branch ? ` · ${sum.branch}` : ''}{sum.worktree ? t('（独立 worktree）') : ''}
           {sum.forkedFrom ? ` · ${t('分叉自「{f}」', { f: sum.forkedFrom })}` : ''}
+          {sum.createdBy && <> · {t('由')}<SessionLink r={sum.createdBy} />{t('创建')}</>}
           {rt.tokens > 0 ? ` · ${t('第 {n} 轮', { n: rt.turn })} · ${fmtTokens(rt.tokens)} tokens` : ''}
           {dirs.length > 0 && <span title={dirs.map((d) => `${d.path}（${d.scope === 'session' ? t('仅本会话') : d.scope === 'workspace' ? t('这个工作区') : t('所有工作区')}）`).join('\n')}> · {t('额外目录 {n} 个', { n: dirs.length })}</span>}
         </div>

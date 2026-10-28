@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
-import { ConfirmHost, Popover, Select, Toasts, Toggle } from '../components/ui';
+import { Button, ConfirmHost, Popover, Select, Toasts, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
 import { useSessions } from '../store/sessions';
 import { useT } from '../lib/i18n';
@@ -115,7 +115,7 @@ function SearchBox() {
     const pages = [
       { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则'), to: '/settings/permissions' },
       { label: t('MCP 服务器'), to: '/mcp' }, { label: t('技能、命令与插件'), to: '/skills' }, { label: t('钩子'), to: '/hooks' }, { label: t('作业'), to: '/jobs' },
-      { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
+      { label: t('设置 · 会话协作'), to: '/settings/collaboration' }, { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
     ].filter((p) => p.label.toLowerCase().includes(k));
     const ss = sessions.filter((s) => !s.draft && (s.title.toLowerCase().includes(k) || s.firstPrompt.toLowerCase().includes(k))).slice(0, 6);
     return [...ss.map((s) => ({ label: s.title, sub: `${workspaces.find((w) => w.id === s.workspaceId)?.name ?? ''} · ${relTime(s.lastActive)}`, to: `/s/${s.id}`, icon: 'chat' })), ...pages.map((p) => ({ ...p, sub: t('页面'), icon: 'chevRight' }))];
@@ -172,6 +172,8 @@ function ApprovalsInbox() {
   const currentId = useMatch('/s/:id')?.params.id;
   const runtimes = useSessions((s) => s.runtimes);
   const sessions = useApp((s) => s.sessions);
+  const held = useApp((s) => s.held);
+  const maxHops = useApp((s) => s.peer.maxHops);
   const notify = useApp((s) => s.prefs.browserNotifications);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
@@ -184,11 +186,11 @@ function ApprovalsInbox() {
     <>
       <button ref={ref} className="top-icon" onClick={() => setOpen(!open)} title={t('等你处理')}>
         <Icon name="bell" size={20} />
-        {pending.length > 0 && <span className="badge">{pending.length}</span>}
+        {pending.length + held.length > 0 && <span className="badge">{pending.length + held.length}</span>}
       </button>
       <Popover anchor={ref.current} open={open} onClose={() => setOpen(false)} placement="bottom-end" className="inbox">
-        <h4>{t('等你处理')} {pending.length > 0 && <span className="chip crit">{pending.length}</span>}</h4>
-        {pending.length === 0 && <div className="empty"><b>{t('没有待处理的请求')}</b>{t('审批、提问和计划审阅会出现在这里')}</div>}
+        <h4>{t('等你处理')} {pending.length + held.length > 0 && <span className="chip crit">{pending.length + held.length}</span>}</h4>
+        {pending.length + held.length === 0 && <div className="empty"><b>{t('没有待处理的请求')}</b>{t('审批、提问、计划审阅和待放行的会话消息会出现在这里')}</div>}
         {pending.map(({ rt, sum }) => {
           const req = rt.request!;
           const what = req.kind === 'approval' ? `${req.tool} · ${req.command ?? req.diff?.path ?? req.outside?.path ?? ''}`
@@ -206,6 +208,23 @@ function ApprovalsInbox() {
             </div>
           );
         })}
+        {held.length > 0 && <h5 className="inbox-sec">{t('等你放行的会话消息')}</h5>}
+        {held.map((h) => (
+          <div key={h.id} className="inbox-item held">
+            <Icon name="link" size={16} className="ink2" />
+            <div className="grow">
+              <div className="t ellipsis">{h.from.title}</div>
+              <div className="to ellipsis">{t('发给「{x}」', { x: h.to.title })}</div>
+              <div className="msg">{h.text}</div>
+              <div className="w">{h.reason === 'mode' ? t('双方权限模式不同：一方跳过权限检查，另一方没有') : h.reason === 'hops' ? t('这串会话消息已连续转发超过 {n} 次，中间没有你的消息', { n: maxHops }) : t('设置为「总是先等我放行」')}</div>
+              <div className="row" style={{ gap: 6, marginTop: 6 }}>
+                <Button size="sm" variant="primary" onClick={() => api.releaseHeld(h.id)}>{t('放行')}</Button>
+                <Button size="sm" onClick={() => api.rejectHeld(h.id)}>{t('不放行')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setOpen(false); api.openSession(h.from.sessionId); nav(`/s/${h.from.sessionId}`); }}>{t('看发送方')}</Button>
+              </div>
+            </div>
+          </div>
+        ))}
         <div className="foot">
           <Toggle on={notify} onChange={(v) => useApp.getState().setPrefs({ browserNotifications: v })} label={t('等待时发送浏览器通知')} />
         </div>

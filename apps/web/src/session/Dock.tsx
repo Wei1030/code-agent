@@ -306,7 +306,7 @@ export function QueueList({ sid, queue }: { sid: string; queue: QueuedMessage[] 
             <input className="input sm grow" value={text} autoFocus onChange={(e) => setText(e.target.value)}
               onBlur={() => { api.updateQueued(sid, q.id, { text: text.trim() || q.text }); setEditing(null); }}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); }} />
-          ) : <span className="txt" title={q.text}>{q.text}</span>}
+          ) : <span className="txt" title={q.text}>{q.from && <span className="from">{t('来自「{x}」：', { x: q.from.title })}</span>}{q.text}</span>}
           <Select size="sm" value={q.priority} width={300} onChange={(v) => api.updateQueued(sid, q.id, { priority: v })}
             options={PRIORITIES.map((p) => ({ value: p.value, label: t(p.label), desc: t(p.desc) }))} />
           <Button size="sm" variant="ghost" icon="pencil" title={t('编辑')} onClick={() => { setEditing(q.id); setText(q.text); }} />

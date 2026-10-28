@@ -3,8 +3,8 @@
  * answers to approvals / questions / plan reviews, and honours interrupts and queued messages.
  */
 import type {
-  ApprovalAnswer, Attachment, ElicitationAnswer, HookRule, Item, PendingRequest, PermissionMode, PermissionRule, PlanAnswer, PlanDoc, QuestionAnswer,
-  SessionEvent, SessionRuntime, SessionState, ToolItem,
+  ApprovalAnswer, Attachment, ElicitationAnswer, HookRule, Item, PeerOrigin, PendingRequest, PermissionMode, PermissionRule, PlanAnswer, PlanDoc,
+  QuestionAnswer, SessionEvent, SessionRef, SessionRuntime, SessionState, ToolItem,
 } from '../api/types';
 import { evaluate } from '../lib/rules';
 import { hookOutput, ruleMatches as hookMatches } from '../lib/hooks';
@@ -357,10 +357,12 @@ function suggestRule(command: string): string {
 
 // ------------------------------------------------------------------ helpers for scripts
 
-export function userItem(sid: string, text: string, attachments: Attachment[] = []): string {
+export function userItem(sid: string, text: string, attachments: Attachment[] = [], extra: { from?: PeerOrigin; refs?: SessionRef[] } = {}): string {
   const id = uuid();
-  addItem(sid, { kind: 'user', id, text, attachments, ts: Date.now() });
-  raw(sid, 'user', text.slice(0, 60), { uuid: id, message: { role: 'user', content: text } });
+  addItem(sid, { kind: 'user', id, text, attachments, ts: Date.now(), ...extra });
+  raw(sid, 'user', extra.from ? `来自会话「${extra.from.title}」` : text.slice(0, 60), {
+    uuid: id, ...(extra.from ? { origin: { kind: 'peer', from: extra.from.sessionId, name: extra.from.title } } : {}), message: { role: 'user', content: text },
+  });
   return id;
 }
 

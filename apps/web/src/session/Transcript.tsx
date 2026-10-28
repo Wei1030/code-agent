@@ -1,7 +1,7 @@
 /** Transcript items: messages, thinking, tool cards, plans, banners and notices. */
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Item, PlanDoc, SessionRuntime, ToolItem } from '../api/types';
+import type { Item, PeerCall, PlanDoc, SessionRef, SessionRuntime, ToolItem } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip } from '../components/ui';
 import { api } from '../api';
@@ -32,11 +32,13 @@ function ItemView({ it, rt, userN, onRewind, onFork }: { it: Item; rt: SessionRu
   switch (it.kind) {
     case 'user':
       return (
-        <div className="umsg">
-          <span className="avatar">W</span>
+        <div className={cx('umsg', it.from && 'peer')}>
+          {it.from ? <span className="avatar peer" title={t('来自其他会话的消息')}><Icon name="link" size={13} /></span> : <span className="avatar">W</span>}
+          {it.from && <div className="from">{it.from.kind === 'receipt' ? t('回执 · 来自') : t('来自会话')} <SessionLink r={it.from} /></div>}
           <div className="text">{it.text}</div>
-          {it.attachments.length > 0 && (
+          {(it.attachments.length > 0 || !!it.refs?.length) && (
             <div className="atts">
+              {it.refs?.map((r) => <span key={r.sessionId} className="chip"><Icon name="chat" size={12} /><SessionLink r={r} /></span>)}
               {it.attachments.map((a) => <Chip key={a.id} icon={a.kind === 'image' ? 'image' : a.kind === 'paste' ? 'copy' : 'file'}>{a.name} · {a.meta}</Chip>)}
             </div>
           )}
@@ -111,7 +113,77 @@ function StatusIcon({ status }: { status: ToolItem['status'] }) {
   return <Icon name={icon} size={15} strokeWidth={2.2} className={cls} />;
 }
 
+/** A session named in the transcript; links to it while it exists, under its current title. */
+export function SessionLink({ r }: { r: SessionRef }) {
+  const t = useT();
+  const nav = useNavigate();
+  const title = useApp((s) => s.sessions.find((x) => x.id === r.sessionId)?.title);
+  if (!title) return <span className="muted">「{r.title}」{t('（已删除）')}</span>;
+  return (
+    <a className="session-link" onClick={(e) => { e.stopPropagation(); api.openSession(r.sessionId); nav(`/s/${r.sessionId}`); }}>「{title}」</a>
+  );
+}
+
+const PEER_INFO: Record<PeerCall['op'], { icon: string; label: string }> = {
+  list: { icon: 'list', label: '列出会话' },
+  read: { icon: 'chat', label: '读取会话' },
+  status: { icon: 'eye', label: '查看会话状态' },
+  send: { icon: 'send', label: '发消息给会话' },
+  create: { icon: 'plus', label: '新建会话' },
+};
+
+const DELIVERY: Record<NonNullable<PeerCall['delivery']>, { label: string; tone?: 'accent' | 'warn' | 'crit' | 'good' }> = {
+  delivered: { label: '已送达', tone: 'accent' },
+  queued: { label: '对方正忙，已排队' },
+  held: { label: '等你放行', tone: 'warn' },
+  handled: { label: '对方已处理', tone: 'good' },
+  rejected: { label: '你没有放行', tone: 'crit' },
+};
+
+/** Calls to the workspace tools: list, read, check, message and create sessions. */
+function PeerCard({ tool }: { tool: ToolItem }) {
+  const t = useT();
+  const p = tool.peer!;
+  const [open, setOpen] = useState(p.op === 'send' || p.op === 'create');
+  const hasBody = !!p.message || !!p.rows?.length;
+  const info = PEER_INFO[p.op];
+  return (
+    <div className="tcard peer">
+      <div className="thead" onClick={() => hasBody && setOpen(!open)}>
+        <Icon name={info.icon} size={15} className="ink2" />
+        <span className="name">{t(info.label)}</span>
+        <span className="detail plain">{p.target ? <SessionLink r={p.target} /> : tool.detail}</span>
+        {p.worktree && <Chip icon="branch" mono title={t('新会话在自己的 git worktree 和分支里工作')}>{p.worktree}</Chip>}
+        {p.delivery && <Chip tone={DELIVERY[p.delivery].tone}>{t(DELIVERY[p.delivery].label)}</Chip>}
+        <StatusIcon status={tool.status} />
+        {hasBody && <Icon name={open ? 'chevUp' : 'chevDown'} size={14} className="muted" />}
+      </div>
+      {open && hasBody && (
+        <div className="tbody">
+          {p.message && <div className="peer-quote">{p.message}</div>}
+          {!!p.rows?.length && (
+            <div className="nested">
+              {p.rows.map((r, i) => (
+                <div key={i} className="nested-row">
+                  <Icon name={r.icon} size={14} className="ink2" />
+                  <span className="t">{r.text}</span>
+                  {r.right && <span className="muted">{r.right}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
+  if (tool.peer) return <PeerCard tool={tool} />;
+  return <PlainToolCard tool={tool} sid={sid} />;
+}
+
+function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
   const t = useT();
   const canBackground = !!tool.backgroundable && tool.status === 'running' && !tool.background;
   const hasBody = !!tool.output || !!tool.agent || !!tool.denialMessage || canBackground || !!tool.background;
