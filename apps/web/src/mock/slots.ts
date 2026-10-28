@@ -7,6 +7,7 @@ import { useApp } from '../store/app';
 import { uid } from '../lib/util';
 import { addItem, emit, isRunning, onIdle, rt } from './engine';
 import { stop } from './server';
+import { activeTicket } from './review';
 
 interface Waiter {
   sid: string;
@@ -16,10 +17,10 @@ interface Waiter {
 
 const waiting: Waiter[] = [];
 
-/** Idle: no turn, no pending request, no queued message and no background task still running. */
+/** Idle: no turn, no pending request, no queued message, no background task and no unfinished code review. */
 function isIdle(sid: string): boolean {
   const r = rt(sid);
-  return !isRunning(sid) && !r?.request && !r?.queue.length && !r?.background.some((b) => b.status === 'running');
+  return !isRunning(sid) && !r?.request && !r?.queue.length && !r?.background.some((b) => b.status === 'running') && !activeTicket(sid);
 }
 
 /** Save idle sessions until there is room for one more; false when every running session is busy. */

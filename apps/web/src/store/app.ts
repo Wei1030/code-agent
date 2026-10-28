@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import type {
   CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PeerSettings, PermissionRule,
-  PluginInfo, Prefs, Profile, ProviderKind, SessionSummary, SkillInfo, Workspace,
+  PluginInfo, Prefs, Profile, ProviderKind, ReviewConfig, ReviewTicket, SessionSummary, SkillInfo, Workspace,
 } from '../api/types';
 import { COMMAND_FILES, FILE_HOOKS, HOOK_LOG, HOOK_RULES, MCP_SERVERS, PLUGINS, SKILLS } from '../mock/extensions';
 import { JOB_RUNS, JOBS } from '../mock/jobs';
@@ -38,7 +38,7 @@ export interface Provider {
   compatibleModel: string;
 }
 
-export type InspectorTab = 'tasks' | 'background' | 'changes' | 'checkpoints' | 'context' | 'events';
+export type InspectorTab = 'tasks' | 'background' | 'changes' | 'review' | 'checkpoints' | 'context' | 'events';
 
 interface AppState {
   workspaces: Workspace[];
@@ -61,6 +61,11 @@ interface AppState {
   peer: PeerSettings;
   /** Claude Code processes running at once, across all workspaces. */
   maxRunning: number;
+  reviews: ReviewTicket[];
+  /** By workspace id. */
+  reviewConfig: Record<string, ReviewConfig>;
+  /** By session id: how many of its file changes a finished review has covered. */
+  reviewed: Record<string, number>;
   /** Messages between sessions waiting for the user to release them. */
   held: HeldMessage[];
   provider: Provider;
@@ -122,6 +127,9 @@ export const useApp = create<AppState>((set, get) => ({
   jobRuns: JOB_RUNS,
   peer: { inbound: 'parity', maxHops: 6 },
   maxRunning: 4,
+  reviews: [],
+  reviewConfig: { 'ws-shop-api': { checks: ['npm run typecheck', 'npm test'], model: 'opus', effort: 'high' } },
+  reviewed: {},
   held: [],
   provider: {
     kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',

@@ -50,7 +50,7 @@ export function General() {
           <Toggle on={prefs.notifyBackground} onChange={(v) => setPrefs({ notifyBackground: v })} label={t('后台任务或作业完成时')} />
         </div>
         <div className="hint" style={{ marginTop: 8, lineHeight: 1.7 }}>
-          {t('提醒在左下角弹出，点一下就能跳到对应的会话；你正在看的那个会话不弹。等你处理的数量还会显示在右上角和浏览器标签的标题上。')}
+          {t('提醒在右下角弹出，点一下就能跳到对应的会话；你正在看的那个会话不弹。等你处理的数量还会显示在右上角和浏览器标签的标题上。')}
         </div>
       </Section>
 

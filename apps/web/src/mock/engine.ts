@@ -297,7 +297,7 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
     else if (r.mode === 'bypassPermissions') d = { allowed: true, provenance: '模式：跳过权限检查' };
     else if (o.kind === 'allow') d = { allowed: true, provenance: `规则 ${o.rule.rule}` };
     else d = r.mode === 'dontAsk' ? { allowed: false, reason: 'dont-ask' } : { ask: true };
-  } else d = decide(run.sid, r.mode, tool.tool, opts.command ?? opts.path);
+  } else d = decide(run.sid, r.mode, tool.tool, opts.command ?? opts.path ?? opts.diff?.path);
   // A hook "allow" skips the prompt, but deny and ask rules still apply.
   if (hook?.action === 'allow' && 'ask' in d) d = { allowed: true, provenance: `钩子「${hook.name}」允许` };
   if ('allowed' in d && d.allowed) return { provenance: d.provenance };
@@ -371,7 +371,7 @@ function suggestRule(command: string): string {
 
 // ------------------------------------------------------------------ helpers for scripts
 
-export function userItem(sid: string, text: string, attachments: Attachment[] = [], extra: { from?: PeerOrigin; refs?: SessionRef[] } = {}): string {
+export function userItem(sid: string, text: string, attachments: Attachment[] = [], extra: { from?: PeerOrigin; refs?: SessionRef[]; fromApp?: string } = {}): string {
   const id = uuid();
   addItem(sid, { kind: 'user', id, text, attachments, ts: Date.now(), ...extra });
   raw(sid, 'user', extra.from ? `来自会话「${extra.from.title}」` : text.slice(0, 60), {

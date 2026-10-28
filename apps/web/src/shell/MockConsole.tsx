@@ -60,6 +60,11 @@ export function MockConsole() {
         <Button onClick={() => api.mockHeld(ensureSession(), 'mode')}>待放行：权限模式不同</Button>
         <Button onClick={() => api.mockHeld(ensureSession(), 'hops')}>待放行：连续转发超限</Button>
       </div>
+      <h4>代码审核（作用于当前会话；没有改动时先加一处示例改动）</h4>
+      <div className="grid">
+        <Button onClick={() => api.mockReview(ensureSession(), 'pass')}>3 轮通过（含一次验证失败）</Button>
+        <Button onClick={() => api.mockReview(ensureSession(), 'stuck')}>5 轮仍未通过</Button>
+      </div>
       <h4>作业</h4>
       <div className="grid">
         <Button onClick={() => api.fireScheduledJob()}>定时作业到点</Button>

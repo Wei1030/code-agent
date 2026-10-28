@@ -9,6 +9,7 @@ import { useApp } from '../store/app';
 import { duration, tokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
+import { ReviewCard } from './Review';
 
 const TOOL_ICON: Record<string, string> = {
   Bash: 'terminal', PowerShell: 'terminal', Read: 'file', Write: 'file', Edit: 'pencil', Grep: 'search', Glob: 'search',
@@ -32,9 +33,12 @@ function ItemView({ it, rt, userN, onRewind, onFork }: { it: Item; rt: SessionRu
   switch (it.kind) {
     case 'user':
       return (
-        <div className={cx('umsg', it.from && 'peer')}>
-          {it.from ? <span className="avatar peer" title={t('来自其他会话的消息')}><Icon name="link" size={13} /></span> : <span className="avatar">W</span>}
+        <div className={cx('umsg', (it.from || it.fromApp) && 'peer')}>
+          {it.from ? <span className="avatar peer" title={t('来自其他会话的消息')}><Icon name="link" size={13} /></span>
+            : it.fromApp ? <span className="avatar peer app" title={t('Code Agent 发给 Claude 的消息')}><Icon name="shield" size={13} /></span>
+              : <span className="avatar">W</span>}
           {it.from && <div className="from">{it.from.kind === 'receipt' ? t('回执 · 来自') : t('来自会话')} <SessionLink r={it.from} /></div>}
+          {it.fromApp && <div className="from">Code Agent · {it.fromApp}</div>}
           <div className="text">{it.text}</div>
           {(it.attachments.length > 0 || !!it.refs?.length) && (
             <div className="atts">
@@ -81,6 +85,8 @@ function ItemView({ it, rt, userN, onRewind, onFork }: { it: Item; rt: SessionRu
       return <Notice tone={it.tone} text={it.text} action={it.action} sid={rt.id} />;
     case 'banner':
       return <Banner kind={it.banner} id={it.id} resolved={it.resolved} sid={rt.id} />;
+    case 'review':
+      return <ReviewCard ticketId={it.ticketId} round={it.round} what={it.what} />;
   }
 }
 
@@ -186,7 +192,7 @@ export function ToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
 function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
   const t = useT();
   const canBackground = !!tool.backgroundable && tool.status === 'running' && !tool.background;
-  const hasBody = !!tool.output || !!tool.agent || !!tool.denialMessage || canBackground || !!tool.background;
+  const hasBody = !!tool.output || !!tool.agent || !!tool.denialMessage || canBackground || !!tool.background || !!tool.rows?.length;
   const [open, setOpen] = useState(tool.tool !== 'Read');
   const nav = useNavigate();
   return (
@@ -231,6 +237,17 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
           )}
           {tool.output?.type === 'code' && <pre className="code-block">{tool.output.lines.join('\n')}</pre>}
           {tool.output?.type === 'text' && <div className="ink2">{tool.output.text}</div>}
+          {!!tool.rows?.length && (
+            <div className="nested">
+              {tool.rows.map((r, i) => (
+                <div key={i} className="nested-row">
+                  <Icon name={r.icon} size={14} className="ink2" />
+                  <span className={cx('t', r.mono && 'mono')}>{r.text}</span>
+                  {r.right && <span className="muted">{r.right}</span>}
+                </div>
+              ))}
+            </div>
+          )}
           {tool.denialMessage && <div className="denial">{t('你的说明：')}{tool.denialMessage}</div>}
           {canBackground && (
             <div className="actions">
@@ -315,6 +332,7 @@ function Notice({ tone, text, action, sid }: { tone: 'good' | 'info' | 'warn'; t
       {action && (
         <button className="link-btn" onClick={() => {
           if (action === '打开用量') nav('/usage');
+          else if (action === '查看审核记录') useApp.getState().setInspector({ open: true, tab: 'review' });
           else useApp.getState().setInspector({ open: true, tab: 'background' });
           void sid;
         }}>{action}</button>

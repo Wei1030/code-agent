@@ -151,6 +151,8 @@ export interface ToolItem {
   denialMessage?: string;
   /** Workspace tool call (list / read / status / send / create sessions). */
   peer?: PeerCall;
+  /** Short result lines shown in the card body. */
+  rows?: NestedRow[];
 }
 
 export interface PlanDoc {
@@ -166,7 +168,11 @@ export type BannerKind =
   | 'workerShutdown' | 'denials' | 'notLoggedIn';
 
 export type Item =
-  | { kind: 'user'; id: string; text: string; attachments: Attachment[]; ts: number; files?: number; from?: PeerOrigin; refs?: SessionRef[] }
+  | {
+    kind: 'user'; id: string; text: string; attachments: Attachment[]; ts: number; files?: number; from?: PeerOrigin; refs?: SessionRef[];
+    /** Put into the conversation by Code Agent itself, e.g. "代码审核 · 第 1 轮". */
+    fromApp?: string;
+  }
   | { kind: 'text'; id: string; text: string; streaming?: boolean; aborted?: boolean }
   | { kind: 'thinking'; id: string; text: string; seconds: number; streaming?: boolean }
   | ToolItem
@@ -175,7 +181,9 @@ export type Item =
   | { kind: 'footer'; id: string; turn: number; seconds: number; toolCalls: number; tokens: number; stopReason: string }
   | { kind: 'banner'; id: string; banner: BannerKind; detail?: string; resolved?: boolean }
   | { kind: 'divider'; id: string; label: string }
-  | { kind: 'notice'; id: string; tone: 'good' | 'info' | 'warn'; text: string; action?: string };
+  | { kind: 'notice'; id: string; tone: 'good' | 'info' | 'warn'; text: string; action?: string }
+  /** A step of a code review ticket; rendered from the ticket so it stays current. */
+  | { kind: 'review'; id: string; ticketId: string; round: number; what: 'check' | 'verdict' };
 
 // ------------------------------------------------------------------ requests
 
@@ -597,4 +605,82 @@ export interface JobRun {
   turns: number;
   tokens: number;
   sessionId?: string;
+}
+
+// ------------------------------------------------------------------ code review
+
+export type ReviewSeverity = 'blocker' | 'major' | 'minor';
+
+/** A reviewer finding; ids are F1, F2… within a ticket. */
+export interface ReviewFinding {
+  id: string;
+  round: number;
+  severity: ReviewSeverity;
+  file: string;
+  line?: number;
+  title: string;
+  detail: string;
+  /**
+   * open: waiting for the author (also when a later reviewer did not accept the fix or the dispute);
+   * fixed / disputed: the author's answer; verified: a later reviewer confirmed the fix; upheld: the
+   * reviewer accepted the dispute.
+   */
+  status: 'open' | 'fixed' | 'disputed' | 'verified' | 'upheld';
+  /** The author's latest answer. */
+  response?: string;
+  /** The reviewer's latest word on it after the first round. */
+  reviewerNote?: string;
+  closedIn?: number;
+}
+
+/** One run of the workspace's check commands, done by Code Agent rather than Claude. */
+export interface ReviewCheck {
+  attempt: number;
+  ok: boolean | null;
+  commands: Array<{ cmd: string; ok: boolean | null; output: string[]; seconds: number }>;
+}
+
+export interface ReviewRound {
+  n: number;
+  /** global: the whole change since the base; incremental: only what changed since the last round. */
+  scope: 'global' | 'incremental';
+  snapshot: string;
+  range: string;
+  diff: { files: number; add: number; del: number };
+  checks: ReviewCheck[];
+  reviewer?: { model: string; seconds: number; tokens: number; toolCalls: number; summary: string };
+  verdict?: 'pass' | 'changes_requested';
+  /** Findings first raised in this round. */
+  raised: string[];
+  /** Findings whose status this round's reviewer changed. */
+  updated: string[];
+  /** The author's fix after a rejection. */
+  fix?: { files: number; add: number; del: number };
+  startedAt: number;
+}
+
+export interface ReviewTicket {
+  id: string;
+  sessionId: string;
+  status: 'checking' | 'reviewing' | 'fixing' | 'passed' | 'needs_decision' | 'checks_failed' | 'stopped' | 'accepted';
+  /** Commit the review compares against. */
+  base: string;
+  maxRounds: number;
+  rounds: ReviewRound[];
+  findings: ReviewFinding[];
+  checks: string[];
+  model: string;
+  effort: Effort;
+  startedAt: number;
+  endedAt?: number;
+  tokens: number;
+  /** How it ended, in words, when the user decided. */
+  note?: string;
+}
+
+/** Per workspace: the check commands and the reviewer subagent's model. */
+export interface ReviewConfig {
+  checks: string[];
+  model: string;
+  effort: Effort;
 }

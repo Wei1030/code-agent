@@ -273,3 +273,26 @@
 .peer-badge { min-width: 17px; height: 17px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; align-self: center; flex: none; }
 .scol-item .by { color: var(--muted); }
 .readonly-bar.waiting { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn-ink); }
+
+/* Code review */
+.shead-right { display: flex; align-items: center; gap: 8px; flex: none; }
+.umsg .avatar.peer.app { background: #52514e; }
+.tcard.review-verdict.pass { border-color: #b7e3b7; }
+.tcard.review-verdict.reject { border-color: var(--warn-line); }
+.tcard.review-verdict .tbody { display: flex; flex-direction: column; gap: 8px; }
+.rv-attempt + .rv-attempt { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.rv-attempt-h { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.rv-cmd { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 3px 0; }
+.rv-cmd .mono { flex: 1; min-width: 0; }
+.rv-finding { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); margin-bottom: 8px; }
+.tcard .rv-finding { margin-bottom: 0; }
+.rv-finding .title { font-weight: 500; margin-top: 4px; line-height: 1.5; }
+.rv-finding .loc { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.rv-finding .d { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; line-height: 1.6; }
+.dpanel.review-decision { border: 1.5px solid var(--warn); }
+.dpanel.review-decision .dpanel-head { background: var(--warn-soft); }
+.review-tab .rv-pick { margin-bottom: 10px; width: 100%; }
+.rv-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.rv-round { border-left: 2px solid var(--border); padding: 2px 0 6px 10px; margin-bottom: 10px; }
+.rv-round-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; min-width: 0; }
+.rv-line { font-size: 12.5px; color: var(--ink-2); display: flex; gap: 6px; align-items: center; padding: 1px 0; flex-wrap: wrap; }

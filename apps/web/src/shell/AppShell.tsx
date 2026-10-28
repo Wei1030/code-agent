@@ -174,6 +174,8 @@ function ApprovalsInbox() {
   const runtimes = useSessions((s) => s.runtimes);
   const sessions = useApp((s) => s.sessions);
   const held = useApp((s) => s.held);
+  const allReviews = useApp((s) => s.reviews);
+  const decisions = allReviews.filter((r) => r.status === 'needs_decision' || r.status === 'checks_failed');
   const maxHops = useApp((s) => s.peer.maxHops);
   const notify = useApp((s) => s.prefs.browserNotifications);
   const open = useApp((s) => s.inboxOpen);
@@ -184,7 +186,7 @@ function ApprovalsInbox() {
     .map((r) => ({ rt: r, sum: sessions.find((s) => s.id === r.id) }))
     .filter((x) => x.sum)
     .sort((a, b) => a.rt.request!.since - b.rt.request!.since);
-  const count = pending.length + held.length;
+  const count = pending.length + held.length + decisions.length;
   useEffect(() => {
     document.title = count > 0 ? `(${count}) Code Agent` : 'Code Agent';
   }, [count]);
@@ -192,11 +194,11 @@ function ApprovalsInbox() {
     <>
       <button ref={ref} className="top-icon" onClick={() => setOpen(!open)} title={t('等你处理')}>
         <Icon name="bell" size={20} />
-        {pending.length + held.length > 0 && <span className="badge">{pending.length + held.length}</span>}
+        {count > 0 && <span className="badge">{count}</span>}
       </button>
       <Popover anchor={ref.current} open={open} onClose={() => setOpen(false)} placement="bottom-end" className="inbox">
-        <h4>{t('等你处理')} {pending.length + held.length > 0 && <span className="chip crit">{pending.length + held.length}</span>}</h4>
-        {pending.length + held.length === 0 && <div className="empty"><b>{t('没有待处理的请求')}</b>{t('审批、提问、计划审阅和待放行的会话消息会出现在这里')}</div>}
+        <h4>{t('等你处理')} {count > 0 && <span className="chip crit">{count}</span>}</h4>
+        {count === 0 && <div className="empty"><b>{t('没有待处理的请求')}</b>{t('审批、提问、计划审阅、待放行的会话消息和要你决定的代码审核会出现在这里')}</div>}
         {pending.map(({ rt, sum }) => {
           const req = rt.request!;
           const what = req.kind === 'approval' ? `${req.tool} · ${req.command ?? req.diff?.path ?? req.outside?.path ?? ''}`
@@ -210,6 +212,19 @@ function ApprovalsInbox() {
                 <div className="t ellipsis">{sum!.title}</div>
                 <div className="d ellipsis">{what}</div>
                 <div className="w">{rt.id === currentId ? t('正在查看') : t('已等待 {t}', { t: relTime(req.since).replace('刚刚', '不到 1 分钟') })}</div>
+              </div>
+            </div>
+          );
+        })}
+        {decisions.map((r) => {
+          const s = sessions.find((x) => x.id === r.sessionId);
+          return (
+            <div key={r.id} className={cx('inbox-item', r.sessionId === currentId && 'current')} onClick={() => { setOpen(false); api.openSession(r.sessionId); nav(`/s/${r.sessionId}`); }}>
+              <Icon name="shield" size={16} className="ink2" />
+              <div className="grow">
+                <div className="t ellipsis">{s?.title}</div>
+                <div className="d ellipsis">{r.status === 'needs_decision' ? t('代码审核 {n} 轮后仍未通过', { n: r.maxRounds }) : t('代码审核：验证连续 3 次没有通过')}</div>
+                <div className="w">{t('等你决定')}</div>
               </div>
             </div>
           );

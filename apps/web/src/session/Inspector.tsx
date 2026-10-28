@@ -8,11 +8,13 @@ import { useApp, type InspectorTab } from '../store/app';
 import { clock, duration, relTime, tokens as fmtTokens, pct } from '../lib/format';
 import { cx, download } from '../lib/util';
 import { useT } from '../lib/i18n';
+import { ReviewTab } from './Review';
 
 const TABS: Array<{ value: InspectorTab; label: string; icon: string }> = [
   { value: 'tasks', label: '任务', icon: 'list' },
   { value: 'background', label: '后台', icon: 'layers' },
   { value: 'changes', label: '变更', icon: 'pencil' },
+  { value: 'review', label: '审核', icon: 'shield' },
   { value: 'checkpoints', label: '检查点', icon: 'rewind' },
   { value: 'context', label: '上下文', icon: 'gauge' },
   { value: 'events', label: '事件', icon: 'braces' },
@@ -30,11 +32,15 @@ export function Inspector({ rt, onRewind }: { rt: SessionRuntime; onRewind: (use
   const t = useT();
   const ins = useApp((s) => s.inspector);
   const setInspector = useApp((s) => s.setInspector);
+  const reviews = useApp((s) => s.reviews);
   const [dragging, setDragging] = useState(false);
+  const latestReview = reviews.find((x) => x.sessionId === rt.id);
   const counts: Partial<Record<InspectorTab, number>> = {
     tasks: rt.tasks.filter((x) => x.status !== 'completed').length || undefined,
     background: rt.background.filter((b) => b.status === 'running').length || undefined,
     changes: rt.changes.length || undefined,
+    review: latestReview && !['passed', 'accepted', 'stopped'].includes(latestReview.status)
+      ? latestReview.findings.filter((f) => ['open', 'fixed', 'disputed'].includes(f.status)).length || undefined : undefined,
   };
   const current = TABS.find((x) => x.value === ins.tab) ?? TABS[0];
 
@@ -65,6 +71,7 @@ export function Inspector({ rt, onRewind }: { rt: SessionRuntime; onRewind: (use
             {ins.tab === 'tasks' && <TasksTab rt={rt} />}
             {ins.tab === 'background' && <BackgroundTab rt={rt} />}
             {ins.tab === 'changes' && <ChangesTab rt={rt} />}
+            {ins.tab === 'review' && <ReviewTab rt={rt} />}
             {ins.tab === 'checkpoints' && <CheckpointsTab rt={rt} onRewind={onRewind} />}
             {ins.tab === 'context' && <ContextTab rt={rt} />}
             {ins.tab === 'events' && <EventsTab rt={rt} />}

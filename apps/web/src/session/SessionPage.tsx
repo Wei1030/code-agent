@@ -16,6 +16,7 @@ import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, Quest
 import { Composer } from './Composer';
 import { Inspector } from './Inspector';
 import { RewindDialog } from './RewindDialog';
+import { ReviewButton, ReviewDecisionPanel } from './Review';
 
 export function SessionPage() {
   const { id = '' } = useParams();
@@ -65,6 +66,7 @@ export function SessionPage() {
         <div className="dock">
           <div className="dock-inner">
             {receipt > 0 && rt.queue.length > 0 && <InterruptReceipt sid={id} count={rt.queue.length} onDone={() => setReceipt(0)} />}
+            <ReviewDecisionPanel sid={id} />
             {rt.request?.kind === 'approval' && <ApprovalPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'plan' && <PlanReviewBar key={rt.request.id} sid={id} req={rt.request} />}
@@ -173,6 +175,7 @@ function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime })
           {dirs.length > 0 && <span title={dirs.map((d) => `${d.path}（${d.scope === 'session' ? t('仅本会话') : d.scope === 'workspace' ? t('这个工作区') : t('所有工作区')}）`).join('\n')}> · {t('额外目录 {n} 个', { n: dirs.length })}</span>}
         </div>
       </div>
+      {!sum.draft && <ReviewButton sum={sum} rt={rt} />}
     </div>
   );
 }
