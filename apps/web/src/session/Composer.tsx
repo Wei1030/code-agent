@@ -261,7 +261,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   // ------------------------------------------------------------ settings
   const model = MODELS.find((m) => m.id === rt.model) ?? MODELS[0];
   const ctxUsed = rt.context.categories.filter((c) => c.kind === 'used').reduce((a, c) => a + c.tokens, 0);
-  const ctxPct = (ctxUsed / rt.context.max) * 100;
+  const ctxPct = rt.context.max ? (ctxUsed / rt.context.max) * 100 : 0;
   const pickMode = (m: PermissionMode) => {
     if (m !== 'bypassPermissions') { api.setMode(sid, m); return; }
     if (!profile.allowBypass) {

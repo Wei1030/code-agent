@@ -109,6 +109,20 @@ export function reloadMcp() {
   if (JSON.stringify(list) !== JSON.stringify(app.mcp)) set('mcp', list);
 }
 
+/** A running session reported its servers (it sees connectors a probe may not). */
+export function noteSessionMcp(workspaceId: string, list: McpServerStatus[]) {
+  let changed = false;
+  for (const st of list) {
+    if (st.name === 'workspace') continue;
+    const key = `${workspaceId}|${st.name}`;
+    const prev = statuses.get(key);
+    if (prev && prev.status === st.status && (prev.tools?.length ?? 0) === (st.tools?.length ?? 0)) continue;
+    statuses.set(key, st);
+    changed = true;
+  }
+  if (changed) reloadMcp();
+}
+
 let probing: Promise<void> | null = null;
 
 /** Ask Claude Code, in each workspace, which servers connect and what tools they offer. */

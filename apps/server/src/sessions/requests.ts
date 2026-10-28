@@ -151,10 +151,19 @@ async function askQuestion(l: Live, input: Input, o: CanUseOpts): Promise<Permis
     questions: qs.map((q) => ({ header: q.header ?? '', question: q.question, multiSelect: !!q.multiSelect, options: (q.options ?? []).map((x) => ({ label: x.label, description: x.description ?? '', ...(x.preview ? { preview: x.preview } : {}) })) })),
     since: Date.now(),
   };
+  // The question and its answer stay in the transcript as a tool card.
+  if (!findItem(l.sid, o.toolUseID)) addItem(l.sid, { kind: 'tool', id: o.toolUseID, tool: 'AskUserQuestion', detail: `${qs.length} 个问题`, status: 'waiting', right: '等待回答' });
   const a = await waitForUser<QuestionAnswer | { behavior: 'deny'; message: string }>(l, req);
-  if ('behavior' in a) return { behavior: 'deny', message: a.message, toolUseID: o.toolUseID };
+  if ('behavior' in a) {
+    patchItem(l.sid, o.toolUseID, { status: 'denied', right: '没有回答' });
+    return { behavior: 'deny', message: a.message, toolUseID: o.toolUseID };
+  }
   const answers: Record<string, string> = {};
   for (const q of qs) answers[q.question] = a.answers[q.question] ?? a.response ?? '';
+  patchItem(l.sid, o.toolUseID, {
+    status: 'ok', right: '已回答', detail: qs.map((q) => `${q.header || q.question}：${answers[q.question] || '—'}`).join('；'),
+    rows: qs.map((q) => ({ icon: 'chat', text: `${q.question} → ${answers[q.question] || '—'}${a.notes?.[q.question] ? `（${a.notes[q.question]}）` : ''}` })),
+  });
   const annotations: Record<string, { notes: string }> = {};
   for (const [k, v] of Object.entries(a.notes ?? {})) if (v) annotations[k] = { notes: v };
   return { behavior: 'allow', updatedInput: { ...input, answers, ...(Object.keys(annotations).length ? { annotations } : {}) }, toolUseID: o.toolUseID };

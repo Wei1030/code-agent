@@ -18,7 +18,7 @@ import { app, set, update } from './state';
 import { broadcast, register } from './hub';
 import { load, save } from './store';
 import { addItem, patchItem, rt, summary } from './sessions/registry';
-import { addHook, decorateTool, inTurn, interruptTurn, live, onProcessEnd, onSendTurn, onTurnEnd, sendTurn } from './sessions/live';
+import { addHook, decorateTool, inTurn, interruptTurn, live, markDenied, onProcessEnd, onSendTurn, onTurnEnd, sendTurn } from './sessions/live';
 import { addSessionAgents, cwdOf } from './sessions/options';
 import { addBusyCheck } from './sessions/slots';
 import { addQueueBlocker, pumpQueue } from './sessions/ops';
@@ -302,9 +302,9 @@ addHook('PreToolUse', (sid, input) => {
   }
   if (input.agent_type === 'code-reviewer' && (name === 'Bash' || name === 'PowerShell')) {
     const cmd = String(ti.command ?? '');
-    return readOnlyCommand(cmd)
-      ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'read-only command of the reviewer' } }
-      : { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer may only run read-only commands (git diff/log/show, ls, cat, grep, find…).' } };
+    if (readOnlyCommand(cmd)) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'read-only command of the reviewer' } };
+    markDenied(sid, String(input.tool_use_id ?? ''), '审核子代理只能运行只读命令');
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer may only run read-only commands (git diff/log/show, ls, cat, grep, find…).' } };
   }
   if (input.agent_type === 'code-reviewer' && ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'].includes(name)) {
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer is read-only.' } };

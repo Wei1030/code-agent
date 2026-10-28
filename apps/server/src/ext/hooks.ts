@@ -10,7 +10,7 @@ import { hookOutput, ruleMatches } from '@code-agent/shared/hooks';
 import { app, set } from '../state';
 import { broadcast } from '../hub';
 import { readSettings, type SettingsScope } from '../claude/files';
-import { addHook } from '../sessions/live';
+import { addHook, markDenied } from '../sessions/live';
 import { patchSummary, summary } from '../sessions/registry';
 
 const RESULT: Record<HookRule['action'], string> = {
@@ -70,6 +70,7 @@ async function runRules(event: string, sid: string, input: Record<string, unknow
           out = { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: r.action === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: r.text || 'Denied by a hook rule.' } } };
         }
         if (r.action === 'title' && r.text) patchSummary(sid, { title: r.text });
+        if (event === 'PreToolUse' && r.action === 'deny') markDenied(sid, String(input.tool_use_id ?? ''), `被钩子「${r.name}」拒绝`);
       }
     }
     logHook({ event, rule: r.name, target: targetOf(input), outcome, result, ms: Date.now() - t0 });

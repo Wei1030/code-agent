@@ -3,6 +3,7 @@
  * become transcript items and side-panel state (see ../../../../packages/shared/src/types.ts for
  * what the UI shows); approvals, questions, plans and MCP elicitations wait for the user.
  */
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type {
@@ -17,6 +18,7 @@ import { agentRow, BACKGROUNDABLE, EDIT_TOOLS, READ_ONLY, toolDetail, toolName, 
 import { buildOptions } from './options';
 import { contextFrom } from './context';
 import { recordUsage, recordLimit } from '../usage';
+import { configDir } from '../claude/files';
 
 type Input = Record<string, unknown>;
 
@@ -69,6 +71,10 @@ export interface Live {
   /** Item id of the read-only group still open (no text or other tool since). */
   group: { id: string; tools: ToolItem[] } | null;
   taskTypes: Map<string, string>;
+  /** Tool calls a Code Agent hook denied, with the reason shown on the card. */
+  denied: Map<string, string>;
+  /** Background task id by the tool_use id that started it. */
+  taskByTool: Map<string, string>;
   /** API message being streamed and its blocks by index. */
   curMsg: string;
   streamIdx: Map<number, StreamItem>;
@@ -196,7 +202,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   let endedResolve!: () => void;
   l = {
     sid, q, input, cwd: opts.cwd, closing: false, turn: null, pending: new Map(), tools: new Map(), streams: new Map(), group: null,
-    taskTypes: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
+    taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
   };
   lives.set(sid, l);
   patchSummary(sid, { live: true, draft: false, waiting: false, lastActive: Date.now() });
@@ -414,6 +420,14 @@ export function answerRequest(sid: string, requestId: string, a: unknown): boole
   raw(sid, 'control_response', `回复 ${requestId.slice(0, 8)}`, { request_id: requestId, response: a });
   fn(a);
   return true;
+}
+
+/** A Code Agent hook denied this tool call: show it as denied, with why. */
+export function markDenied(sid: string, toolUseId: string, why: string) {
+  const l = lives.get(sid);
+  if (!l || !toolUseId) return;
+  l.denied.set(toolUseId, why);
+  if (findItem(sid, toolUseId)) patchItem(sid, toolUseId, { status: 'denied', provenance: why, right: undefined });
 }
 
 /** The tool_use id of the latest call of `name` (main thread) that matches, for tools that need to patch their own card. */
@@ -704,11 +718,20 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
     const r = toolResult(track.name, track.input, b.content, structured, isError, l.cwd);
     const item = findItem(l.sid, b.tool_use_id) as ToolItem | undefined;
     if (!item) continue;
-    const denied = item.status === 'denied';
+    const hookWhy = l.denied.get(b.tool_use_id);
+    const denied = item.status === 'denied' || !!hookWhy;
     const p: Partial<ToolItem> = {
       status: denied ? 'denied' : isError ? 'error' : 'ok', seconds, backgroundable: false,
+      // Neither a rule we know nor the user allowed it: Claude Code decided it needs no approval.
+      ...(hookWhy ? { provenance: hookWhy, right: undefined } : !item.provenance && !denied && !track.name.startsWith('mcp__workspace__') ? { provenance: '无需审批' } : {}),
       ...(r.output ? { output: r.output } : {}), ...(r.right !== undefined ? { right: r.right } : {}),
     };
+    // A foreground subagent's task ends with its result.
+    const task = l.taskByTool.get(b.tool_use_id);
+    if (task && !p.background) {
+      const cur = rt(l.sid)!.background.find((x) => x.id === task);
+      if (cur?.status === 'running') upsertBg(l.sid, { ...cur, status: isError ? 'failed' : 'completed', endedAt: Date.now() });
+    }
     if (item.agent) {
       const text = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? (b.content as Block[]).map((x) => x.text ?? '').join('\n') : '';
       p.agent = { ...item.agent, summary: item.agent.summary ?? (text ? text.slice(0, 300) : undefined) };
@@ -729,6 +752,9 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
 }
 
 function addChange(l: Live, c: { path: string; kind: 'created' | 'modified'; diff: string[]; add: number; del: number }) {
+  // Claude Code's own files (plans written in plan mode…) are not changes to the project.
+  const abs = path.resolve(l.cwd, c.path).toLowerCase();
+  if (abs.startsWith(path.resolve(configDir()).toLowerCase() + path.sep)) return;
   const r = rt(l.sid)!;
   const afterUserId = l.turn?.userId ?? lastUserId(l.sid);
   const i = r.changes.findIndex((x) => x.path === c.path && x.afterUserId === afterUserId);
@@ -787,11 +813,15 @@ function onResult(l: Live, m: Extract<SDKMessage, { type: 'result' }>) {
     if (r.mode === 'dontAsk' || n >= 3) addItem(sid, { kind: 'banner', id: randomUUID(), banner: 'denials', detail: String(n) });
   }
   closeOpenItems(l, interrupted ? '已中断' : '未完成');
-  const turnNo = r.turn + 1;
-  addItem(sid, {
-    kind: 'footer', id: randomUUID(), turn: turnNo, seconds: Math.round(m.duration_ms / 100) / 10, toolCalls: turn?.toolCalls ?? 0, tokens,
-    stopReason: interrupted ? 'interrupted' : m.subtype === 'success' ? (m.stop_reason ?? 'end_turn') : m.subtype,
-  });
+  // Local commands and compaction make no API turn: no footer, the turn count stays.
+  const silent = m.num_turns === 0 && !tokens && !interrupted;
+  const turnNo = silent ? r.turn : r.turn + 1;
+  if (!silent) {
+    addItem(sid, {
+      kind: 'footer', id: randomUUID(), turn: turnNo, seconds: Math.round(m.duration_ms / 100) / 10, toolCalls: turn?.toolCalls ?? 0, tokens,
+      stopReason: interrupted ? 'interrupted' : m.subtype === 'success' ? (m.stop_reason ?? 'end_turn') : m.subtype,
+    });
+  }
   emit(sid, { t: 'settings', patch: { turn: turnNo, tokens: r.tokens + tokens } });
   l.turn = null;
   l.group = null;
@@ -799,6 +829,7 @@ function onResult(l: Live, m: Extract<SDKMessage, { type: 'result' }>) {
   emit(sid, { t: 'status', status: null });
   if (!rt(sid)?.request) emit(sid, { t: 'state', state: 'idle' });
   void refreshContext(sid);
+  void l.q.mcpServerStatus().then((list) => import('../ext/mcp').then((m) => m.noteSessionMcp(summary(sid)?.workspaceId ?? '', list))).catch(() => undefined);
   const lastText = [...rt(sid)!.items].reverse().find((x): x is Extract<Item, { kind: 'text' }> => x.kind === 'text');
   const sum = summary(sid);
   if (sum && !sum.jobId && !interrupted) {
@@ -867,7 +898,8 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const taskId = String(m.task_id);
       if (m.subagent_type) l.taskTypes.set(taskId, String(m.subagent_type));
       const kind: BgTask['kind'] = m.task_type === 'local_bash' ? 'bash' : m.task_type === 'local_workflow' ? 'workflow' : m.task_type === 'monitor' ? 'monitor' : 'agent';
-      if (m.is_backgrounded || kind !== 'agent') {
+      if (m.tool_use_id) l.taskByTool.set(String(m.tool_use_id), taskId);
+      if (m.is_backgrounded === true || kind === 'bash' || kind === 'monitor') {
         upsertBg(sid, { id: taskId, kind, name: String(m.description ?? ''), status: 'running', startedAt: Date.now(), parent: m.parent_task_id as string | undefined });
       }
       raw(sid, 'system/task_started', String(m.description ?? ''), m);
