@@ -6,7 +6,7 @@
  * round's prompt (a PreToolUse hook pins the prompt; the verdict comes back through submit_review).
  * Rounds 1–3 look at the whole change, later rounds only at what changed since the previous round.
  */
-import type { NestedRow, ReviewCheck, ReviewFinding, ReviewRound, ReviewTicket } from '../api/types';
+import type { Effort, NestedRow, ReviewCheck, ReviewFinding, ReviewRound, ReviewTicket } from '../api/types';
 import { useApp } from '../store/app';
 import { uid } from '../lib/util';
 import { notify } from '../lib/notify';
@@ -22,7 +22,7 @@ type ScriptName = 'pass' | 'stuck';
 
 interface Edit { path: string; diff: string[]; add: number; del: number; created?: boolean }
 
-/** What the mock reviewer and author do in one round. Finding ids are given out in order: F1, F2… */
+/** What the mock reviewer and author do in one round. Finding ids are given out in order: R1, R2… */
 interface RoundScript {
   /** Outcome of each check attempt; a failure goes back to the author, who applies `checkFix`. */
   checks?: Array<'ok' | 'fail'>;
@@ -37,15 +37,15 @@ interface RoundScript {
   fix?: { intro: string; edits: Edit[]; responses: Array<{ id: string; status: 'fixed' | 'disputed'; text: string }> };
 }
 
-const SESSION_F1: Edit = {
+const SESSION_R1: Edit = {
   path: 'src/checkout/session.ts', add: 3, del: 1,
   diff: ['@@ -38,6 +38,8 @@ export async function resumeSession(id: string) {', '   const s = await load(id);', '-  startTimer(s.cart);', '+  s.previousCart?.dispose();', '+  startTimer(s.cart);'],
 };
-const TEST_F2: Edit = {
+const TEST_R2: Edit = {
   path: 'tests/checkout/timer.test.ts', add: 18, del: 0,
   diff: ['@@ -60,0 +61,18 @@', '+it("clears the timer when the cart is disposed", () => {', '+  const cart = makeCart();', '+  startTimer(cart);', '+  cart.dispose();', '+  expect(clock.pending()).toBe(0);', '+});', '+it("does not start a second timer on resume", async () => { /* … */ });'],
 };
-const SESSION_F4: Edit = {
+const SESSION_R4: Edit = {
   path: 'src/checkout/session.ts', add: 2, del: 1,
   diff: ['@@ -50,4 +50,5 @@', '-  s.previousCart?.dispose();', '+  if (s.previousCart && !s.previousCart.expired) s.previousCart.dispose();', '+  if (s.cart.expired) return gone();'],
 };
@@ -61,12 +61,12 @@ const ROUND1: RoundScript = {
   ],
   pass: false,
   fix: {
-    intro: '逐条处理：F1、F2 我来改；F3 我有不同意见。',
-    edits: [SESSION_F1, TEST_F2],
+    intro: '逐条处理：R1、R2 我来改；R3 我有不同意见。',
+    edits: [SESSION_R1, TEST_R2],
     responses: [
-      { id: 'F1', status: 'fixed', text: 'resumeSession 先释放旧购物车，再启动新计时器' },
-      { id: 'F2', status: 'fixed', text: '新增 2 个用例：释放后计时器被清理；恢复会话不会重复计时' },
-      { id: 'F3', status: 'disputed', text: 'dispose 之后不会再调用 startTimer，这个分支走不到；加日志只会制造噪音' },
+      { id: 'R1', status: 'fixed', text: 'resumeSession 先释放旧购物车，再启动新计时器' },
+      { id: 'R2', status: 'fixed', text: '新增 2 个用例：释放后计时器被清理；恢复会话不会重复计时' },
+      { id: 'R3', status: 'disputed', text: 'dispose 之后不会再调用 startTimer，这个分支走不到；加日志只会制造噪音' },
     ],
   },
 };
@@ -74,20 +74,20 @@ const ROUND1: RoundScript = {
 const ROUND2: RoundScript = {
   rows: [['terminal', 'git diff {base}..r2 --stat', '{files} 个文件'], ['file', 'Read src/checkout/session.ts'], ['file', 'Read tests/checkout/timer.test.ts'],
     ['search', 'Grep "dispose(" in src/**', '6 处匹配']],
-  summary: 'F1、F2 已修好，F3 的异议成立。但 F1 的修法在购物车已过期时会出问题。',
+  summary: 'R1、R2 已修好，R3 的异议成立。但 R1 的修法在购物车已过期时会出问题。',
   updates: [
-    { id: 'F1', status: 'verified', note: '已确认：resumeSession 先释放旧购物车' },
-    { id: 'F2', status: 'verified', note: '已确认：两个新用例覆盖了释放和恢复' },
-    { id: 'F3', status: 'upheld', note: '异议成立：dispose 之后确实不会再调用 startTimer' },
+    { id: 'R1', status: 'verified', note: '已确认：resumeSession 先释放旧购物车' },
+    { id: 'R2', status: 'verified', note: '已确认：两个新用例覆盖了释放和恢复' },
+    { id: 'R3', status: 'upheld', note: '异议成立：dispose 之后确实不会再调用 startTimer' },
   ],
   raise: [
     { severity: 'major', file: 'src/checkout/session.ts', line: 52, title: '购物车已过期时，恢复会话会抛异常，原来是返回 410', detail: '新加的释放逻辑会对已过期的购物车再调用一次 dispose，抛出 AlreadyDisposedError，GET /checkout/:id 从 410 变成了 500。' },
   ],
   pass: false,
   fix: {
-    intro: 'F4 是我上一轮改出来的问题，修掉。',
-    edits: [SESSION_F4],
-    responses: [{ id: 'F4', status: 'fixed', text: '已过期的购物车不再重复释放，恢复时直接返回 410' }],
+    intro: 'R4 是我上一轮改出来的问题，修掉。',
+    edits: [SESSION_R4],
+    responses: [{ id: 'R4', status: 'fixed', text: '已过期的购物车不再重复释放，恢复时直接返回 410' }],
   },
 };
 
@@ -98,45 +98,45 @@ const SCRIPTS: Record<ScriptName, RoundScript[]> = {
     checkFix: { text: '过期判断写反了，改过来。', edit: { path: 'src/checkout/session.ts', add: 1, del: 1, diff: ['@@ -51,1 +51,1 @@', '-  if (s.cart.expired) return gone();', '+  if (!s.cart.isActive()) return gone();'] } },
     rows: [['terminal', 'git diff {base}..r3 --stat', '{files} 个文件'], ['file', 'Read src/checkout/session.ts'], ['file', 'Read tests/checkout/resume.test.ts']],
     summary: '没有阻断或重要问题，可以合入。',
-    updates: [{ id: 'F4', status: 'verified', note: '已确认：过期的购物车返回 410，不再重复释放' }],
+    updates: [{ id: 'R4', status: 'verified', note: '已确认：过期的购物车返回 410，不再重复释放' }],
     raise: [{ severity: 'minor', file: 'src/checkout/session.ts', line: 50, title: '日志里 “expird” 拼错了', detail: '不影响行为。' }],
     pass: true,
   }],
   stuck: [ROUND1, ROUND2, {
     rows: [['terminal', 'git diff {base}..r3 --stat', '{files} 个文件'], ['file', 'Read src/checkout/session.ts'], ['search', 'Grep "resumeSession(" in src/**', '3 处匹配']],
-    summary: 'F4 已修好，但恢复会话还有并发问题。',
-    updates: [{ id: 'F4', status: 'verified', note: '已确认：过期的购物车返回 410' }],
+    summary: 'R4 已修好，但恢复会话还有并发问题。',
+    updates: [{ id: 'R4', status: 'verified', note: '已确认：过期的购物车返回 410' }],
     raise: [{ severity: 'major', file: 'src/checkout/session.ts', line: 38, title: '同一个会话被并发恢复两次时，仍会挂两个计时器', detail: '两个请求同时进入 resumeSession，都看到旧购物车还没释放，于是各自 startTimer。' }],
     pass: false,
     fix: {
-      intro: 'F5 的问题存在，加一把会话级的锁。',
+      intro: 'R5 的问题存在，加一把会话级的锁。',
       edits: [{ path: 'src/checkout/session.ts', add: 6, del: 2, diff: ['@@ -36,3 +36,7 @@', '+const locks = new Map<string, Promise<void>>();', '+export async function resumeSession(id: string) {', '+  await locks.get(id);', '+  const done = withLock(locks, id);'] }],
-      responses: [{ id: 'F5', status: 'fixed', text: '按会话 id 加锁，同一会话的恢复串行执行' }],
+      responses: [{ id: 'R5', status: 'fixed', text: '按会话 id 加锁，同一会话的恢复串行执行' }],
     },
   }, {
     rows: [['terminal', 'git diff r3..r4', '{files} 个文件'], ['file', 'Read src/checkout/session.ts'], ['search', 'Grep "checkout.instances" in config/**', '1 处匹配']],
-    summary: '锁只在单个进程里有效，F5 没有真正解决。',
-    updates: [{ id: 'F5', status: 'open', note: '锁只在单个进程内有效；多实例部署时，两个实例仍会同时恢复同一个会话' }],
+    summary: '锁只在单个进程里有效，R5 没有真正解决。',
+    updates: [{ id: 'R5', status: 'open', note: '锁只在单个进程内有效；多实例部署时，两个实例仍会同时恢复同一个会话' }],
     pass: false,
     fix: {
       intro: '这一点我有不同意见。',
       edits: [],
-      responses: [{ id: 'F5', status: 'disputed', text: '多实例之间由网关按会话 id 做粘性路由，同一个会话只会到一个实例' }],
+      responses: [{ id: 'R5', status: 'disputed', text: '多实例之间由网关按会话 id 做粘性路由，同一个会话只会到一个实例' }],
     },
   }, {
     rows: [['terminal', 'git diff r4..r5', '没有代码修改'], ['file', 'Read config/gateway.yaml'], ['search', 'Grep "sticky" in config/**', '1 处匹配']],
-    summary: '异议不成立，F5 仍未解决。',
-    updates: [{ id: 'F5', status: 'open', note: '异议不成立：config/gateway.yaml 里粘性路由默认是关闭的' }],
+    summary: '异议不成立，R5 仍未解决。',
+    updates: [{ id: 'R5', status: 'open', note: '异议不成立：config/gateway.yaml 里粘性路由默认是关闭的' }],
     pass: false,
     fix: {
       intro: '按第 5 轮的意见，改用 Redis 锁，跨实例也能串行。',
       edits: [{ path: 'src/checkout/session.ts', add: 8, del: 6, diff: ['@@ -36,7 +36,9 @@', '-const locks = new Map<string, Promise<void>>();', '+const lock = redisLock({ ttlMs: 5000 });', '+export async function resumeSession(id: string) {', '+  return lock.run(`resume:${id}`, async () => {'] }],
-      responses: [{ id: 'F5', status: 'fixed', text: '改用 Redis 锁，多个实例之间也串行' }],
+      responses: [{ id: 'R5', status: 'fixed', text: '改用 Redis 锁，多个实例之间也串行' }],
     },
   }, {
     rows: [['terminal', 'git diff r5..r6', '{files} 个文件'], ['file', 'Read src/checkout/session.ts'], ['file', 'Read src/lib/redis-lock.ts']],
-    summary: 'F5 已解决，可以合入。',
-    updates: [{ id: 'F5', status: 'verified', note: '已确认：Redis 锁让多个实例之间的恢复串行执行' }],
+    summary: 'R5 已解决，可以合入。',
+    updates: [{ id: 'R5', status: 'verified', note: '已确认：Redis 锁让多个实例之间的恢复串行执行' }],
     pass: true,
   }],
 };
@@ -179,15 +179,17 @@ const scriptFor = (id: string, n: number) => SCRIPTS[scripts.get(id) ?? 'pass'][
 // ------------------------------------------------------------------ the loop
 
 /** Start a review of the session's unreviewed changes. Empty `checks` skips the checks. */
-export function startReview(sid: string, checks: string[], script: ScriptName = 'pass'): string | null {
+export function startReview(sid: string, checks: string[], opts: { model?: string; effort?: Effort; script?: ScriptName } = {}): string | null {
   const app = useApp.getState();
   const sum = sumOf(sid);
   if (!sum || isRunning(sid) || activeTicket(sid)) return null;
   app.set({ reviewChecks: { ...app.reviewChecks, [sum.workspaceId]: checks } });
   const id = uid('rv');
   const base = Math.random().toString(16).slice(2, 9);
-  // The reviewer runs with the 评审 profile as it is now.
-  const { model, effort } = app.reviewProfile;
+  // The reviewer runs with the 评审 profile; model and effort can be changed for this review only.
+  const model = opts.model ?? app.reviewProfile.model;
+  const effort = opts.effort ?? app.reviewProfile.effort;
+  const script = opts.script ?? 'pass';
   app.set({ reviews: [{ id, sessionId: sid, status: 'checking', base, maxRounds: 5, rounds: [], findings: [], checks, model, effort, startedAt: Date.now(), tokens: 0 }, ...app.reviews] });
   scripts.set(id, script);
   snaps.set(id, [app.reviewed[sid] ?? 0]);
@@ -326,7 +328,7 @@ async function reviewPhase(run: Run, id: string, n: number): Promise<boolean> {
 
   // Record the verdict.
   const start = get(id).findings.length;
-  const added: ReviewFinding[] = raise.map((f, i) => ({ ...f, id: `F${start + i + 1}`, round: n, status: 'open' }));
+  const added: ReviewFinding[] = raise.map((f, i) => ({ ...f, id: `R${start + i + 1}`, round: n, status: 'open' }));
   update(id, (x) => ({ ...x, tokens: x.tokens + tokens, findings: [...x.findings, ...added] }));
   for (const u of s.updates ?? []) setFinding(id, u.id, { status: u.status, reviewerNote: u.note, closedIn: u.status === 'verified' || u.status === 'upheld' ? n : undefined });
   setRound(id, n, (r) => ({ ...r, verdict: s.pass ? 'pass' : 'changes_requested', raised: added.map((f) => f.id), rulings: s.updates ?? [], reviewer: { model, seconds, tokens, toolCalls: rows.length, summary: s.summary } }));
@@ -421,7 +423,7 @@ export function mockReview(sid: string, script: ScriptName) {
     addItem(sid, { kind: 'tool', id: uid('tool'), tool: 'Edit', detail: 'src/cart/timer.ts', status: 'ok', provenance: '已由你批准', right: '+2 −1', output: { type: 'diff', lines: diff } });
     emit(sid, { t: 'changes', changes: [...r.changes, { path: 'src/cart/timer.ts', kind: 'modified', add: 2, del: 1, diff, afterUserId: lastUserId(sid) }] });
   }
-  startReview(sid, useApp.getState().reviewChecks[sum.workspaceId] ?? ['npm test'], script);
+  startReview(sid, useApp.getState().reviewChecks[sum.workspaceId] ?? ['npm test'], { script });
 }
 
 export function reviewMarkdown(id: string): string {

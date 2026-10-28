@@ -611,7 +611,7 @@ export interface JobRun {
 
 export type ReviewSeverity = 'blocker' | 'major' | 'minor';
 
-/** A reviewer finding; ids are F1, F2… within a ticket. */
+/** A reviewer finding; ids are R1, R2… within a ticket. */
 export interface ReviewFinding {
   id: string;
   round: number;
