@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import type {
   CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PeerSettings, PermissionRule,
-  PluginInfo, Prefs, Profile, ProviderKind, ReviewConfig, ReviewTicket, SessionSummary, SkillInfo, Workspace,
+  PluginInfo, Prefs, Profile, ProviderKind, ReviewProfile, ReviewTicket, SessionSummary, SkillInfo, Workspace,
 } from '../api/types';
 import { COMMAND_FILES, FILE_HOOKS, HOOK_LOG, HOOK_RULES, MCP_SERVERS, PLUGINS, SKILLS } from '../mock/extensions';
 import { JOB_RUNS, JOBS } from '../mock/jobs';
@@ -38,7 +38,7 @@ export interface Provider {
   compatibleModel: string;
 }
 
-export type InspectorTab = 'tasks' | 'background' | 'changes' | 'review' | 'checkpoints' | 'context' | 'events';
+export type InspectorTab = 'tasks' | 'background' | 'changes' | 'checkpoints' | 'context' | 'events';
 
 interface AppState {
   workspaces: Workspace[];
@@ -62,8 +62,11 @@ interface AppState {
   /** Claude Code processes running at once, across all workspaces. */
   maxRunning: number;
   reviews: ReviewTicket[];
-  /** By workspace id. */
-  reviewConfig: Record<string, ReviewConfig>;
+  /** Check commands by workspace id; empty skips the checks. */
+  reviewChecks: Record<string, string[]>;
+  reviewProfile: ReviewProfile;
+  /** Session whose review record is open in the dialog. */
+  reviewRecord: string | null;
   /** By session id: how many of its file changes a finished review has covered. */
   reviewed: Record<string, number>;
   /** Messages between sessions waiting for the user to release them. */
@@ -128,7 +131,9 @@ export const useApp = create<AppState>((set, get) => ({
   peer: { inbound: 'parity', maxHops: 6 },
   maxRunning: 4,
   reviews: [],
-  reviewConfig: { 'ws-shop-api': { checks: ['npm run typecheck', 'npm test'], model: 'opus', effort: 'high' } },
+  reviewChecks: { 'ws-shop-api': ['npm run typecheck', 'npm test'] },
+  reviewProfile: { model: 'opus', effort: 'high', tools: [], claudeMd: true, extraPrompt: '' },
+  reviewRecord: null,
   reviewed: {},
   held: [],
   provider: {

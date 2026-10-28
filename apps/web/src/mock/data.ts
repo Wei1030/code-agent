@@ -177,29 +177,8 @@ const ALL_TOOLS = BUILTIN_TOOLS.map((t) => t.name);
 
 export const PROFILES: Profile[] = [
   {
-    id: 'p-default', name: '默认', desc: '新会话使用', isDefault: true, allowBypass: false,
+    id: 'p-default', name: '默认', desc: '新会话和 Claude 新建的会话使用', isDefault: true, allowBypass: false,
     model: 'opus', effort: 'max', mode: 'default', prompts: 'host',
-    tools: ALL_TOOLS, questionPreviews: true,
-    sources: { user: true, project: true, local: true }, promptMode: 'append', promptText: '', responseLanguage: 'ui',
-    features: { checkpoints: true, subagentText: true, progressSummaries: true, hookEvents: true, persist: true, verbatim: false },
-  },
-  {
-    id: 'p-review', name: '评审', desc: '只读，不能改文件和运行命令', allowBypass: false,
-    model: 'opus', effort: 'max', mode: 'plan', prompts: 'host',
-    tools: ['Read', 'Glob', 'Grep', 'Agent', 'TaskCreate', 'AskUserQuestion', 'Skill'], questionPreviews: false,
-    sources: { user: true, project: true, local: false }, promptMode: 'append', promptText: '', responseLanguage: 'ui',
-    features: { checkpoints: false, subagentText: true, progressSummaries: true, hookEvents: false, persist: true, verbatim: false },
-  },
-  {
-    id: 'p-ci', name: '无人值守', desc: '不询问 · 未授权的一律拒绝', allowBypass: false,
-    model: 'sonnet', effort: 'max', mode: 'dontAsk', prompts: 'none',
-    tools: ALL_TOOLS.filter((t) => t !== 'AskUserQuestion'), questionPreviews: false,
-    sources: { user: false, project: true, local: false }, promptMode: 'append', promptText: '', responseLanguage: 'conversation',
-    features: { checkpoints: false, subagentText: false, progressSummaries: false, hookEvents: true, persist: true, verbatim: true },
-  },
-  {
-    id: 'p-exp', name: '实验', desc: '允许跳过权限检查', allowBypass: true,
-    model: 'fable', effort: 'max', mode: 'acceptEdits', prompts: 'host',
     tools: ALL_TOOLS, questionPreviews: true,
     sources: { user: true, project: true, local: true }, promptMode: 'append', promptText: '', responseLanguage: 'ui',
     features: { checkpoints: true, subagentText: true, progressSummaries: true, hookEvents: true, persist: true, verbatim: false },

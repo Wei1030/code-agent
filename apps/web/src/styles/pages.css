@@ -184,3 +184,6 @@
 .plain-list { margin: 0; padding-left: 18px; color: var(--ink-2); line-height: 1.8; font-size: 13px; }
 .tool-item.disabled { opacity: .55; cursor: not-allowed; }
 .tool-item.disabled:hover { border-color: var(--border); }
+.tool-item.locked { cursor: default; opacity: .8; }
+.tool-item.locked:hover { border-color: var(--accent-line); }
+.panel-head .hint { margin-left: 8px; }

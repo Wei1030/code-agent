@@ -6,7 +6,7 @@
  * round's prompt (a PreToolUse hook pins the prompt; the verdict comes back through submit_review).
  * Rounds 1–3 look at the whole change, later rounds only at what changed since the previous round.
  */
-import type { NestedRow, ReviewCheck, ReviewConfig, ReviewFinding, ReviewRound, ReviewTicket } from '../api/types';
+import type { NestedRow, ReviewCheck, ReviewFinding, ReviewRound, ReviewTicket } from '../api/types';
 import { useApp } from '../store/app';
 import { uid } from '../lib/util';
 import { notify } from '../lib/notify';
@@ -30,7 +30,7 @@ interface RoundScript {
   checkFix?: { text: string; edit: Edit };
   rows: Array<[icon: string, text: string, right?: string]>;
   summary: string;
-  updates?: Array<{ id: string; status: ReviewFinding['status']; note: string }>;
+  updates?: Array<{ id: string; status: 'verified' | 'upheld' | 'open'; note: string }>;
   raise?: Array<Pick<ReviewFinding, 'severity' | 'file' | 'line' | 'title' | 'detail'>>;
   pass: boolean;
   /** The author's answer to a rejection. */
@@ -178,14 +178,17 @@ const scriptFor = (id: string, n: number) => SCRIPTS[scripts.get(id) ?? 'pass'][
 
 // ------------------------------------------------------------------ the loop
 
-export function startReview(sid: string, cfg: ReviewConfig, script: ScriptName = 'pass'): string | null {
+/** Start a review of the session's unreviewed changes. Empty `checks` skips the checks. */
+export function startReview(sid: string, checks: string[], script: ScriptName = 'pass'): string | null {
   const app = useApp.getState();
   const sum = sumOf(sid);
   if (!sum || isRunning(sid) || activeTicket(sid)) return null;
-  app.set({ reviewConfig: { ...app.reviewConfig, [sum.workspaceId]: cfg } });
+  app.set({ reviewChecks: { ...app.reviewChecks, [sum.workspaceId]: checks } });
   const id = uid('rv');
   const base = Math.random().toString(16).slice(2, 9);
-  app.set({ reviews: [{ id, sessionId: sid, status: 'checking', base, maxRounds: 5, rounds: [], findings: [], checks: cfg.checks, model: cfg.model, effort: cfg.effort, startedAt: Date.now(), tokens: 0 }, ...app.reviews] });
+  // The reviewer runs with the 评审 profile as it is now.
+  const { model, effort } = app.reviewProfile;
+  app.set({ reviews: [{ id, sessionId: sid, status: 'checking', base, maxRounds: 5, rounds: [], findings: [], checks, model, effort, startedAt: Date.now(), tokens: 0 }, ...app.reviews] });
   scripts.set(id, script);
   snaps.set(id, [app.reviewed[sid] ?? 0]);
   void startRun(sid, (run) => loop(run, id, 1, false));
@@ -208,10 +211,11 @@ async function loop(run: Run, id: string, from: number, fixFirst: boolean) {
       const t = get(id);
       update(id, (x) => ({ ...x, status: 'checking', rounds: [...x.rounds, {
         n, scope, snapshot: `refs/code-agent/review/${id.slice(-6)}/r${n}`, range: scope === 'global' ? `${t.base}..r${n}` : `r${n - 1}..r${n}`,
-        diff: scope === 'global' ? diffOf(sid, base, at) : diffOf(sid, prev, at), checks: [], raised: [], updated: [], startedAt: Date.now(),
+        diff: scope === 'global' ? diffOf(sid, base, at) : diffOf(sid, prev, at), checks: [], raised: [], rulings: [], answers: [], authorFiles: [], startedAt: Date.now(),
       }] }));
-      addItem(sid, { kind: 'divider', id: uid('div'), label: `代码审核 · 第 ${n} 轮 · ${scope === 'global' ? '全局审核' : `增量审核（只看第 ${n - 1} 轮之后的修改）`}` });
-      if (!(await checkPhase(run, id, n))) return;
+      const skip = get(id).checks.length === 0;
+      addItem(sid, { kind: 'divider', id: uid('div'), label: `代码审核 · 第 ${n} 轮 · ${scope === 'global' ? '全局审核' : `增量审核（只看第 ${n - 1} 轮之后的修改）`}${skip ? ' · 跳过验证' : ''}` });
+      if (!skip && !(await checkPhase(run, id, n))) return;
       if (await reviewPhase(run, id, n)) return;
       if (n < get(id).maxRounds) {
         await fixPhase(run, id, n);
@@ -271,10 +275,12 @@ async function checkPhase(run: Run, id: string, n: number): Promise<boolean> {
     const failed = cmds[failAt] ?? cmds[cmds.length - 1];
     userItem(sid, `验证没有通过（第 ${attempt} 次）：${failed} 失败。\n${(s.checkFail ?? []).slice(1, 5).join('\n')}\n请修复后结束这一轮，Code Agent 会重新验证。`, [], { fromApp: `代码审核 · 第 ${n} 轮 · 验证` });
     const t0 = Date.now();
+    const before = rt(sid)!.changes.length;
     if (s.checkFix) {
       await streamText(run, s.checkFix.text);
       await editStep(run, s.checkFix.edit.path, s.checkFix.edit.diff, s.checkFix.edit.add, s.checkFix.edit.del);
     }
+    recordFiles(id, n, sid, before, 'check');
     footer(sid, 1, (Date.now() - t0) / 1000);
   }
   return false;
@@ -300,7 +306,7 @@ async function reviewPhase(run: Run, id: string, n: number): Promise<boolean> {
   const task = `第 ${n} 轮${round.scope === 'global' ? '全局' : '增量'}审核`;
   const model = t.model;
   const ag = newTool(sid, 'Agent', `code-reviewer · ${task}`, {
-    right: model, provenance: '只读 · 提示词由 Code Agent 固定',
+    right: model, provenance: '评审方案 · 只读 · 提示词由 Code Agent 固定',
     agent: { agentType: 'code-reviewer', task, model, summary: '正在读取改动…', rows: [], tokens: 0, toolCalls: 0 },
   });
   const rows: NestedRow[] = [];
@@ -323,7 +329,7 @@ async function reviewPhase(run: Run, id: string, n: number): Promise<boolean> {
   const added: ReviewFinding[] = raise.map((f, i) => ({ ...f, id: `F${start + i + 1}`, round: n, status: 'open' }));
   update(id, (x) => ({ ...x, tokens: x.tokens + tokens, findings: [...x.findings, ...added] }));
   for (const u of s.updates ?? []) setFinding(id, u.id, { status: u.status, reviewerNote: u.note, closedIn: u.status === 'verified' || u.status === 'upheld' ? n : undefined });
-  setRound(id, n, (r) => ({ ...r, verdict: s.pass ? 'pass' : 'changes_requested', raised: added.map((f) => f.id), updated: (s.updates ?? []).map((u) => u.id), reviewer: { model, seconds, tokens, toolCalls: rows.length, summary: s.summary } }));
+  setRound(id, n, (r) => ({ ...r, verdict: s.pass ? 'pass' : 'changes_requested', raised: added.map((f) => f.id), rulings: s.updates ?? [], reviewer: { model, seconds, tokens, toolCalls: rows.length, summary: s.summary } }));
   addItem(sid, { kind: 'review', id: uid('rv'), ticketId: id, round: n, what: 'verdict' });
 
   if (!s.pass) return false;
@@ -352,9 +358,16 @@ async function fixPhase(run: Run, id: string, n: number) {
   await sleep(run, 300);
   finishTool(sid, tool, { seconds: 0.1 });
   for (const r of s.fix.responses) setFinding(id, r.id, { status: r.status, response: r.text });
-  setRound(id, n, (r) => ({ ...r, fix: diffOf(sid, before) }));
+  setRound(id, n, (r) => ({ ...r, answers: [...r.answers, ...s.fix!.responses] }));
+  recordFiles(id, n, sid, before, 'fix');
   await streamText(run, '这一轮的意见处理完了。');
   footer(sid, s.fix.edits.length + 1, (Date.now() - t0) / 1000);
+}
+
+/** The author's file changes since `before`, attached to round n. */
+function recordFiles(id: string, n: number, sid: string, before: number, phase: 'check' | 'fix') {
+  const files = (rt(sid)?.changes ?? []).slice(before).map((c) => ({ path: c.path, add: c.add, del: c.del, diff: c.diff, phase }));
+  if (files.length) setRound(id, n, (r) => ({ ...r, authorFiles: [...r.authorFiles, ...files] }));
 }
 
 function finish(id: string, status: ReviewTicket['status'], note: string) {
@@ -408,29 +421,45 @@ export function mockReview(sid: string, script: ScriptName) {
     addItem(sid, { kind: 'tool', id: uid('tool'), tool: 'Edit', detail: 'src/cart/timer.ts', status: 'ok', provenance: '已由你批准', right: '+2 −1', output: { type: 'diff', lines: diff } });
     emit(sid, { t: 'changes', changes: [...r.changes, { path: 'src/cart/timer.ts', kind: 'modified', add: 2, del: 1, diff, afterUserId: lastUserId(sid) }] });
   }
-  const cfg = useApp.getState().reviewConfig[sum.workspaceId] ?? { checks: ['npm test'], model: 'opus', effort: 'high' as const };
-  startReview(sid, cfg, script);
+  startReview(sid, useApp.getState().reviewChecks[sum.workspaceId] ?? ['npm test'], script);
 }
 
 export function reviewMarkdown(id: string): string {
   const t = get(id);
   const sum = sumOf(t.sessionId);
   const sev = { blocker: '阻断', major: '重要', minor: '次要' };
-  const st = { open: '待处理', fixed: '已修改', disputed: '有异议', verified: '已确认修复', upheld: '异议成立' };
-  const lines = [`# 代码审核 · ${sum?.title ?? ''}`, '', `- 基准：${t.base}`, `- 轮数：${t.rounds.length}/${t.maxRounds}`, `- 结果：${t.status}${t.note ? `（${t.note}）` : ''}`, `- 验证命令：${t.checks.join('；')}`, ''];
+  const rule = { verified: '已确认修复', upheld: '异议成立', open: '未解决' };
+  const lines = [
+    `# 代码审核 · ${sum?.title ?? ''}`, '',
+    `- 基准：${t.base}`, `- 轮数：${t.rounds.length}/${t.maxRounds}`, `- 结果：${t.status}${t.note ? `（${t.note}）` : ''}`,
+    `- 验证命令：${t.checks.length ? t.checks.join('；') : '跳过验证'}`, '',
+  ];
   for (const r of t.rounds) {
     lines.push(`## 第 ${r.n} 轮 · ${r.scope === 'global' ? '全局' : '增量'} · ${r.range}`, '');
-    lines.push(`- 改动：${r.diff.files} 个文件 +${r.diff.add} −${r.diff.del}`);
-    lines.push(`- 验证：${r.checks.map((c) => `第 ${c.attempt} 次${c.ok ? '通过' : '失败'}`).join('，') || '无'}`);
-    lines.push(`- 结论：${r.verdict === 'pass' ? '通过' : r.verdict === 'changes_requested' ? '打回' : '—'}${r.raised.length ? `，新意见 ${r.raised.join('、')}` : ''}`);
-    if (r.fix) lines.push(`- 作者修改：${r.fix.files} 个文件 +${r.fix.add} −${r.fix.del}`);
-    lines.push('');
-  }
-  lines.push('## 意见', '');
-  for (const f of t.findings) {
-    lines.push(`- **${f.id}** [${sev[f.severity]}] ${f.file}${f.line ? `:${f.line}` : ''} — ${f.title}（${st[f.status]}）`);
-    if (f.response) lines.push(`  - 作者：${f.response}`);
-    if (f.reviewerNote) lines.push(`  - 审核：${f.reviewerNote}`);
+    lines.push(`- 审核范围：${r.diff.files} 个文件 +${r.diff.add} −${r.diff.del}`);
+    lines.push(`- 验证：${t.checks.length === 0 ? '跳过' : r.checks.map((c) => `第 ${c.attempt} 次${c.ok ? '通过' : '失败'}`).join('，') || '—'}`);
+    lines.push(`- 结论：${r.verdict === 'pass' ? '通过' : r.verdict === 'changes_requested' ? '打回' : '—'}${r.reviewer ? `（${r.reviewer.summary}）` : ''}`, '');
+    const raised = t.findings.filter((f) => r.raised.includes(f.id));
+    if (raised.length) {
+      lines.push('### 新意见', '');
+      for (const f of raised) lines.push(`- **${f.id}** [${sev[f.severity]}] ${f.file}${f.line ? `:${f.line}` : ''} — ${f.title}`, `  ${f.detail}`);
+      lines.push('');
+    }
+    if (r.rulings.length) {
+      lines.push('### 对之前意见的结论', '');
+      for (const u of r.rulings) lines.push(`- **${u.id}** ${rule[u.status]}：${u.note}`);
+      lines.push('');
+    }
+    if (r.answers.length) {
+      lines.push('### 作者的答复', '');
+      for (const x of r.answers) lines.push(`- **${x.id}** ${x.status === 'fixed' ? '已修改' : '有异议'}：${x.text}`);
+      lines.push('');
+    }
+    if (r.authorFiles.length) {
+      lines.push('### 作者修改的文件', '');
+      for (const f of r.authorFiles) lines.push(`- ${f.path} +${f.add} −${f.del}（${f.phase === 'check' ? '验证没通过后修复' : '按意见修改'}）`);
+      lines.push('');
+    }
   }
   return lines.join('\n');
 }

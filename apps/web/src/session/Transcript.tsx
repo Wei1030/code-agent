@@ -332,7 +332,7 @@ function Notice({ tone, text, action, sid }: { tone: 'good' | 'info' | 'warn'; t
       {action && (
         <button className="link-btn" onClick={() => {
           if (action === '打开用量') nav('/usage');
-          else if (action === '查看审核记录') useApp.getState().setInspector({ open: true, tab: 'review' });
+          else if (action === '查看审核记录') useApp.getState().set({ reviewRecord: sid });
           else useApp.getState().setInspector({ open: true, tab: 'background' });
           void sid;
         }}>{action}</button>

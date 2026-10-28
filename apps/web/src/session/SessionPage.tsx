@@ -16,7 +16,7 @@ import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, Quest
 import { Composer } from './Composer';
 import { Inspector } from './Inspector';
 import { RewindDialog } from './RewindDialog';
-import { ReviewButton, ReviewDecisionPanel } from './Review';
+import { ReviewButton, ReviewDecisionPanel, ReviewRecord } from './Review';
 
 export function SessionPage() {
   const { id = '' } = useParams();
@@ -24,6 +24,7 @@ export function SessionPage() {
   const nav = useNavigate();
   const sum = useApp((s) => s.sessions.find((x) => x.id === id));
   const rt = useSessions((s) => s.runtimes[id]);
+  const record = useApp((s) => s.reviewRecord);
   const [rewindAt, setRewindAt] = useState<{ userId: string; n: number } | null>(null);
   const [receipt, setReceipt] = useState<number>(0);
 
@@ -85,6 +86,7 @@ export function SessionPage() {
       </div>
       <Inspector rt={rt} onRewind={onRewind} />
       {rewindAt && <RewindDialog sid={id} userId={rewindAt.userId} n={rewindAt.n} onClose={() => setRewindAt(null)} />}
+      {record === id && <ReviewRecord sid={id} />}
     </div>
   );
 }

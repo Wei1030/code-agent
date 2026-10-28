@@ -652,10 +652,12 @@ export interface ReviewRound {
   verdict?: 'pass' | 'changes_requested';
   /** Findings first raised in this round. */
   raised: string[];
-  /** Findings whose status this round's reviewer changed. */
-  updated: string[];
-  /** The author's fix after a rejection. */
-  fix?: { files: number; add: number; del: number };
+  /** This round's reviewer on earlier findings. */
+  rulings: Array<{ id: string; status: 'verified' | 'upheld' | 'open'; note: string }>;
+  /** The author's answers to this round's verdict. */
+  answers: Array<{ id: string; status: 'fixed' | 'disputed'; text: string }>;
+  /** Files the author changed in this round: after a failed check, or to answer the verdict. */
+  authorFiles: Array<{ path: string; add: number; del: number; diff: string[]; phase: 'check' | 'fix' }>;
   startedAt: number;
 }
 
@@ -678,9 +680,17 @@ export interface ReviewTicket {
   note?: string;
 }
 
-/** Per workspace: the check commands and the reviewer subagent's model. */
-export interface ReviewConfig {
-  checks: string[];
+/**
+ * The 评审 profile: what the code-reviewer subagent runs with (an SDK AgentDefinition). Read, Glob,
+ * Grep and read-only commands are always on; Code Agent's hook refuses any other command it runs.
+ */
+export interface ReviewProfile {
   model: string;
   effort: Effort;
+  /** Optional extra tools: WebFetch, WebSearch, Skill, Agent. */
+  tools: string[];
+  /** Load CLAUDE.md files (AgentDefinition.omitClaudeMd, inverted). */
+  claudeMd: boolean;
+  /** Appended to Code Agent's built-in review instructions. */
+  extraPrompt: string;
 }
