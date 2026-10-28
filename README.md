@@ -13,7 +13,23 @@ Phase 1 integrates the Claude Agent SDK only.
 
 ## Status
 
-Design stage. No application code yet.
+Design stage. `apps/web` holds a front-end-only interaction mock: every screen and interaction is
+clickable, but the backend is mocked in the browser (`apps/web/src/mock`) and nothing talks to
+Claude Code yet. It is the reference for the interaction design while it is being revised; the SVG
+prototype predates the latest round of changes.
+
+### Running the interaction mock
+
+```
+npm install
+npm run dev        # http://127.0.0.1:5180
+```
+
+The flask icon at the bottom of the left rail opens a mock console that plays scripted scenarios
+(approvals, questions, plan review, subagents, high-risk commands) and injects error states.
+Messages typed into a session also pick a scenario by keyword (计划, 提问, 子代理, 删除, 修复).
+
+`npm run typecheck` and `npm run build` check and build the web app.
 
 | Document | Contents |
 | --- | --- |
@@ -34,18 +50,18 @@ code-agent/
 │   └── prototype/           # SVG interaction prototype (static page)
 ├── apps/
 │   ├── server/              # Node.js: REST + WebSocket API, session manager, SDK adapter
-│   └── web/                 # browser single-page app
+│   └── web/                 # browser single-page app (currently the interaction mock)
 └── packages/
     └── protocol/            # shared types for the REST / WebSocket protocol
 ```
 
-`apps/` and `packages/` are created with the first code.
+`apps/server` and `packages/` are created with the first server code.
 
 ## Planned stack
 
-- Node.js 22 LTS, TypeScript, pnpm workspaces
+- Node.js 22 LTS or later, TypeScript, npm workspaces
 - Server: Fastify with WebSocket support, `@anthropic-ai/claude-agent-sdk`
-- Web: React + Vite (to be confirmed, see the open decisions in the requirements)
+- Web: React 19, Vite, Zustand, React Router; plain CSS
 - Local storage: SQLite in `~/.code-agent/`
 - UI languages: Simplified Chinese and English
 

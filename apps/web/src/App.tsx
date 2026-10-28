@@ -1,0 +1,33 @@
+/** Routes. Every page renders inside the app shell. */
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppShell } from './shell/AppShell';
+import { Home } from './pages/Home';
+import { History } from './pages/History';
+import { Usage } from './pages/Usage';
+import { SessionPage } from './session/SessionPage';
+import { SettingsLayout } from './pages/settings/SettingsLayout';
+import { Profiles } from './pages/settings/Profiles';
+import { Permissions } from './pages/settings/Permissions';
+import { Provider } from './pages/settings/Provider';
+import { Language } from './pages/settings/Language';
+
+export function App() {
+  return (
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route index element={<Home />} />
+        <Route path="sessions" element={<History />} />
+        <Route path="s/:id" element={<SessionPage />} />
+        <Route path="usage" element={<Usage />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="profiles" replace />} />
+          <Route path="profiles" element={<Profiles />} />
+          <Route path="permissions" element={<Permissions />} />
+          <Route path="provider" element={<Provider />} />
+          <Route path="language" element={<Language />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
+  );
+}

@@ -1,0 +1,13 @@
+{
+  "name": "code-agent",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @code-agent/web",
+    "build": "npm run build -w @code-agent/web",
+    "typecheck": "npm run typecheck -w @code-agent/web"
+  }
+}
