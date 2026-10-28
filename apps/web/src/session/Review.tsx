@@ -330,7 +330,7 @@ export function ReviewRecord({ sid }: { sid: string }) {
       footLeft={tickets.length > 1 ? <Select value={ticket.id} width={320} placement="top-start" onChange={setSel}
         options={tickets.map((x, i) => ({ value: x.id, label: t('第 {n} 次审核 · {w}', { n: tickets.length - i, w: relTime(x.startedAt) }), desc: t(TICKET_STATUS[x.status].label) }))} /> : undefined}
       footer={<>
-        <Button icon="download" onClick={() => void api.reviewMarkdown(ticket.id).then((md) => download(`code-review-${ticket.id.slice(-6)}.md`, md, 'text/markdown;charset=utf-8'))}>{t('导出 Markdown')}</Button>
+        <Button icon="download" onClick={() => api.reviewMarkdown(ticket.id).then((md) => download(`code-review-${ticket.id.slice(-6)}.md`, md, 'text/markdown;charset=utf-8'))}>{t('导出 Markdown')}</Button>
         <Button variant="primary" onClick={close}>{t('关闭')}</Button>
       </>}>
       <div className="rr-summary">

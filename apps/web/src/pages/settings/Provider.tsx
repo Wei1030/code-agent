@@ -104,7 +104,7 @@ export function Provider() {
               )}
               <div className="row" style={{ marginTop: 12 }}>
                 <Button size="sm" icon="copy" onClick={() => { void navigator.clipboard?.writeText(loginCmd); app.toast(t('已复制登录命令'), 'good'); }}>{t('复制命令')}</Button>
-                <Button size="sm" icon="refresh" disabled={checking} onClick={() => void recheck()}>{checking ? t('检测中…') : t('重新检测')}</Button>
+                <Button size="sm" icon="refresh" disabled={checking} onClick={() => recheck()}>{checking ? t('检测中…') : t('重新检测')}</Button>
                 {p.checkedAt && <span className="hint">{t('上次检测 {t}', { t: relTime(p.checkedAt) })}</span>}
               </div>
             </Section>
@@ -121,7 +121,7 @@ export function Provider() {
               <Field label={t('模型名')} hint="ANTHROPIC_MODEL"><input className="input mono" placeholder="vendor/model-name" value={p.compatibleModel} onChange={(e) => app.setProvider({ compatibleModel: e.target.value })} /></Field>
               <Field label={t('认证令牌')} hint={p.compatibleKeySet ? t('已保存在服务端（不会发到浏览器）；输入新的会替换它') : 'ANTHROPIC_AUTH_TOKEN'}>
                 <div className="row"><input className="input mono grow" type="password" placeholder={p.compatibleKeySet ? '••••••••' : ''} value={key} onChange={(e) => setKey(e.target.value)} />
-                  <Button size="sm" disabled={!key} onClick={() => void api.setCompatibleKey(key).then(() => { setKey(''); app.toast(t('已保存认证令牌'), 'good'); })}>{t('保存')}</Button></div>
+                  <Button size="sm" disabled={!key} onClick={() => api.setCompatibleKey(key).then(() => { setKey(''); app.toast(t('已保存认证令牌'), 'good'); })}>{t('保存')}</Button></div>
               </Field>
             </div>
             <div className="banner-warn" style={{ marginTop: 14 }}>

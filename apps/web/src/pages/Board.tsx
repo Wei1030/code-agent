@@ -12,6 +12,7 @@ import { Button, Check, Chip, Field, Modal, Seg, Select, Tabs, Toggle } from '..
 import { linkify } from '../components/BoardLink';
 import { SessionLink } from '../session/Transcript';
 import { useApp } from '../store/app';
+import { NoWorkspace } from '../components/NoWorkspace';
 import { EFFORT_LABEL, MODELS } from '../lib/catalog';
 import { CLOSED, KIND_ICON, KIND_LABEL, STATUSES, STATUS_LABEL, STATUS_TONE } from '../lib/board';
 import { relTime } from '../lib/format';
@@ -24,7 +25,9 @@ export function Board() {
   const t = useT();
   const [params, setParams] = useSearchParams();
   const app = useApp();
-  const wsId = params.get('ws') || app.currentWorkspaceId || app.workspaces[0]?.id || '';
+  const asked = params.get('ws');
+  const known = (id: string | null) => !!id && app.workspaces.some((w) => w.id === id);
+  const wsId = known(asked) ? asked! : known(app.currentWorkspaceId) ? app.currentWorkspaceId : app.workspaces[0]?.id ?? '';
   const focus = params.get('item');
   const items = app.board.filter((x) => x.workspaceId === wsId);
   const focused = focus ? items.find((x) => x.id === focus) : undefined;
@@ -57,11 +60,22 @@ export function Board() {
     : STATUSES[kind].map((s) => ({ title: t(STATUS_LABEL[s]), items: list.filter((x) => x.status === s) }));
   const pick = (id: string) => { setSelId(id); setParams({ ws: wsId, item: id }, { replace: true }); };
 
+  const intro = t('这个工作区要做的功能、发现的问题和值得记住的笔记。Claude 可以查看和修改看板；每轮对话结束后，后台会把新的决定、确认的问题和完成的工作记下来。数据保存在 Code Agent 的数据目录，不放进仓库。');
+  if (!wsId) {
+    return (
+      <div className="page"><div className="page-inner">
+        <div className="page-title"><h1>{t('看板')}</h1></div>
+        <p className="page-sub">{intro}</p>
+        <NoWorkspace text={t('看板按工作区记录。添加一个工作区后，就能在这里新建、导入条目，Claude 也会在对话后自动记录。')} />
+      </div></div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-inner">
         <div className="page-title"><h1>{t('看板')}</h1></div>
-        <p className="page-sub">{t('这个工作区要做的功能、发现的问题和值得记住的笔记。Claude 可以查看和修改看板；每轮对话结束后，后台会把新的决定、确认的问题和完成的工作记下来。数据保存在 Code Agent 的数据目录，不放进仓库。')}</p>
+        <p className="page-sub">{intro}</p>
         <div className="row board-bar">
           <Select value={wsId} icon="folder" className="w-240" onChange={(v) => { setSelId(null); setParams({ ws: v }); }}
             options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
@@ -73,7 +87,7 @@ export function Board() {
             <input className="input" placeholder={t('搜索编号、标题、内容')} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <span className="grow" />
-          <Button icon="download" onClick={() => void api.boardMarkdown(wsId).then((md) => download(`board-${app.workspaces.find((w) => w.id === wsId)?.name ?? wsId}.md`, md, 'text/markdown;charset=utf-8'))}>{t('导出')}</Button>
+          <Button icon="download" onClick={() => api.boardMarkdown(wsId).then((md) => download(`board-${app.workspaces.find((w) => w.id === wsId)?.name ?? wsId}.md`, md, 'text/markdown;charset=utf-8'))}>{t('导出')}</Button>
           <Button icon="upload" onClick={() => setDialog('import')}>{t('导入')}</Button>
           <Button icon="gear" title={t('自动记录、识别用的模型和思考强度')} onClick={() => setDialog('settings')}>{t('设置')}</Button>
           <Button variant="primary" icon="plus" onClick={() => setDialog('new')}>{t('新建')}</Button>
@@ -263,7 +277,7 @@ function NewItemDialog({ wsId, kind: initial, onClose, onCreated }: { wsId: stri
   };
   return (
     <Modal title={t('新建看板条目')} width={520} onClose={onClose}
-      footer={<><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!title.trim()} onClick={() => void create()}>{t('新建')}</Button></>}>
+      footer={<><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!title.trim()} onClick={() => create()}>{t('新建')}</Button></>}>
       <div className="col" style={{ gap: 12 }}>
         <Seg value={kind} onChange={setKind} items={(['feature', 'issue', 'note'] as BoardKind[]).map((k) => ({ value: k, label: t(KIND_LABEL[k]) }))} />
         <Field label={t('标题')}><input className="input" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
@@ -316,8 +330,8 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
     <Modal title={t('导入到看板')} sub={step === 'preview' ? t('Claude 整理好了，确认后才写入') : t('Claude 读取来源，整理成条目，并和看板上已有的条目查重')} width={step === 'preview' ? 980 : 600} onClose={onClose}
       footLeft={step === 'preview' ? <span className="hint">{t('将新建 {c} 条，合并 {m} 条，跳过 {s} 条', { c: nCreate, m: rows.length - nCreate - nSkip, s: nSkip })}</span> : undefined}
       footer={step === 'preview'
-        ? <><Button onClick={() => setStep('source')}>{t('返回')}</Button><Button variant="primary" disabled={nCreate + (rows.length - nCreate - nSkip) === 0} onClick={() => void apply()}>{t('导入')}</Button></>
-        : <><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!ready || step === 'working'} onClick={() => void run()}>{t('读取并整理')}</Button></>}>
+        ? <><Button onClick={() => setStep('source')}>{t('返回')}</Button><Button variant="primary" disabled={nCreate + (rows.length - nCreate - nSkip) === 0} onClick={() => apply()}>{t('导入')}</Button></>
+        : <><Button onClick={onClose}>{t('取消')}</Button><Button variant="primary" disabled={!ready || step === 'working'} onClick={() => run()}>{t('读取并整理')}</Button></>}>
       {step === 'source' && (
         <div className="col" style={{ gap: 12 }}>
           <Seg value={source} onChange={setSource} items={[

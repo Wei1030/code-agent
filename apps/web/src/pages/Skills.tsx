@@ -4,6 +4,7 @@ import type { CommandFile, PluginInfo, SkillInfo } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Modal, Seg, Select, Status, Tabs, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
+import { useWorkspaceChoice } from '../components/NoWorkspace';
 import { api } from '../api';
 import { BUILTIN_COMMANDS } from '../lib/catalog';
 import { cx, uid } from '../lib/util';
@@ -33,7 +34,7 @@ function invocableOf(fm: Record<string, string>): SkillInfo['invocable'] {
 export function Skills() {
   const t = useT();
   const app = useApp();
-  const [wsId, setWsId] = useState(app.currentWorkspaceId || app.workspaces[0]?.id || '');
+  const [wsId, setWsId] = useWorkspaceChoice();
   const [tab, setTab] = useState<'skills' | 'commands' | 'plugins'>('skills');
   const ws = app.workspaces.find((w) => w.id === wsId);
   const skills = app.skills.filter((s) => s.source !== 'workspace' || s.workspaceId === wsId);
@@ -48,8 +49,14 @@ export function Skills() {
         <div className="page-title"><h1>{t('技能、命令与插件')}</h1></div>
         <p className="page-sub">{t('技能是写在 SKILL.md 里的做事方法，Claude 需要时自动使用，也可以用 / 命令调用；命令是可复用的提示词；插件把技能、命令、钩子和 MCP 服务器打包在一个文件夹里。')}</p>
         <div className="row" style={{ marginBottom: 12 }}>
-          <span className="ink2">{t('查看工作区')}</span>
-          <Select value={wsId} onChange={setWsId} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+          {wsId ? (
+            <>
+              <span className="ink2">{t('查看工作区')}</span>
+              <Select value={wsId} onChange={setWsId} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+            </>
+          ) : (
+            <span className="hint">{t('还没有工作区：这里只列出所有工作区通用的技能、命令和插件。')} <a className="link" onClick={() => app.set({ folderPickerOpen: true })}>{t('打开文件夹…')}</a></span>
+          )}
         </div>
         <Tabs value={tab} onChange={setTab} items={[
           { value: 'skills', label: t('技能'), count: skills.length },
@@ -157,7 +164,7 @@ function SkillEditor({ skill, wsId }: { skill: SkillInfo; wsId: string }) {
           <div className="row">
             <span className="grow" />
             <Button size="sm" icon="refresh" disabled={dirty || live === 0} title={dirty ? t('先保存') : undefined}
-              onClick={() => void api.reloadInSessions('skills', skill.source === 'workspace' ? wsId : undefined).then((n) => app.toast(t('已在 {n} 个运行中的会话里重新加载技能', { n }), 'good'))}>{t('在运行中的会话里重新加载（{n}）', { n: live })}</Button>
+              onClick={() => api.reloadInSessions('skills', skill.source === 'workspace' ? wsId : undefined).then((n) => app.toast(t('已在 {n} 个运行中的会话里重新加载技能', { n }), 'good'))}>{t('在运行中的会话里重新加载（{n}）', { n: live })}</Button>
             <Button size="sm" onClick={() => setText(skill.content)} disabled={!dirty}>{t('还原')}</Button>
             <Button size="sm" variant="primary" disabled={!dirty || problems.length > 0} onClick={save}>{t('保存')}</Button>
           </div>
@@ -172,7 +179,7 @@ function NewFileDialog({ kind, wsId, wsName, onClose }: { kind: 'skill' | 'comma
   const app = useApp();
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
-  const [where, setWhere] = useState<'workspace' | 'global'>('workspace');
+  const [where, setWhere] = useState<'workspace' | 'global'>(wsId ? 'workspace' : 'global');
   const taken = kind === 'skill' ? app.skills.some((s) => s.name === name) : app.commandFiles.some((c) => c.name === name);
   const valid = /^[a-z0-9-]+$/.test(name) && !taken && desc.trim().length > 0;
   const base = where === 'workspace' ? '.claude' : '~/.claude';
@@ -199,7 +206,7 @@ function NewFileDialog({ kind, wsId, wsName, onClose }: { kind: 'skill' | 'comma
           <input className="input" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={kind === 'skill' ? t('为接口生成 API 文档。新增或修改接口时使用。') : t('根据昨天的提交写站会摘要')} />
         </Field>
         <Field label={t('保存位置')}>
-          <Seg value={where} onChange={setWhere} items={[{ value: 'workspace', label: t('{w}（随仓库）', { w: wsName }) }, { value: 'global', label: t('所有工作区') }]} />
+          <Seg value={where} onChange={setWhere} items={[{ value: 'workspace', label: wsId ? t('{w}（随仓库）', { w: wsName }) : t('这个工作区（还没有工作区）'), disabled: !wsId }, { value: 'global', label: t('所有工作区') }]} />
         </Field>
         <div className="hint mono">{path}</div>
       </div>
@@ -289,7 +296,7 @@ function PluginsTab() {
     title: t('在运行中的会话里重新加载插件？'),
     body: t('{n} 个运行中的会话会重新加载插件。插件里的技能和工具有变化时，这些会话的提示缓存会失效，下一轮会多消耗一些 token。', { n: live }),
     confirmLabel: t('重新加载'),
-    onConfirm: () => void api.reloadInSessions('plugins').then((n) => app.toast(t('已在 {n} 个会话里重新加载插件', { n }), 'good')),
+    onConfirm: () => api.reloadInSessions('plugins').then((n) => app.toast(t('已在 {n} 个会话里重新加载插件', { n }), 'good')),
   });
 
   return (

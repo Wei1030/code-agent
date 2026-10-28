@@ -77,7 +77,7 @@ export function FolderPicker() {
       sub={t('浏览的是运行 Code Agent 服务的这台机器上的文件夹。')}
       onClose={close}
       width={560}
-      footer={<><Button onClick={close}>{t('取消')}</Button><Button variant="primary" disabled={!path || busy} onClick={() => void add()}>{t('添加为工作区')}</Button></>}
+      footer={<><Button onClick={close}>{t('取消')}</Button><Button variant="primary" disabled={!path || busy} onClick={() => add()}>{t('添加为工作区')}</Button></>}
     >
       <div className="folder-tree">{children[''] ? render(children[''], '', 0) : <div className="hint"><span className="spinner" /> {t('正在读取…')}</div>}</div>
       <div className="field">

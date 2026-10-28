@@ -44,11 +44,27 @@ export function AppShell() {
         )}
         {booted ? <Outlet /> : <div className="boot"><span className="spinner" />{t('正在连接 Code Agent 服务…')}</div>}
       </main>
+      <TopProgress />
       <ConfirmHost />
       <Toasts />
       <FolderPicker />
     </div>
   );
+}
+
+/** A thin bar at the top while a server call the user waits for takes longer than 300 ms. */
+function TopProgress() {
+  const busy = useApp((s) => s.busy > 0);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!busy) {
+      setShown(false);
+      return;
+    }
+    const timer = setTimeout(() => setShown(true), 300);
+    return () => clearTimeout(timer);
+  }, [busy]);
+  return shown ? <div className="top-progress" role="progressbar" aria-label="正在处理" /> : null;
 }
 
 /** 看板 in the left rail, with the selected workspace's count of items waiting for confirmation. */

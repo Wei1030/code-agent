@@ -47,7 +47,7 @@ export function SessionPage() {
       </div>
     );
   }
-  if (!rt) return <div className="session-layout"><SessionColumn current={sum} /><div className="scenter" /></div>;
+  if (!rt) return <div className="session-layout"><SessionColumn current={sum} /><div className="scenter"><div className="loading-block"><span className="spinner" />{t('正在载入会话…')}</div></div></div>;
 
   const onFork = async (userId: string) => {
     const msg = rt.items.find((x) => x.id === userId);

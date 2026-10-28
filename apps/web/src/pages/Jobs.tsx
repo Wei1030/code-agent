@@ -9,6 +9,7 @@ import { api } from '../api';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Seg, Select, Status, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
+import { NoWorkspace } from '../components/NoWorkspace';
 import { EFFORT_LABEL, MODE_INFO, MODELS } from '../lib/catalog';
 import { NEW_JOB_SCHEMA } from '../lib/catalog';
 import { describeSchedule, fillVars, nextRun, parseCron, promptVars } from '../lib/schedule';
@@ -57,10 +58,11 @@ export function Jobs() {
         <div className="page-title">
           <h1>{t('作业')}</h1>
           <span className="grow" />
-          <Button variant="primary" icon="plus" onClick={create}>{t('新建作业')}</Button>
+          <Button variant="primary" icon="plus" disabled={!app.workspaces.length} title={app.workspaces.length ? undefined : t('作业在工作区里运行，先添加一个工作区')} onClick={create}>{t('新建作业')}</Button>
         </div>
         <p className="page-sub">{t('作业是可以反复运行的任务：Claude 照常读文件、跑命令，但最后必须交出符合你定义的结构的 JSON。可以手动运行，也可以定时运行；每次运行都是一个普通会话，可以打开继续追问。')}</p>
 
+        {!app.workspaces.length && !app.jobs.length ? <NoWorkspace text={t('作业在某个工作区里运行（读文件、跑命令）。添加一个工作区后就能新建作业。')} /> : (
         <div className="jobs-layout">
           <div className="ext-list">
             {app.jobs.map((j) => {
@@ -82,6 +84,7 @@ export function Jobs() {
           {job ? <JobEditor key={job.id} job={job} onDeleted={() => setSelId('')} onDuplicated={setSelId} /> : <div />}
           {job ? <RunPanel key={`run-${job.id}`} job={job} /> : <div />}
         </div>
+        )}
       </div>
     </div>
   );
@@ -122,8 +125,9 @@ function JobEditor({ job, onDeleted, onDuplicated }: { job: JobTemplate; onDelet
       <div className="panel-body col" style={{ gap: 14 }}>
         <div className="form-grid">
           <Field label={t('名称')}><input className="input" value={d.name} onChange={(e) => set({ name: e.target.value })} /></Field>
-          <Field label={t('工作区')}>
-            <Select value={d.workspaceId} onChange={(v) => set({ workspaceId: v })} icon="folder" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+          <Field label={t('工作区')} hint={app.workspaces.some((w) => w.id === d.workspaceId) ? undefined : t('原来的工作区已经移除，选一个新的才能运行')}>
+            <Select value={d.workspaceId} onChange={(v) => set({ workspaceId: v })} icon="folder" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))}
+              renderValue={(o) => o?.label ?? t('（未选择）')} />
           </Field>
         </div>
 
@@ -248,7 +252,7 @@ function RunPanel({ job }: { job: JobTemplate }) {
           <div className="banner-warn">
             <Icon name="warning" size={16} />
             <div className="grow">{t('有 {n} 次定时运行因为 Code Agent 服务没有运行而错过。', { n: job.missedRuns ?? 0 })}</div>
-            <Button size="sm" onClick={() => void api.catchUpJob(job.id).then(setSelId)}>{t('补跑一次')}</Button>
+            <Button size="sm" onClick={() => api.catchUpJob(job.id).then(setSelId)}>{t('补跑一次')}</Button>
             <Button size="sm" variant="ghost" onClick={() => app.set({ jobs: app.jobs.map((j) => (j.id === job.id ? { ...j, missedRuns: 0 } : j)) })}>{t('忽略')}</Button>
           </div>
         )}
@@ -258,7 +262,7 @@ function RunPanel({ job }: { job: JobTemplate }) {
         ))}
         <div className="row">
           <span className="hint grow truncate" title={fillVars(job.prompt, values)}>{fillVars(job.prompt, values) || t('（提示词为空）')}</span>
-          <Button variant="primary" icon="play" disabled={missing || !job.prompt.trim()} onClick={() => void api.runJob(job.id, values, 'manual').then(setSelId)}>{t('运行作业')}</Button>
+          <Button variant="primary" icon="play" disabled={missing || !job.prompt.trim() || !app.workspaces.some((w) => w.id === job.workspaceId)} onClick={() => api.runJob(job.id, values, 'manual').then(setSelId)}>{t('运行作业')}</Button>
         </div>
 
         <div className="divider-line" />

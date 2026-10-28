@@ -143,7 +143,7 @@ function BackgroundTab({ rt }: { rt: SessionRuntime }) {
             </div>
             {b.summary && <div className="sum">{b.summary}</div>}
             <div className="row" style={{ marginTop: 6 }}>
-              <Button size="sm" variant="ghost" icon="eye" onClick={() => void api.taskOutput(rt.id, b.id).then((text) => setOutput({ name: b.name, text }))}>{t('查看输出')}</Button>
+              <Button size="sm" variant="ghost" icon="eye" onClick={() => api.taskOutput(rt.id, b.id).then((text) => setOutput({ name: b.name, text }))}>{t('查看输出')}</Button>
               {b.status === 'running' && <Button size="sm" variant="danger-outline" icon="stop" onClick={() => api.stopTask(rt.id, b.id)}>{t('停止')}</Button>}
             </div>
           </div>

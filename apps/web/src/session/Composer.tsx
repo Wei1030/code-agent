@@ -91,13 +91,13 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   }, [text]);
 
   // ------------------------------------------------------------ palette data
-  const [tree, setTree] = useState<FsNode[]>([]);
+  const [tree, setTree] = useState<FsNode[] | null>(null);
   const [sdkCommands, setSdkCommands] = useState<CommandInfo[]>([]);
   const paletteKind = palette?.kind;
   useEffect(() => {
     if (paletteKind !== 'mention') return;
     let live = true;
-    void api.listFiles(workspaceId).then((t) => live && setTree(t));
+    void api.listFiles(workspaceId).then((t) => live && setTree(t)).catch(() => live && setTree([]));
     return () => { live = false; };
   }, [paletteKind, workspaceId]);
   useEffect(() => {
@@ -106,7 +106,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
     void api.listCommands(sid).then((c) => live && setSdkCommands(c));
     return () => { live = false; };
   }, [paletteKind, sid]);
-  const allPaths = useMemo(() => flatten(tree), [tree]);
+  const allPaths = useMemo(() => flatten(tree ?? []), [tree]);
   // Built-in commands, then skills you can invoke, command files and MCP prompts for this workspace.
   const allCommands = useMemo<CommandInfo[]>(() => {
     const inWs = <T extends { source: string; workspaceId?: string }>(x: T) => x.source !== 'workspace' || x.workspaceId === workspaceId;
@@ -135,7 +135,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
       // Browse: list the directory typed so far, filtered by the last segment.
       const dirPath = slash >= 0 ? q.slice(0, slash).split('/').filter(Boolean) : [];
       const leaf = slash >= 0 ? q.slice(slash + 1).toLowerCase() : '';
-      return listDir(tree, dirPath)
+      return listDir(tree ?? [], dirPath)
         .filter((n) => n.name.toLowerCase().includes(leaf))
         .map((n) => ({ path: [...dirPath, n.name].join('/') + (n.dir ? '/' : ''), name: n.name, dir: !!n.dir }));
     }
@@ -358,7 +358,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
         <div className="c-right">
           {running ? (
             <>
-              <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => void api.interrupt(sid).then((q) => onInterrupt(q.length))}>{t('中断')}</Button>
+              <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => api.interrupt(sid).then((q) => onInterrupt(q.length))}>{t('中断')}</Button>
               <span className="split">
                 <Button size="sm" variant="primary" icon="queue" disabled={!canSend} onClick={() => doSend()}>{t('排队')}</Button>
                 <MenuButton icon="chevDown" variant="primary" size="sm" placement="top-end" width={300} items={[
@@ -420,7 +420,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
               </span>
               <span>{palette.query && !palette.query.includes('/') ? t('搜索结果') : t('当前目录')}</span>
             </div>
-            {mentionItems.length === 0 && <div className="pi muted">{t('没有匹配的文件')}</div>}
+            {mentionItems.length === 0 && <div className="pi muted">{tree === null ? <><span className="spinner" /> {t('正在读取工作区文件…')}</> : t('没有匹配的文件')}</div>}
             {crumbs.length > 0 && (
               <div className="pi" onMouseDown={(e) => { e.preventDefault(); replaceToken(crumbs.length > 1 ? `@${crumbs.slice(0, -1).join('/')}/` : '@', true); }}>
                 <Icon name="chevLeft" size={15} className="muted" /><span className="h">{t('上一级')}</span>

@@ -207,6 +207,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   lives.set(sid, l);
   patchSummary(sid, { live: true, draft: false, waiting: false, lastActive: Date.now() });
   emit(sid, { t: 'settings', patch: { readOnly: false } });
+  emit(sid, { t: 'status', status: { kind: 'working', label: '正在启动 Claude Code…' } });
   emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] Claude Code 启动中（${so.resume ? '恢复会话' : '新会话'}，工作目录 ${opts.cwd}）` });
   void pump(l).finally(() => endedResolve());
   l.ready = q.initializationResult().then((init) => {
@@ -217,6 +218,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
     emit(sid, { t: 'stderr', line: `初始化失败：${e instanceof Error ? e.message : String(e)}` });
   });
   await l.ready;
+  if (!l.turn && rt(sid)?.status?.kind === 'working') emit(sid, { t: 'status', status: null });
 }
 
 async function pump(l: Live) {

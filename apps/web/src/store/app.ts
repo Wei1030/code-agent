@@ -23,7 +23,7 @@ export interface ConfirmRequest {
   danger?: boolean;
   /** When set, the user must type this word to enable the confirm button. */
   typeToConfirm?: string;
-  onConfirm: () => void;
+  onConfirm: () => unknown;
 }
 
 export type InspectorTab = 'tasks' | 'background' | 'changes' | 'checkpoints' | 'context' | 'events';
@@ -70,6 +70,8 @@ interface AppState {
   usage: UsageData;
   connection: 'online' | 'offline' | 'restored';
   reconnectAttempt: number;
+  /** Server calls in flight that the user is waiting for (drives the top progress bar). */
+  busy: number;
   toasts: Toast[];
   confirm: ConfirmRequest | null;
   inspector: { open: boolean; width: number; tab: InspectorTab; eventsSub: 'events' | 'stderr' | 'hooks' };
@@ -142,6 +144,7 @@ export const useApp = create<AppState>((set, get) => ({
   usage: { fiveHour: null, weekly: null, checkedAt: null, days: {} },
   connection: 'online',
   reconnectAttempt: 0,
+  busy: 0,
   toasts: [],
   confirm: null,
   inspector: { open: true, width: 340, tab: 'tasks', eventsSub: 'events' },

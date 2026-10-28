@@ -8,6 +8,7 @@ import type { PermissionRule } from '../../api/types';
 import { Icon } from '../../components/Icon';
 import { Button, Chip, Seg, Select } from '../../components/ui';
 import { useApp } from '../../store/app';
+import { NoWorkspace, useWorkspaceChoice } from '../../components/NoWorkspace';
 import { buildRule, describeRule, evaluate, type RuleKind } from '../../lib/rules';
 import { uid } from '../../lib/util';
 import { useT } from '../../lib/i18n';
@@ -41,7 +42,7 @@ export function Permissions() {
   const t = useT();
   const app = useApp();
   const [scope, setScope] = useState<'global' | 'workspace'>('global');
-  const [wsId, setWsId] = useState(app.currentWorkspaceId || app.workspaces[0]?.id || '');
+  const [wsId, setWsId] = useWorkspaceChoice();
   const ws = app.workspaces.find((w) => w.id === wsId);
 
   const own = app.rules.filter((r) => (scope === 'global' ? r.scope === 'global' : r.scope === 'workspace' && r.workspaceId === wsId));
@@ -71,12 +72,13 @@ export function Permissions() {
 
       <div className="row" style={{ marginBottom: 12 }}>
         <Seg value={scope} onChange={setScope} items={[{ value: 'global', label: t('所有工作区') }, { value: 'workspace', label: t('单个工作区') }]} />
-        {scope === 'workspace' && (
+        {scope === 'workspace' && wsId && (
           <Select value={wsId} onChange={setWsId} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
         )}
-        <span className="hint mono" title={t('规则保存的位置')}>{file}</span>
+        {(scope === 'global' || wsId) && <span className="hint mono" title={t('规则保存的位置')}>{file}</span>}
       </div>
 
+      {scope === 'workspace' && !wsId ? <NoWorkspace text={t('单个工作区的规则保存在工作区的 .claude/settings.local.json 里。添加一个工作区后才能设置。')} /> : (
       <div className="rules-grid">
         <div>
           <div className="panel" style={{ marginBottom: 14 }}>
@@ -112,6 +114,7 @@ export function Permissions() {
         <TryIt rules={effective} dirs={scope === 'workspace' && ws ? [ws.path, ...app.dirs.filter((d) => d.scope === 'global' || (d.scope === 'workspace' && d.workspaceId === wsId)).map((d) => d.path)] : null}
           scopeLabel={scope === 'global' ? t('全局规则') : t('全局 + {w} 的规则', { w: ws?.name ?? '' })} />
       </div>
+      )}
     </>
   );
 }

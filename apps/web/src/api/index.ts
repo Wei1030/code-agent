@@ -31,13 +31,20 @@ function sendRaw(data: string) {
   else outbox.push(data);
 }
 
+/** Calls that happen in the background (typing, palettes): no progress bar for them. */
+const QUIET = new Set(['setState', 'markRead', 'listCommands', 'listFiles', 'listDir', 'suggestChecks']);
+
 export function call<T = unknown>(method: string, args: unknown[]): Promise<T> {
   seq += 1;
   const id = seq;
-  return new Promise<T>((res, rej) => {
+  const shown = !QUIET.has(method);
+  if (shown) useApp.setState((s) => ({ busy: s.busy + 1 }));
+  const p = new Promise<T>((res, rej) => {
     waiting.set(id, { res: res as (v: unknown) => void, rej });
     sendRaw(JSON.stringify({ t: 'call', id, method, args }));
   });
+  if (shown) void p.then(() => undefined, () => undefined).finally(() => useApp.setState((s) => ({ busy: Math.max(0, s.busy - 1) })));
+  return p;
 }
 
 function applySlices(patch: Partial<AppSlices>) {

@@ -7,21 +7,39 @@ import { useApp } from '../store/app';
 
 type BtnVariant = 'primary' | 'danger' | 'danger-outline' | 'soft' | 'ghost' | 'default';
 
-export function Button({ children, icon, variant = 'default', size, onClick, disabled, title, className, iconRight, type = 'button', style }: {
-  children?: ReactNode; icon?: string; variant?: BtnVariant; size?: 'sm' | 'lg'; onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+/**
+ * A button. When onClick returns a promise (a call to the server), the button shows a spinner and
+ * stays disabled until it settles, so a slow action never looks like a missed click.
+ */
+export function Button({ children, icon, variant = 'default', size, onClick, disabled, title, className, iconRight, type = 'button', style, loading }: {
+  children?: ReactNode; icon?: string; variant?: BtnVariant; size?: 'sm' | 'lg'; onClick?: (e: React.MouseEvent<HTMLButtonElement>) => unknown;
   disabled?: boolean; title?: string; className?: string; iconRight?: string; type?: 'button' | 'submit'; style?: CSSProperties;
+  /** Show the spinner regardless of onClick (work started elsewhere). */
+  loading?: boolean;
 }) {
+  const [busy, setBusy] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
+  const spinning = loading || busy;
+  const click = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const r = onClick?.(e);
+    if (r && typeof (r as Promise<unknown>).then === 'function') {
+      setBusy(true);
+      (r as Promise<unknown>).then(() => undefined, () => undefined).finally(() => { if (alive.current) setBusy(false); });
+    }
+  };
   return (
     <button
       type={type}
-      className={cx('btn', variant !== 'default' && variant, size, !children && 'icon-only', className)}
-      onClick={onClick}
-      disabled={disabled}
+      className={cx('btn', variant !== 'default' && variant, size, !children && 'icon-only', spinning && 'busy', className)}
+      onClick={click}
+      disabled={disabled || spinning}
+      aria-busy={spinning || undefined}
       title={title}
       aria-label={!children ? title : undefined}
       style={style}
     >
-      {icon && <Icon name={icon} size={size === 'sm' ? 14 : 16} />}
+      {spinning ? <span className="spinner" /> : icon && <Icon name={icon} size={size === 'sm' ? 14 : 16} />}
       {children}
       {iconRight && <Icon name={iconRight} size={14} />}
     </button>
@@ -275,7 +293,10 @@ export function ConfirmHost() {
       footer={
         <>
           <Button onClick={close}>取消</Button>
-          <Button variant={confirm.danger ? 'danger' : 'primary'} disabled={blocked} onClick={() => { close(); confirm.onConfirm(); }}>{confirm.confirmLabel}</Button>
+          <Button variant={confirm.danger ? 'danger' : 'primary'} disabled={blocked} onClick={async () => {
+            // Stay open with a spinner while the confirmed action talks to the server.
+            try { await confirm.onConfirm(); } finally { close(); }
+          }}>{confirm.confirmLabel}</Button>
         </>
       }
     >

@@ -39,7 +39,7 @@ export function RewindDialog({ sid, userId, n, onClose }: { sid: string; userId:
       footer={
         <>
           <Button onClick={onClose}>{t('取消')}</Button>
-          <Button variant="primary" icon="rewind" disabled={!dry?.canRewind} onClick={() => void run()}>{mode === 'fork' ? t('回退并分叉') : t('回退文件')}</Button>
+          <Button variant="primary" icon="rewind" disabled={!dry?.canRewind} onClick={() => run()}>{mode === 'fork' ? t('回退并分叉') : t('回退文件')}</Button>
         </>
       }
     >

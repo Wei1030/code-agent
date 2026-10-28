@@ -7,6 +7,7 @@ import type { McpServer, PermissionRule } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Modal, Seg, Select, Status, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
+import { useWorkspaceChoice } from '../components/NoWorkspace';
 import { api } from '../api';
 import { tokens as fmtTokens } from '../lib/format';
 import { cx, uid } from '../lib/util';
@@ -30,7 +31,7 @@ export function serversFor(all: McpServer[], wsId: string) {
 export function Mcp() {
   const t = useT();
   const app = useApp();
-  const [wsId, setWsId] = useState(app.currentWorkspaceId || app.workspaces[0]?.id || '');
+  const [wsId, setWsId] = useWorkspaceChoice();
   const ws = app.workspaces.find((w) => w.id === wsId);
   const list = serversFor(app.mcp, wsId);
   const [selId, setSelId] = useState(list[0]?.id ?? '');
@@ -52,8 +53,14 @@ export function Mcp() {
         <div className="page-title"><h1>{t('MCP 服务器')}</h1></div>
         <p className="page-sub">{t('MCP 服务器给 Claude 提供额外的工具（GitHub、数据库、浏览器…）。配置保存在 Claude Code 自己的配置里，在终端里用 claude 时同样可用。')}</p>
         <div className="row" style={{ marginBottom: 14 }}>
-          <span className="ink2">{t('查看工作区')}</span>
-          <Select value={wsId} onChange={(v) => { setWsId(v); setSelId(''); }} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+          {wsId ? (
+            <>
+              <span className="ink2">{t('查看工作区')}</span>
+              <Select value={wsId} onChange={(v) => { setWsId(v); setSelId(''); }} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+            </>
+          ) : (
+            <span className="hint">{t('还没有工作区：这里只列出对所有工作区生效的服务器。')} <a className="link" onClick={() => app.set({ folderPickerOpen: true })}>{t('打开文件夹…')}</a></span>
+          )}
           <span className="grow" />
           <Button variant="primary" icon="plus" onClick={() => setEditing('new')}>{t('添加服务器')}</Button>
         </div>
@@ -72,7 +79,7 @@ export function Mcp() {
                 ))}
               </div>
             ))}
-            {list.length === 0 && <div className="empty">{t('这个工作区还没有 MCP 服务器')}</div>}
+            {list.length === 0 && <div className="empty">{wsId ? t('这个工作区还没有 MCP 服务器') : t('还没有 MCP 服务器')}</div>}
           </div>
 
           {sel ? <ServerDetail s={sel} wsId={wsId} wsName={ws?.name ?? ''} onEdit={() => setEditing(sel)} onRemoved={() => setSelId('')} /> : <div />}
@@ -112,7 +119,7 @@ function ServerDetail({ s, wsId, wsName, onEdit, onRemoved }: { s: McpServer; ws
         <Chip>{s.type}</Chip>
         <Status tone={STATUS[s.status].tone}>{t(STATUS[s.status].label)}{s.version ? ` · ${s.version}` : ''}</Status>
         <span className="grow" />
-        <Button size="sm" icon="refresh" disabled={busy} onClick={() => void reconnect()}>{busy ? t('连接中…') : t('重新连接')}</Button>
+        <Button size="sm" icon="refresh" disabled={busy} onClick={() => reconnect()}>{busy ? t('连接中…') : t('重新连接')}</Button>
         {editable && <Button size="sm" icon="pencil" onClick={onEdit}>{t('编辑')}</Button>}
         {editable && (
           <Button size="sm" icon="trash" variant="danger-outline" onClick={() => app.ask({
@@ -172,7 +179,7 @@ function ServerDetail({ s, wsId, wsName, onEdit, onRemoved }: { s: McpServer; ws
                 <div key={x.id} className="row">
                   <Toggle on={on} onChange={(v) => patch({ offIn: v ? s.offIn.filter((i) => i !== x.id) : [...s.offIn, x.id] })} />
                   <span className={cx('grow truncate', !on && 'muted')}>{x.title}</span>
-                  <Button size="sm" variant="ghost" icon="refresh" title={t('在这个会话里重新连接')} disabled={!on} onClick={() => void api.reconnectMcpInSession(x.id, s.name).then(() => app.toast(t('已在「{n}」中重新连接 {s}', { n: x.title, s: s.name }), 'good'))} />
+                  <Button size="sm" variant="ghost" icon="refresh" title={t('在这个会话里重新连接')} disabled={!on} onClick={() => api.reconnectMcpInSession(x.id, s.name).then(() => app.toast(t('已在「{n}」中重新连接 {s}', { n: x.title, s: s.name }), 'good'))} />
                 </div>
               );
             })}
@@ -285,7 +292,7 @@ function ServerForm({ server, wsId, wsName, onClose }: { server: McpServer | nul
   const [url, setUrl] = useState(server?.url ?? '');
   const [headers, setHeaders] = useState((server?.headers ?? []).map((h) => `${h.key}: ${h.value}`).join('\n'));
   const [timeout, setTimeoutS] = useState(String(server?.timeout ?? 60));
-  const [scope, setScope] = useState<'global' | 'workspace'>(server?.scope === 'workspace' ? 'workspace' : 'global');
+  const [scope, setScope] = useState<'global' | 'workspace'>(server?.scope === 'workspace' && wsId ? 'workspace' : 'global');
   const nameOk = /^[A-Za-z0-9_-]+$/.test(name) && !app.mcp.some((x) => x.name === name && x.id !== server?.id && (x.scope === 'global' || x.workspaceId === wsId));
   const valid = nameOk && (type === 'stdio' ? !!command.trim() : /^https?:\/\//.test(url.trim()));
 
@@ -331,7 +338,7 @@ function ServerForm({ server, wsId, wsName, onClose }: { server: McpServer | nul
         <div className="form-grid">
           <Field label={t('工具超时（秒）')}><input className="input" inputMode="numeric" value={timeout} onChange={(e) => setTimeoutS(e.target.value.replace(/\D/g, ''))} /></Field>
           <Field label={t('适用范围')}>
-            <Seg value={scope} onChange={setScope} items={[{ value: 'global', label: t('所有工作区') }, { value: 'workspace', label: t('{w}（仅本机）', { w: wsName }) }]} />
+            <Seg value={scope} onChange={setScope} items={[{ value: 'global', label: t('所有工作区') }, { value: 'workspace', label: wsId ? t('{w}（仅本机）', { w: wsName }) : t('这个工作区（还没有工作区）'), disabled: !wsId }]} />
           </Field>
         </div>
       </div>

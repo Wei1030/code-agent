@@ -81,7 +81,7 @@ export function Hooks() {
                 </div>
                 <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
                   <Chip tone={ACTION_TONE[r.action]}>{t(actionLabel(r.event, r.action))}</Chip>
-                  <span className="hint">{r.scope === 'global' ? t('所有工作区') : app.workspaces.find((w) => w.id === r.workspaceId)?.name}</span>
+                  <span className="hint">{r.scope === 'global' ? t('所有工作区') : app.workspaces.find((w) => w.id === r.workspaceId)?.name ?? t('（已移除的工作区）')}</span>
                 </div>
               </div>
             ))}
