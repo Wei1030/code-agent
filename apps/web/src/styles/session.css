@@ -25,13 +25,16 @@
 .shead .title .edit { color: var(--muted); cursor: pointer; }
 .shead .title .edit:hover { color: var(--accent); }
 .shead .meta { color: var(--muted); font-size: 11.5px; }
-/* The conversation sits in a sunken well so it reads as the main area at a glance. */
+/*
+ * The conversation sits in a bordered, sunken well so it reads as the main area at a glance.
+ * It has the same width as the composer below it: the column minus 2 × 24 px, at most 1600 px.
+ */
 .transcript {
-  flex: 1; overflow: auto; margin: 14px 24px 12px; padding: 18px 20px 14px;
-  min-height: 180px; background: #e9ecf1; border: 1px solid var(--border-strong); border-radius: 14px;
+  flex: 1; overflow: auto; align-self: center; width: calc(100% - 48px); max-width: 1600px; margin: 14px 0 12px;
+  padding: 18px 20px 14px; min-height: 180px; border: 1px solid var(--border-strong); border-radius: 14px;
   box-shadow: inset 0 2px 8px rgba(15, 23, 42, 0.12), inset 0 1px 2px rgba(15, 23, 42, 0.08);
 }
-.transcript-inner { max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.transcript-inner { display: flex; flex-direction: column; gap: 12px; }
 .dock { flex: 0 1 auto; min-height: 0; overflow: auto; padding: 0 24px 14px; }
 .dock-inner { max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
 
