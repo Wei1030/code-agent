@@ -158,68 +158,81 @@ export const SERVER_FOLDERS: FsNode[] = [
   { name: 'C:\\', dir: true, children: [{ name: 'Users', dir: true, children: [{ name: 'maowe', dir: true }] }] },
 ];
 
+/** Built-in tools a profile can switch on or off. WebSearch is left out: it only works with Claude models. */
+export const BUILTIN_TOOLS: Array<{ name: string; label: string; desc: string }> = [
+  { name: 'Read', label: '读取文件', desc: '查看文件内容' },
+  { name: 'Glob', label: '按名称找文件', desc: '例如找出所有 *.test.ts' },
+  { name: 'Grep', label: '搜索文件内容', desc: '在代码里搜索文字' },
+  { name: 'Edit', label: '修改文件', desc: '在现有文件里做局部修改' },
+  { name: 'Write', label: '新建或覆盖文件', desc: '' },
+  { name: 'NotebookEdit', label: '编辑 Jupyter 笔记本', desc: '' },
+  { name: 'Bash', label: '运行命令', desc: '在终端里执行 Bash 命令' },
+  { name: 'PowerShell', label: '运行 PowerShell 命令', desc: '仅 Windows' },
+  { name: 'WebFetch', label: '抓取网页', desc: '读取指定网址的内容' },
+  { name: 'Agent', label: '子代理', desc: '把任务交给子代理并行处理' },
+  { name: 'TaskCreate', label: '任务清单', desc: '把多步骤工作拆成任务并跟踪进度' },
+  { name: 'AskUserQuestion', label: '向你提问', desc: '有选择时停下来问你' },
+  { name: 'Skill', label: '技能', desc: '调用已安装的技能' },
+];
+
+const ALL_TOOLS = BUILTIN_TOOLS.map((t) => t.name);
+
 export const PROFILES: Profile[] = [
   {
     id: 'p-default', name: '默认', desc: '新会话使用', isDefault: true, allowBypass: false,
-    model: 'opus', fallback: 'sonnet', effort: 'high', thinking: 'adaptive', mode: 'default', prompts: 'host',
-    allowed: ['Read', 'Grep', 'Glob', 'Bash(npm test *)'], blocked: ['Bash(rm -rf *)', 'WebFetch(domain:pastebin.com)'],
-    maxTurns: '50', toolsPreset: 'claude_code', taskTools: true, questionPreviews: true,
-    sources: { user: true, project: true, local: true }, promptMode: 'append',
-    promptText: '尽量小步提交。先跑最小范围的测试。', responseLanguage: 'ui',
-    features: { checkpoints: true, suggestions: true, subagentText: true, progressSummaries: true, hookEvents: true, persist: true, verbatim: false },
+    model: 'opus', effort: 'max', thinking: 'adaptive', mode: 'default', prompts: 'host',
+    tools: ALL_TOOLS, questionPreviews: true,
+    sources: { user: true, project: true, local: true }, promptMode: 'append', promptText: '', responseLanguage: 'ui',
+    features: { checkpoints: true, subagentText: true, progressSummaries: true, hookEvents: true, persist: true, verbatim: false },
   },
   {
-    id: 'p-review', name: '评审', desc: '只读，不能用 Bash', allowBypass: false,
-    model: 'opus', fallback: 'sonnet', effort: 'high', thinking: 'adaptive', mode: 'plan', prompts: 'host',
-    allowed: ['Read', 'Grep', 'Glob'], blocked: ['Bash', 'Edit', 'Write'],
-    maxTurns: '30', toolsPreset: 'custom', taskTools: true, questionPreviews: false,
-    sources: { user: true, project: true, local: false }, promptMode: 'preset', promptText: '', responseLanguage: 'ui',
-    features: { checkpoints: false, suggestions: true, subagentText: true, progressSummaries: true, hookEvents: false, persist: true, verbatim: false },
+    id: 'p-review', name: '评审', desc: '只读，不能改文件和运行命令', allowBypass: false,
+    model: 'opus', effort: 'max', thinking: 'adaptive', mode: 'plan', prompts: 'host',
+    tools: ['Read', 'Glob', 'Grep', 'Agent', 'TaskCreate', 'AskUserQuestion', 'Skill'], questionPreviews: false,
+    sources: { user: true, project: true, local: false }, promptMode: 'append', promptText: '', responseLanguage: 'ui',
+    features: { checkpoints: false, subagentText: true, progressSummaries: true, hookEvents: false, persist: true, verbatim: false },
   },
   {
-    id: 'p-ci', name: '无人值守 CI', desc: '不询问 · 一律拒绝', allowBypass: false,
-    model: 'sonnet', fallback: 'haiku', effort: 'medium', thinking: 'off', mode: 'dontAsk', prompts: 'none',
-    allowed: ['Read', 'Grep', 'Glob', 'Bash(npm test *)', 'Bash(npm run lint *)'], blocked: [],
-    maxTurns: '80', toolsPreset: 'claude_code', taskTools: false, questionPreviews: false,
-    sources: { user: false, project: true, local: false }, promptMode: 'preset', promptText: '', responseLanguage: 'conversation',
-    features: { checkpoints: false, suggestions: false, subagentText: false, progressSummaries: false, hookEvents: true, persist: true, verbatim: true },
+    id: 'p-ci', name: '无人值守', desc: '不询问 · 未授权的一律拒绝', allowBypass: false,
+    model: 'sonnet', effort: 'max', thinking: 'off', mode: 'dontAsk', prompts: 'none',
+    tools: ALL_TOOLS.filter((t) => t !== 'AskUserQuestion'), questionPreviews: false,
+    sources: { user: false, project: true, local: false }, promptMode: 'append', promptText: '', responseLanguage: 'conversation',
+    features: { checkpoints: false, subagentText: false, progressSummaries: false, hookEvents: true, persist: true, verbatim: true },
   },
   {
     id: 'p-exp', name: '实验', desc: '允许跳过权限检查', allowBypass: true,
-    model: 'fable', fallback: 'opus', effort: 'xhigh', thinking: 'adaptive', mode: 'acceptEdits', prompts: 'host',
-    allowed: [], blocked: ['Bash(rm -rf *)'],
-    maxTurns: '', toolsPreset: 'claude_code', taskTools: true, questionPreviews: true,
-    sources: { user: true, project: true, local: true }, promptMode: 'preset', promptText: '', responseLanguage: 'ui',
-    features: { checkpoints: true, suggestions: true, subagentText: true, progressSummaries: true, hookEvents: true, persist: true, verbatim: false },
+    model: 'fable', effort: 'max', thinking: 'adaptive', mode: 'acceptEdits', prompts: 'host',
+    tools: ALL_TOOLS, questionPreviews: true,
+    sources: { user: true, project: true, local: true }, promptMode: 'append', promptText: '', responseLanguage: 'ui',
+    features: { checkpoints: true, subagentText: true, progressSummaries: true, hookEvents: true, persist: true, verbatim: false },
   },
 ];
 
 export const RULES: PermissionRule[] = [
-  { id: 'r1', behavior: 'allow', rule: 'Read', matches: '所有文件读取', source: '配置方案 · 默认' },
-  { id: 'r2', behavior: 'allow', rule: 'Bash(npm test *)', matches: '以「npm test」开头的命令', source: '配置方案 · 默认' },
-  { id: 'r3', behavior: 'allow', rule: 'Bash(git status)', matches: '恰好是「git status」', source: '.claude/settings.local.json' },
-  { id: 'r4', behavior: 'allow', rule: 'Edit(/src/**)', matches: './src 下的编辑', source: '配置方案 · 默认' },
-  { id: 'r5', behavior: 'allow', rule: 'WebFetch(domain:docs.github.com)', matches: '从该域名抓取', source: '~/.claude/settings.json' },
-  { id: 'r6', behavior: 'allow', rule: 'mcp__github__list_*', matches: 'GitHub 的 list 类工具', source: '配置方案 · 默认' },
-  { id: 'r7', behavior: 'allow', rule: 'Agent(Explore)', matches: 'Explore 子代理', source: '配置方案 · 默认' },
-  { id: 'r8', behavior: 'allow', rule: 'Skill(code-review)', matches: 'code-review 技能', source: '.claude/settings.json', locked: true },
-  { id: 'r9', behavior: 'ask', rule: 'Bash(git push *)', matches: '所有 git push', source: '.claude/settings.json' },
-  { id: 'r10', behavior: 'ask', rule: 'mcp__github__merge_pull_request', matches: '合并 PR', source: '配置方案 · 默认' },
-  { id: 'r11', behavior: 'deny', rule: 'Bash(rm -rf *)', matches: '递归强制删除', source: '配置方案 · 默认' },
-  { id: 'r12', behavior: 'deny', rule: 'Edit(//etc/**)', matches: '/etc 下的任何编辑', source: '~/.claude/settings.json' },
-  { id: 'r13', behavior: 'deny', rule: 'WebFetch(domain:pastebin.com)', matches: '从 pastebin 抓取', source: '配置方案 · 默认' },
-  { id: 'r14', behavior: 'deny', rule: 'Read(./.env*)', matches: '读取 .env 文件', source: '.claude/settings.json' },
+  { id: 'r1', behavior: 'allow', rule: 'Bash(npm test *)', scope: 'global' },
+  { id: 'r2', behavior: 'allow', rule: 'WebFetch(domain:docs.github.com)', scope: 'global' },
+  { id: 'r3', behavior: 'ask', rule: 'Bash(git push *)', scope: 'global' },
+  { id: 'r4', behavior: 'deny', rule: 'Bash(rm -rf *)', scope: 'global' },
+  { id: 'r5', behavior: 'deny', rule: 'Edit(//etc/**)', scope: 'global' },
+  { id: 'r6', behavior: 'allow', rule: 'Bash(git status)', scope: 'workspace', workspaceId: 'ws-shop-api' },
+  { id: 'r7', behavior: 'allow', rule: 'Edit(/src/**)', scope: 'workspace', workspaceId: 'ws-shop-api' },
+  { id: 'r8', behavior: 'deny', rule: 'Read(./.env*)', scope: 'repo', workspaceId: 'ws-shop-api' },
+  { id: 'r9', behavior: 'allow', rule: 'Bash(npm run lint *)', scope: 'repo', workspaceId: 'ws-shop-api' },
+  { id: 'r10', behavior: 'allow', rule: 'Bash(npm run build *)', scope: 'workspace', workspaceId: 'ws-shop-web' },
 ];
 
-export const ENV_VARS: EnvVar[] = [
-  { id: 'e1', key: 'API_TIMEOUT_MS', value: '600000', scope: '所有配置方案', note: '单次请求等待时长' },
-  { id: 'e2', key: 'CLAUDE_CODE_MAX_RETRIES', value: '10', scope: '所有配置方案', note: 'API 重试次数' },
-  { id: 'e3', key: 'CLAUDE_CODE_RETRY_WATCHDOG', value: '1', scope: '无人值守 CI', note: '服务中断时持续重试' },
-  { id: 'e4', key: 'CLAUDE_ENABLE_STREAM_WATCHDOG', value: '1', scope: '所有配置方案', note: '中止卡住的流' },
-  { id: 'e5', key: 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', value: '3', scope: '默认', note: '子代理层数' },
-  { id: 'e6', key: 'ENABLE_TOOL_SEARCH', value: 'auto:10', scope: '评审', note: '延迟加载工具定义' },
-  { id: 'e7', key: 'MCP_TIMEOUT', value: '30000', scope: '所有配置方案', note: 'MCP 连接等待' },
+/** Environment variables users commonly set, with Claude Code's built-in default. Nothing is set by default. */
+export const COMMON_ENV: Array<{ key: string; note: string; def: string }> = [
+  { key: 'API_TIMEOUT_MS', note: '每次 API 请求等待响应头的时间（毫秒）', def: '600000（10 分钟）' },
+  { key: 'CLAUDE_CODE_MAX_RETRIES', note: 'API 请求失败后的重试次数', def: '10' },
+  { key: 'BASH_DEFAULT_TIMEOUT_MS', note: '命令默认超时（毫秒）', def: '120000（2 分钟）' },
+  { key: 'BASH_MAX_TIMEOUT_MS', note: 'Claude 能给命令设置的最长超时（毫秒）', def: '600000（10 分钟）' },
+  { key: 'BASH_MAX_OUTPUT_LENGTH', note: '命令输出读回给 Claude 的最大字符数', def: '30000' },
+  { key: 'CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH', note: '子代理最多嵌套几层；1 表示子代理不能再开子代理', def: '3' },
+  { key: 'HTTPS_PROXY', note: '通过代理访问网络', def: '不使用代理' },
 ];
+
+export const ENV_VARS: EnvVar[] = [];
 
 /** Tokens per day for the last 30 days, per model (deterministic). */
 export function usageDays(): Array<{ date: number; opus: number; sonnet: number; haiku: number }> {

@@ -18,48 +18,73 @@ const TABS: Array<{ value: InspectorTab; label: string; icon: string }> = [
   { value: 'events', label: '事件', icon: 'braces' },
 ];
 
+const MIN_W = 280;
+const MAX_W = 900;
+const CENTER_MIN = 560;
+
+/**
+ * The icon rail on the far right is always there. Clicking an icon opens the panel on that tab;
+ * clicking the open tab's icon closes it. The panel's left edge can be dragged to resize it.
+ */
 export function Inspector({ rt, onRewind }: { rt: SessionRuntime; onRewind: (userId: string) => void }) {
   const t = useT();
   const ins = useApp((s) => s.inspector);
   const setInspector = useApp((s) => s.setInspector);
+  const [dragging, setDragging] = useState(false);
   const counts: Partial<Record<InspectorTab, number>> = {
     tasks: rt.tasks.filter((x) => x.status !== 'completed').length || undefined,
     background: rt.background.filter((b) => b.status === 'running').length || undefined,
     changes: rt.changes.length || undefined,
   };
+  const current = TABS.find((x) => x.value === ins.tab) ?? TABS[0];
 
-  if (!ins.open) {
-    return (
-      <aside className="ins-rail" aria-label={t('检查面板（已收起）')}>
-        <Button variant="ghost" icon="chevLeft" title={t('展开右侧面板')} onClick={() => setInspector({ open: true })} />
-        {TABS.map((tb) => (
-          <button key={tb.value} className="ins-rail-btn" title={t(tb.label)} onClick={() => setInspector({ open: true, tab: tb.value })}>
-            <Icon name={tb.icon} size={17} />
-            {counts[tb.value] !== undefined && <span className="badge">{counts[tb.value]}</span>}
-          </button>
-        ))}
-      </aside>
-    );
-  }
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = ins.width;
+    // Keep the conversation column at least CENTER_MIN wide (nav rail + session list + icon rail = 364 px).
+    const max = Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - 364 - CENTER_MIN));
+    setDragging(true);
+    const move = (ev: PointerEvent) => setInspector({ width: Math.round(Math.min(max, Math.max(MIN_W, startW + startX - ev.clientX))) });
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   return (
-    <aside className={cx('inspector', ins.wide && 'wide')}>
-      <div className="ins-head">
-        <span className="lbl">{t('检查面板')}</span>
-        <Button size="sm" variant="ghost" icon={ins.wide ? 'collapse' : 'expand'} title={ins.wide ? t('恢复宽度') : t('加宽')} onClick={() => setInspector({ wide: !ins.wide })} />
-        <Button size="sm" variant="ghost" icon="chevRight" title={t('收起右侧面板')} onClick={() => setInspector({ open: false })} />
-      </div>
-      <Tabs className="ins-tabs" value={ins.tab} onChange={(v) => setInspector({ tab: v })}
-        items={TABS.map((tb) => ({ value: tb.value, label: t(tb.label), count: counts[tb.value] }))} />
-      <div className="ins-body">
-        {ins.tab === 'tasks' && <TasksTab rt={rt} />}
-        {ins.tab === 'background' && <BackgroundTab rt={rt} />}
-        {ins.tab === 'changes' && <ChangesTab rt={rt} />}
-        {ins.tab === 'checkpoints' && <CheckpointsTab rt={rt} onRewind={onRewind} />}
-        {ins.tab === 'context' && <ContextTab rt={rt} />}
-        {ins.tab === 'events' && <EventsTab rt={rt} />}
-      </div>
-    </aside>
+    <div className={cx('ins-wrap', dragging && 'dragging')}>
+      {ins.open && (
+        <aside className="inspector" style={{ width: ins.width }}>
+          <div className="ins-resize" onPointerDown={startResize} onDoubleClick={() => setInspector({ width: 340 })} title={t('拖动调整宽度，双击恢复')} />
+          <div className="ins-head"><Icon name={current.icon} size={15} className="muted" /><b>{t(current.label)}</b></div>
+          <div className="ins-body">
+            {ins.tab === 'tasks' && <TasksTab rt={rt} />}
+            {ins.tab === 'background' && <BackgroundTab rt={rt} />}
+            {ins.tab === 'changes' && <ChangesTab rt={rt} />}
+            {ins.tab === 'checkpoints' && <CheckpointsTab rt={rt} onRewind={onRewind} />}
+            {ins.tab === 'context' && <ContextTab rt={rt} />}
+            {ins.tab === 'events' && <EventsTab rt={rt} />}
+          </div>
+        </aside>
+      )}
+      <nav className="ins-rail" aria-label={t('右侧面板')}>
+        {TABS.map((tb) => {
+          const on = ins.open && ins.tab === tb.value;
+          return (
+            <button key={tb.value} className={cx('ins-rail-btn', on && 'on')} title={on ? t('收起') : t(tb.label)}
+              onClick={() => setInspector(on ? { open: false } : { open: true, tab: tb.value })}>
+              <Icon name={tb.icon} size={17} />
+              <span>{t(tb.label)}</span>
+              {counts[tb.value] !== undefined && <span className="badge">{counts[tb.value]}</span>}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
 

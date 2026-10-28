@@ -218,11 +218,40 @@ export function setMode(sid: string, mode: PermissionMode) {
   raw(sid, 'control_request', `set_permission_mode · ${mode}`, {});
 }
 
-/** End the Claude Code process; the session becomes a saved, read-only session. */
+/** Work that ends when the session's Claude Code process is stopped. */
+export interface RunningWork {
+  turn: boolean;
+  request: boolean;
+  background: string[];
+  queued: number;
+}
+
+export function runningWork(sid: string): RunningWork {
+  const r = rt(sid);
+  if (!r) return { turn: false, request: false, background: [], queued: 0 };
+  return {
+    turn: isRunning(sid) && !r.request,
+    request: !!r.request,
+    background: r.background.filter((b) => b.status === 'running').map((b) => b.name),
+    queued: r.queue.length,
+  };
+}
+
+/** The session to open for a workspace: the most recently active one, if any. */
+export function latestSession(workspaceId: string): string | null {
+  const list = useApp.getState().sessions.filter((s) => s.workspaceId === workspaceId && !s.draft);
+  if (list.length === 0) return null;
+  return list.reduce((a, b) => (b.lastActive > a.lastActive ? b : a)).id;
+}
+
+/** End the Claude Code process; the session becomes a saved, read-only session. Running work is killed. */
 export function stop(sid: string) {
   cancelRun(sid);
   const r = rt(sid);
   if (r?.request) emit(sid, { t: 'request', request: null });
+  if (r?.background.some((b) => b.status === 'running')) {
+    emit(sid, { t: 'background', background: r.background.map((b) => (b.status === 'running' ? { ...b, status: 'stopped', endedAt: Date.now() } : b)) });
+  }
   emit(sid, { t: 'settings', patch: { readOnly: true } });
   emit(sid, { t: 'state', state: 'idle' });
   emit(sid, { t: 'queue', queue: [] });
@@ -446,15 +475,6 @@ export function retryBanner(sid: string, itemId: string) {
   emit(sid, { t: 'item.patch', id: itemId, patch: { resolved: true } });
 }
 
-/** Continue after "max turns": a short continuation run. */
-export function continueAfterLimit(sid: string, itemId: string) {
-  retryBanner(sid, itemId);
-  void startRun(sid, async (run) => {
-    await streamText(run, '继续未完成的工作：已补齐剩余的两个测试，全部通过。');
-    footer(sid, 3, 20);
-  });
-}
-
 // ------------------------------------------------------------------ boot
 
 let booted = false;
@@ -469,7 +489,7 @@ export function boot() {
   initRaw('s-flaky');
   void startRun('s-flaky', bootFlaky);
 
-  init(emptyRuntime('s-auth', { mode: 'acceptEdits', model: 'sonnet', effort: 'high', turn: 2, tokens: 980_000, context: baseContext('claude-sonnet-5', 81_000),
+  init(emptyRuntime('s-auth', { mode: 'acceptEdits', model: 'sonnet', effort: 'max', turn: 2, tokens: 980_000, context: baseContext('claude-sonnet-5', 81_000),
     items: [
       { kind: 'user', id: 'auth-u1', text: '把鉴权中间件拆成独立模块，并补上测试。', attachments: [], ts: Date.now() - 40 * 60_000 },
       { kind: 'text', id: 'auth-t1', text: '已拆分完成，测试通过。' },

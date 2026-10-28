@@ -153,7 +153,7 @@ export function Usage() {
             <div className="panel-head"><b>{t('订阅限额')}</b><span className="grow" /><span className="hint">{provider.kind === 'subscription' ? `Claude ${provider.plan}` : ''}</span></div>
             <div className="panel-body">
               {provider.kind !== 'subscription' ? (
-                <div className="empty"><b>{t('当前不是订阅登录')}</b>{t('通过 API 或云平台使用时没有 5 小时 / 周限额，用量按 token 计费。')}</div>
+                <div className="empty"><b>{t('当前使用兼容端点')}</b>{t('没有 Claude 订阅的 5 小时 / 每周限额。')}</div>
               ) : (
                 <>
                   <div className="limit">

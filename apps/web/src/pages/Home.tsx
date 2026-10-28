@@ -2,9 +2,8 @@
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Button, Chip } from '../components/ui';
-import { SessionRow } from '../components/SessionRow';
+import { SessionRow, useOpenWorkspace } from '../components/SessionRow';
 import { useApp } from '../store/app';
-import { api } from '../api';
 import { relTime } from '../lib/format';
 import { useT } from '../lib/i18n';
 
@@ -16,10 +15,7 @@ export function Home() {
   const recent = sessions.filter((s) => !s.draft).sort((a, b) => b.lastActive - a.lastActive).slice(0, 8);
   const openPicker = () => useApp.getState().set({ folderPickerOpen: true });
 
-  const startIn = (wsId: string) => {
-    const id = api.createDraft(wsId);
-    nav(`/s/${id}`);
-  };
+  const openWorkspace = useOpenWorkspace();
 
   return (
     <div className="page">
@@ -29,7 +25,7 @@ export function Home() {
           <span className="grow" />
           {workspaces.length > 0 && <Button icon="folder" onClick={openPicker}>{t('打开文件夹…')}</Button>}
         </div>
-        <p className="page-sub">{t('选择一个文件夹作为 Agent 的工作目录，点击卡片即开始新会话。会话按工作区归类。')}</p>
+        <p className="page-sub">{t('选择一个文件夹作为 Agent 的工作目录。点击卡片进入这个工作区最近的会话；还没有会话时新建一个。')}</p>
 
         {workspaces.length === 0 ? (
           <div className="ws-empty">
@@ -46,7 +42,7 @@ export function Home() {
               const live = all.filter((s) => s.live);
               const waiting = live.filter((s) => s.state === 'requires_action').length;
               return (
-                <button key={w.id} className="ws-card" onClick={() => startIn(w.id)} title={t('在 {name} 中开始新会话', { name: w.name })}>
+                <button key={w.id} className="ws-card" onClick={() => openWorkspace(w.id)} title={t('打开 {name} 最近的会话', { name: w.name })}>
                   <div className="ws-card-head">
                     <span className="ws-icon"><Icon name="folder" size={16} /></span>
                     <span className="grow" style={{ minWidth: 0 }}>

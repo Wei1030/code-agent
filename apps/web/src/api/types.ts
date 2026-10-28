@@ -109,7 +109,7 @@ export interface PlanDoc {
 }
 
 export type BannerKind =
-  | 'maxTurns' | 'crash' | 'apiRetry' | 'rateLimit' | 'modelFallback' | 'startupFailure'
+  | 'crash' | 'apiRetry' | 'rateLimit' | 'modelFallback' | 'startupFailure'
   | 'workerShutdown' | 'denials' | 'notLoggedIn';
 
 export type Item =
@@ -152,8 +152,11 @@ export type PendingRequest =
   | { kind: 'question'; id: string; toolItemId: string; questions: Question[]; since: number }
   | { kind: 'plan'; id: string; planItemId: string; since: number };
 
+/** Where "allow and don't ask again" keeps the rule. Maps to the SDK's session / localSettings / userSettings. */
+export type RuleDestination = 'session' | 'workspace' | 'global';
+
 export type ApprovalAnswer =
-  | { behavior: 'allow'; command?: string; remember?: { rule: string; destination: string } }
+  | { behavior: 'allow'; command?: string; remember?: { rule: string; destination: RuleDestination } }
   | { behavior: 'deny'; message?: string; interrupt?: boolean };
 
 export interface QuestionAnswer {
@@ -240,7 +243,6 @@ export interface SessionRuntime {
   context: ContextUsage;
   events: RawEvent[];
   stderr: string[];
-  suggestion: string | null;
   status: TransientStatus | null;
   /** Saved session opened without a running process. */
   readOnly: boolean;
@@ -264,7 +266,6 @@ export type SessionEvent =
   | { t: 'context'; context: ContextUsage }
   | { t: 'raw'; type: string; summary: string; json: unknown }
   | { t: 'stderr'; line: string }
-  | { t: 'suggestion'; text: string | null }
   | { t: 'status'; status: TransientStatus | null }
   | { t: 'settings'; patch: Partial<Pick<SessionRuntime, 'model' | 'effort' | 'mode' | 'readOnly' | 'turn' | 'tokens'>> };
 
@@ -277,16 +278,12 @@ export interface Profile {
   isDefault?: boolean;
   allowBypass: boolean;
   model: string;
-  fallback: string;
   effort: Effort;
   thinking: 'adaptive' | 'budget' | 'off';
   mode: PermissionMode;
   prompts: 'host' | 'none';
-  allowed: string[];
-  blocked: string[];
-  maxTurns: string;
-  toolsPreset: 'claude_code' | 'custom';
-  taskTools: boolean;
+  /** Built-in tools Claude can use; the others are hidden from it (SDK `tools`). */
+  tools: string[];
   questionPreviews: boolean;
   sources: { user: boolean; project: boolean; local: boolean };
   promptMode: 'preset' | 'append' | 'custom' | 'minimal';
@@ -295,22 +292,25 @@ export interface Profile {
   features: Record<string, boolean>;
 }
 
+/**
+ * A permission rule in Claude Code's own settings files:
+ * global = ~/.claude/settings.json, workspace = <workspace>/.claude/settings.local.json (this machine only),
+ * repo = <workspace>/.claude/settings.json (committed with the repository; read-only here).
+ */
 export interface PermissionRule {
   id: string;
   behavior: 'allow' | 'ask' | 'deny';
   rule: string;
-  matches: string;
-  source: string;
-  locked?: boolean;
+  scope: 'global' | 'workspace' | 'repo';
+  workspaceId?: string;
 }
 
-export type ProviderKind = 'subscription' | 'apiKey' | 'bedrock' | 'vertex' | 'foundry' | 'compatible';
+export type ProviderKind = 'subscription' | 'compatible';
 
 export interface EnvVar {
   id: string;
   key: string;
   value: string;
-  scope: string;
   note: string;
 }
 

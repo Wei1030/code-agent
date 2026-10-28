@@ -4,9 +4,10 @@
  * subscription, the user logs in to Claude Code themselves and we only point at its config dir.
  */
 import { useState } from 'react';
-import type { ProviderKind } from '../../api/types';
+import type { EnvVar, ProviderKind } from '../../api/types';
+import { COMMON_ENV } from '../../mock/data';
 import { Icon } from '../../components/Icon';
-import { Button, Chip, Field, Radio, Seg, Status, Toggle } from '../../components/ui';
+import { Button, Chip, Field, Radio, Seg, Select, Status, Toggle } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { cx, uid } from '../../lib/util';
 import { useT } from '../../lib/i18n';
@@ -14,10 +15,6 @@ import { Section } from './SettingsLayout';
 
 const KINDS: Array<{ kind: ProviderKind; icon: string; label: string; desc: string }> = [
   { kind: 'subscription', icon: 'user', label: 'Claude 订阅', desc: '使用你自己登录的 Claude Code' },
-  { kind: 'apiKey', icon: 'key', label: 'Anthropic API', desc: 'API 密钥，按 token 计费' },
-  { kind: 'bedrock', icon: 'box', label: 'Amazon Bedrock', desc: 'AWS 凭证' },
-  { kind: 'vertex', icon: 'box', label: 'Google Cloud Vertex AI', desc: 'GCP 凭证' },
-  { kind: 'foundry', icon: 'box', label: 'Microsoft Foundry', desc: 'Azure 凭证' },
   { kind: 'compatible', icon: 'link', label: '兼容端点', desc: 'Anthropic Messages 兼容的网关或其他模型' },
 ];
 
@@ -26,7 +23,6 @@ export function Provider() {
   const app = useApp();
   const p = app.provider;
   const [checking, setChecking] = useState(false);
-  const [keyDraft, setKeyDraft] = useState('');
   const recheck = () => {
     setChecking(true);
     setTimeout(() => {
@@ -41,7 +37,7 @@ export function Provider() {
     <>
       <h1>{t('模型服务与账号')}</h1>
       <p className="lead">{t('选择 Claude Code 连接哪个模型服务。修改后对新启动的会话生效。')}</p>
-      <div className="provider-cards">
+      <div className="provider-cards" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', maxWidth: 760 }}>
         {KINDS.map((k) => (
           <button key={k.kind} className={cx('provider-card', p.kind === k.kind && 'on')} onClick={() => app.setProvider({ kind: k.kind })}>
             <Radio on={p.kind === k.kind} onChange={() => app.setProvider({ kind: k.kind })} />
@@ -108,50 +104,6 @@ export function Provider() {
         </div>
       )}
 
-      {p.kind === 'apiKey' && (
-        <div className="panel" style={{ marginBottom: 16 }}>
-          <div className="panel-head"><h3>Anthropic API</h3></div>
-          <div className="panel-body form-grid">
-            <Field label={t('API 密钥')} hint={p.apiKeyMasked ? t('已保存：{k}', { k: p.apiKeyMasked }) : t('保存在本机的服务端，不会发到浏览器')}>
-              <div className="row">
-                <input className="input mono grow" type="password" placeholder="sk-ant-…" value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} />
-                <Button disabled={!keyDraft} onClick={() => { app.setProvider({ apiKeyMasked: `${keyDraft.slice(0, 7)}…${keyDraft.slice(-4)}` }); setKeyDraft(''); app.toast(t('已保存密钥'), 'good'); }}>{t('保存')}</Button>
-              </div>
-            </Field>
-            <Field label={t('Base URL（可选）')} hint="ANTHROPIC_BASE_URL"><input className="input mono" placeholder="https://api.anthropic.com" value={p.baseUrl} onChange={(e) => app.setProvider({ baseUrl: e.target.value })} /></Field>
-          </div>
-        </div>
-      )}
-
-      {p.kind === 'bedrock' && (
-        <div className="panel" style={{ marginBottom: 16 }}>
-          <div className="panel-head"><h3>Amazon Bedrock</h3><span className="sub">CLAUDE_CODE_USE_BEDROCK=1</span></div>
-          <div className="panel-body form-grid">
-            <Field label={t('区域')}><input className="input mono" value={p.region} onChange={(e) => app.setProvider({ region: e.target.value })} /></Field>
-            <Field label={t('AWS 配置文件')} hint={t('凭证由 AWS SDK 读取')}><input className="input mono" value={p.awsProfile} onChange={(e) => app.setProvider({ awsProfile: e.target.value })} /></Field>
-          </div>
-        </div>
-      )}
-
-      {p.kind === 'vertex' && (
-        <div className="panel" style={{ marginBottom: 16 }}>
-          <div className="panel-head"><h3>Google Cloud Vertex AI</h3><span className="sub">CLAUDE_CODE_USE_VERTEX=1</span></div>
-          <div className="panel-body form-grid">
-            <Field label={t('项目 ID')}><input className="input mono" value={p.gcpProject} onChange={(e) => app.setProvider({ gcpProject: e.target.value })} /></Field>
-            <Field label={t('区域')}><input className="input mono" value={p.region} onChange={(e) => app.setProvider({ region: e.target.value })} /></Field>
-          </div>
-        </div>
-      )}
-
-      {p.kind === 'foundry' && (
-        <div className="panel" style={{ marginBottom: 16 }}>
-          <div className="panel-head"><h3>Microsoft Foundry</h3><span className="sub">CLAUDE_CODE_USE_FOUNDRY=1</span></div>
-          <div className="panel-body form-grid">
-            <Field label={t('资源名称')}><input className="input mono" value={p.foundryResource} onChange={(e) => app.setProvider({ foundryResource: e.target.value })} /></Field>
-          </div>
-        </div>
-      )}
-
       {p.kind === 'compatible' && (
         <div className="panel" style={{ marginBottom: 16 }}>
           <div className="panel-head"><h3>{t('兼容端点')}</h3><span className="sub">{t('需要实现 Anthropic Messages API')}</span></div>
@@ -183,29 +135,49 @@ function EnvVars() {
   const app = useApp();
   const [k, setK] = useState('');
   const [v, setV] = useState('');
+  const [note, setNote] = useState('');
+  const known = COMMON_ENV.find((c) => c.key === k);
+  const patch = (id: string, p: Partial<EnvVar>) => app.set({ env: app.env.map((x) => (x.id === id ? { ...x, ...p } : x)) });
+  const add = () => {
+    app.set({ env: [...app.env, { id: uid('e'), key: k, value: v, note: note || known?.note || '' }] });
+    setK(''); setV(''); setNote('');
+  };
   return (
     <div className="panel" style={{ marginBottom: 16 }}>
-      <div className="panel-head"><h3>{t('环境变量')}</h3><span className="sub">{t('启动 Claude Code 进程时传入')}</span></div>
-      <div className="panel-body" style={{ padding: 0 }}>
-        <table className="data-table">
-          <thead><tr><th style={{ paddingLeft: 16 }}>{t('变量')}</th><th>{t('值')}</th><th>{t('适用于')}</th><th>{t('说明')}</th><th /></tr></thead>
-          <tbody>
-            {app.env.map((e) => (
-              <tr key={e.id}>
-                <td className="mono" style={{ paddingLeft: 16 }}>{e.key}</td>
-                <td><input className="input sm mono" value={e.value} onChange={(ev) => app.set({ env: app.env.map((x) => (x.id === e.id ? { ...x, value: ev.target.value } : x)) })} /></td>
-                <td className="ink2">{t(e.scope)}</td>
-                <td className="muted">{t(e.note)}</td>
-                <td className="num"><Button size="sm" variant="ghost" icon="trash" title={t('删除')} onClick={() => app.set({ env: app.env.filter((x) => x.id !== e.id) })} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="panel-body row" style={{ borderTop: '1px solid var(--border)' }}>
-        <input className="input sm mono" style={{ width: 280 }} placeholder="NAME" value={k} onChange={(e) => setK(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))} />
-        <input className="input sm mono grow" placeholder={t('值')} value={v} onChange={(e) => setV(e.target.value)} />
-        <Button size="sm" icon="plus" disabled={!k} onClick={() => { app.set({ env: [...app.env, { id: uid('e'), key: k, value: v, scope: '所有配置方案', note: '' }] }); setK(''); setV(''); }}>{t('添加')}</Button>
+      <div className="panel-head"><h3>{t('环境变量')}</h3><span className="sub">{t('启动 Claude Code 进程时传入，对所有会话生效')}</span></div>
+      {app.env.length === 0 ? (
+        <div className="empty">{t('没有设置任何环境变量，Claude Code 使用自己的默认值。')}</div>
+      ) : (
+        <div className="panel-body" style={{ padding: 0 }}>
+          <table className="data-table">
+            <thead><tr><th style={{ paddingLeft: 16, width: 280 }}>{t('变量')}</th><th style={{ width: 200 }}>{t('值')}</th><th>{t('说明')}</th><th /></tr></thead>
+            <tbody>
+              {app.env.map((e) => (
+                <tr key={e.id}>
+                  <td className="mono" style={{ paddingLeft: 16 }}>{e.key}</td>
+                  <td><input className="input sm mono" value={e.value} onChange={(ev) => patch(e.id, { value: ev.target.value })} /></td>
+                  <td><input className="input sm" value={e.note} placeholder={t('写点备注')} onChange={(ev) => patch(e.id, { note: ev.target.value })} /></td>
+                  <td className="num"><Button size="sm" variant="ghost" icon="trash" title={t('删除')} onClick={() => app.set({ env: app.env.filter((x) => x.id !== e.id) })} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="panel-body col" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="row">
+          <Select value="" size="sm" width={420} className="w-240"
+            renderValue={() => <span className="muted">{t('从常用变量中选择…')}</span>}
+            onChange={(key) => { const c = COMMON_ENV.find((x) => x.key === key); setK(key); setNote(c?.note ?? ''); }}
+            options={COMMON_ENV.filter((c) => !app.env.some((e) => e.key === c.key)).map((c) => ({ value: c.key, label: <span className="mono">{c.key}</span>, desc: `${t(c.note)} · ${t('默认 {d}', { d: t(c.def) })}` }))} />
+          <span className="hint">{t('或者直接输入变量名')}</span>
+        </div>
+        <div className="row">
+          <input className="input sm mono" style={{ width: 280 }} placeholder="NAME" value={k} onChange={(e) => setK(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))} />
+          <input className="input sm mono" style={{ width: 200 }} placeholder={known ? t('默认 {d}', { d: t(known.def) }) : t('值')} value={v} onChange={(e) => setV(e.target.value)} />
+          <input className="input sm grow" placeholder={t('说明（可选）')} value={note} onChange={(e) => setNote(e.target.value)} />
+          <Button size="sm" icon="plus" disabled={!k} onClick={add}>{t('添加')}</Button>
+        </div>
       </div>
     </div>
   );
@@ -221,7 +193,7 @@ function Runtime() {
       <div className="panel-head"><h3>{t('运行与遥测')}</h3></div>
       <div className="panel-body">
         <div className="col">
-          <Toggle on={r.debugLog} onChange={(v) => set({ debugLog: v })} label={t('保存调试日志')} hint={t('stderr 写入会话目录，便于排查')} />
+          <Toggle on={r.debugLog} onChange={(v) => set({ debugLog: v })} label={t('保存调试日志')} hint={t('把 Claude Code 的调试输出写入文件，排查问题时再打开')} />
           <Toggle on={r.otel} onChange={(v) => set({ otel: v })} label={t('导出 OpenTelemetry')} hint="CLAUDE_CODE_ENABLE_TELEMETRY=1" />
         </div>
         {r.otel && (

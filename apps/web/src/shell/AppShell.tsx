@@ -10,6 +10,7 @@ import { cx } from '../lib/util';
 import { MockConsole } from './MockConsole';
 import { FolderPicker } from './FolderPicker';
 import { api } from '../api';
+import { useOpenWorkspace } from '../components/SessionRow';
 
 export function AppShell() {
   const t = useT();
@@ -48,7 +49,8 @@ function TopBar() {
   const workspaces = useApp((s) => s.workspaces);
   const current = useApp((s) => s.currentWorkspaceId);
   const provider = useApp((s) => s.provider);
-  const authKind = provider.kind === 'subscription' ? t('Claude 订阅') : provider.kind === 'apiKey' ? 'API Key' : provider.kind === 'compatible' ? t('兼容接口') : t('云厂商');
+  const openWorkspace = useOpenWorkspace();
+  const authKind = provider.kind === 'subscription' ? t('Claude 订阅') : t('兼容端点');
   return (
     <header className="topbar">
       <div className="brand" onClick={() => nav('/')}>
@@ -68,7 +70,7 @@ function TopBar() {
           renderValue={(o) => o?.label}
           onChange={(v) => {
             if (v === '__open') useApp.getState().set({ folderPickerOpen: true });
-            else useApp.getState().set({ currentWorkspaceId: v });
+            else openWorkspace(v);
           }}
         />
       )}
@@ -99,7 +101,7 @@ function SearchBox() {
     const k = q.trim().toLowerCase();
     if (!k) return [];
     const pages = [
-      { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则与沙箱'), to: '/settings/permissions' },
+      { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则'), to: '/settings/permissions' },
       { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
     ].filter((p) => p.label.toLowerCase().includes(k));
     const ss = sessions.filter((s) => !s.draft && (s.title.toLowerCase().includes(k) || s.firstPrompt.toLowerCase().includes(k))).slice(0, 6);

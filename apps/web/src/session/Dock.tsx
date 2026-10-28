@@ -1,6 +1,7 @@
 /** Panels docked above the composer: approval, questions, plan review, read-only bar, queue. */
 import { useEffect, useState } from 'react';
-import type { PendingRequest, QueuedMessage } from '../api/types';
+import type { PendingRequest, QueuedMessage, RuleDestination } from '../api/types';
+import { describeRule } from '../lib/rules';
 import { Icon } from '../components/Icon';
 import { Button, Check, Chip, Radio, Select } from '../components/ui';
 import { api } from '../api';
@@ -18,11 +19,10 @@ function useSince(since: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-const DESTINATIONS = [
-  { value: 'session', label: '仅本会话' },
-  { value: '.claude/settings.local.json', label: '本项目 · 本地设置' },
-  { value: '.claude/settings.json', label: '本项目 · 共享设置' },
-  { value: '~/.claude/settings.json', label: '所有项目 · 用户设置' },
+const DESTINATIONS: Array<{ value: RuleDestination; label: string; desc: string }> = [
+  { value: 'session', label: '仅本会话', desc: '会话结束后失效，不写入文件' },
+  { value: 'workspace', label: '这个工作区', desc: '只在这个工作区生效' },
+  { value: 'global', label: '所有工作区', desc: '对以后所有会话生效' },
 ];
 
 export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingRequest, { kind: 'approval' }> }) {
@@ -31,7 +31,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
   const showRaw = useApp((s) => s.prefs.showRawSdkText);
   const [choice, setChoice] = useState<'once' | 'remember' | 'edit' | 'deny'>(req.defaultToNo ? 'deny' : 'once');
   const [rule, setRule] = useState(req.suggestions[0] ?? '');
-  const [dest, setDest] = useState('.claude/settings.local.json');
+  const [dest, setDest] = useState<RuleDestination>('workspace');
   const [command, setCommand] = useState(req.command ?? '');
   const [message, setMessage] = useState('');
   const [rawOpen, setRawOpen] = useState(showRaw);
@@ -39,7 +39,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
 
   const submit = () => {
     if (choice === 'deny') api.respondApproval(sid, req.id, { behavior: 'deny', message: message.trim() || undefined });
-    else if (choice === 'remember') api.respondApproval(sid, req.id, { behavior: 'allow', remember: { rule, destination: DESTINATIONS.find((d) => d.value === dest)?.label ?? dest } });
+    else if (choice === 'remember') api.respondApproval(sid, req.id, { behavior: 'allow', remember: { rule, destination: dest } });
     else if (choice === 'edit') api.respondApproval(sid, req.id, { behavior: 'allow', command });
     else api.respondApproval(sid, req.id, { behavior: 'allow' });
   };
@@ -105,8 +105,9 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
               <div className="extra" onClick={(e) => e.stopPropagation()}>
                 <span className="ink2">{t('规则')}</span>
                 <Select size="sm" value={rule} onChange={setRule} width={260} options={req.suggestions.map((s) => ({ value: s, label: <span className="mono">{s}</span> }))} />
-                <span className="ink2">{t('保存到')}</span>
-                <Select size="sm" value={dest} onChange={setDest} width={240} options={DESTINATIONS.map((d) => ({ ...d, label: t(d.label) }))} />
+                <span className="ink2">{t('适用范围')}</span>
+                <Select<RuleDestination> size="sm" value={dest} onChange={setDest} width={260} options={DESTINATIONS.map((d) => ({ value: d.value, label: t(d.label), desc: t(d.desc) }))} />
+                <span className="hint">{describeRule(rule)}</span>
               </div>
             )}
           </div>
@@ -300,17 +301,6 @@ export function InterruptReceipt({ sid, count, onDone }: { sid: string; count: n
       <span className="grow">{t('本轮已中断。有 {n} 条排队消息没有取消，要继续执行吗？', { n: count })}</span>
       <Button size="sm" onClick={() => { api.runQueued(sid); onDone(); }}>{t('保留并执行')}</Button>
       <Button size="sm" variant="danger-outline" onClick={() => { api.removeQueued(sid); onDone(); }}>{t('取消排队消息')}</Button>
-    </div>
-  );
-}
-
-export function Suggestion({ sid, text }: { sid: string; text: string }) {
-  const t = useT();
-  return (
-    <div className="suggestion">
-      <Icon name="spark" size={14} className="muted" />
-      <span>{t('下一步建议：')}</span>
-      <button onClick={() => useApp.getState().fillComposer(sid, text)}>{text}</button>
     </div>
   );
 }

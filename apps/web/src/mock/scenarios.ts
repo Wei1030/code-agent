@@ -194,7 +194,6 @@ export async function scenarioFix(run: Run) {
     ? '测试已经在后台运行，完成后会通知你。修复本身已经完成：计时器改用注入的时钟，并随购物车一起释放。'
     : '两个测试共用了一个从未清理的模块级计时器，导致后一个测试读到过期的时间。现在计时器改用注入的时钟，并随购物车一起释放，测试连续通过。');
   footer(sid, 9, (Date.now() - t0) / 1000);
-  emit(sid, { t: 'suggestion', text: '运行完整测试套件，确认修复有效' });
 }
 
 export async function scenarioGeneric(run: Run, text: string) {
@@ -216,7 +215,6 @@ export async function scenarioGeneric(run: Run, text: string) {
   await checkpoint(run);
   await streamText(run, '改好了：在创建订单后补充了日志和指标。需要的话我可以继续补测试。');
   footer(sid, 4, (Date.now() - t0) / 1000);
-  emit(sid, { t: 'suggestion', text: '为这个改动补一个单元测试' });
 }
 
 const REDIS_PREVIEW = `<div style="font:13px system-ui;padding:12px"><div style="display:flex;gap:18px;align-items:center">
@@ -256,7 +254,6 @@ export async function scenarioQuestion(run: Run) {
   await playGroup(run, g, '读取 · {n} 个文件');
   await streamText(run, '下一步我会写出具体实现。要先看计划的话，把权限模式切到「规划模式」再让我继续。');
   footer(sid, 3, (Date.now() - t0) / 1000);
-  emit(sid, { t: 'suggestion', text: '先出计划，我审过之后再改代码' });
 }
 
 const PLAN_V1 = {
@@ -327,7 +324,6 @@ export async function scenarioPlan(run: Run) {
   await bashStep(run, 'npm test -- rate-limit', ['> jest rate-limit', 'PASS  tests/rate-limit.test.ts (3.4 s)', 'Tests:       12 passed, 12 total'], { description: '运行限流测试' });
   await streamText(run, 'POST /orders 的限流已上线，补充了单元测试；文档的 429 说明也已加上。');
   footer(sid, 14, (Date.now() - t0) / 1000);
-  emit(sid, { t: 'suggestion', text: '把限额改成从环境变量读取' });
 }
 
 export async function scenarioSubagents(run: Run) {

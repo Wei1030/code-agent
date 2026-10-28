@@ -34,7 +34,7 @@ export function MockConsole() {
     ['subagents', '子代理与后台任务'], ['highRisk', '高风险审批（默认拒绝）'],
   ];
   const banners: Array<[BannerKind, string]> = [
-    ['maxTurns', '达到最大轮数'], ['crash', '会话崩溃'], ['apiRetry', 'API 过载重试'], ['rateLimit', '接近速率限制'],
+    ['crash', '会话崩溃'], ['apiRetry', 'API 过载重试'], ['rateLimit', '接近速率限制'],
     ['modelFallback', '模型拒答回退'], ['startupFailure', '启动失败'], ['workerShutdown', '进程退出'],
     ['denials', '本轮有调用被拒绝'], ['notLoggedIn', '未登录 Claude'],
   ];

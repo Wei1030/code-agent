@@ -12,9 +12,9 @@ interface SessionsState {
 
 export function emptyRuntime(id: string, p: Partial<SessionRuntime> = {}): SessionRuntime {
   return {
-    id, items: [], state: 'idle', model: 'opus', effort: 'high', mode: 'default', request: null, queue: [],
+    id, items: [], state: 'idle', model: 'opus', effort: 'max', mode: 'default', request: null, queue: [],
     tasks: [], background: [], changes: [], context: baseContext('claude-opus-5-5', 1200), events: [], stderr: [],
-    suggestion: null, status: null, readOnly: false, turn: 0, tokens: 0, ...p,
+    status: null, readOnly: false, turn: 0, tokens: 0, ...p,
   };
 }
 
@@ -71,8 +71,6 @@ function reduce(rt: SessionRuntime, ev: SessionEvent): SessionRuntime {
     }
     case 'stderr':
       return { ...rt, stderr: [...rt.stderr, ev.line] };
-    case 'suggestion':
-      return { ...rt, suggestion: ev.text };
     case 'status':
       return { ...rt, status: ev.status };
     case 'settings':

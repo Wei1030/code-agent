@@ -3,9 +3,10 @@
  * answers to approvals / questions / plan reviews, and honours interrupts and queued messages.
  */
 import type {
-  ApprovalAnswer, Attachment, Item, PendingRequest, PermissionMode, PlanAnswer, PlanDoc, QuestionAnswer,
+  ApprovalAnswer, Attachment, Item, PendingRequest, PermissionMode, PermissionRule, PlanAnswer, PlanDoc, QuestionAnswer,
   SessionEvent, SessionRuntime, SessionState, ToolItem,
 } from '../api/types';
+import { evaluate } from '../lib/rules';
 import { useApp } from '../store/app';
 import { useSessions } from '../store/sessions';
 import { uid, uuid } from '../lib/util';
@@ -76,7 +77,6 @@ export async function startRun(sid: string, body: (run: Run) => Promise<void>): 
   const run: Run = { sid, cancelled: false, backgrounded: new Set(), steer: [], wake: [] };
   runs.set(sid, run);
   emit(sid, { t: 'state', state: 'running' });
-  emit(sid, { t: 'suggestion', text: null });
   try {
     await body(run);
   } catch (e) {
@@ -181,28 +181,27 @@ export function answer(sid: string, requestId: string, a: ApprovalAnswer | Quest
 
 // ------------------------------------------------------------------ permissions
 
-function ruleMatches(rule: string, tool: string, command?: string): boolean {
-  if (rule === tool) return true;
-  const m = rule.match(/^(\w+)\((.*)\)$/);
-  if (!m || m[1] !== tool || !command) return false;
-  const pat = m[2];
-  if (pat.endsWith('*')) return command.startsWith(pat.slice(0, -1).trimEnd());
-  return command === pat;
-}
-
 export type Decision = { allowed: true; provenance: string } | { allowed: false; reason: 'deny-rule' | 'dont-ask'; rule?: string } | { ask: true };
 
-export function decide(mode: PermissionMode, tool: string, command?: string): Decision | { ask: true } {
-  const rules = useApp.getState().rules;
-  const deny = rules.find((r) => r.behavior === 'deny' && ruleMatches(r.rule, tool, command));
-  if (deny) return { allowed: false, reason: 'deny-rule', rule: deny.rule };
-  const askRule = rules.find((r) => r.behavior === 'ask' && ruleMatches(r.rule, tool, command));
-  if (askRule) return mode === 'dontAsk' ? { allowed: false, reason: 'dont-ask' } : { ask: true };
+/** Rules "remembered" for one session only; they live as long as its process. */
+const sessionRules = new Map<string, string[]>();
+
+/** Rules that apply to a session: global, its workspace (local + repository) and session-only ones. */
+export function rulesFor(sid: string): PermissionRule[] {
+  const app = useApp.getState();
+  const ws = app.sessions.find((s) => s.id === sid)?.workspaceId;
+  const own = (sessionRules.get(sid) ?? []).map((rule, i) => ({ id: `session-${i}`, behavior: 'allow' as const, rule, scope: 'workspace' as const }));
+  return [...app.rules.filter((r) => r.scope === 'global' || r.workspaceId === ws), ...own];
+}
+
+export function decide(sid: string, mode: PermissionMode, tool: string, command?: string): Decision | { ask: true } {
+  const o = evaluate(rulesFor(sid), tool, command ?? '');
+  if (o.kind === 'deny') return { allowed: false, reason: 'deny-rule', rule: o.rule.rule };
+  if (o.kind === 'ask') return mode === 'dontAsk' ? { allowed: false, reason: 'dont-ask' } : { ask: true };
   if (mode === 'bypassPermissions') return { allowed: true, provenance: '模式：跳过权限检查' };
   const isEdit = tool === 'Edit' || tool === 'Write';
   if (mode === 'acceptEdits' && isEdit) return { allowed: true, provenance: '模式：自动接受编辑' };
-  const allow = rules.find((r) => r.behavior === 'allow' && ruleMatches(r.rule, tool, command));
-  if (allow) return { allowed: true, provenance: `规则 ${allow.rule}` };
+  if (o.kind === 'allow') return { allowed: true, provenance: `规则 ${o.rule.rule}` };
   if (tool === 'Read' || tool === 'Grep' || tool === 'Glob') return { allowed: true, provenance: '只读操作' };
   if (mode === 'dontAsk') return { allowed: false, reason: 'dont-ask' };
   return { ask: true };
@@ -217,7 +216,7 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
   reason?: string; title?: string; defaultToNo?: boolean;
 }): Promise<{ provenance: string; command?: string } | null> {
   const r = rt(run.sid)!;
-  const d = opts.defaultToNo ? { ask: true as const } : decide(r.mode, tool.tool, opts.command);
+  const d = opts.defaultToNo ? { ask: true as const } : decide(run.sid, r.mode, tool.tool, opts.command);
   if ('allowed' in d && d.allowed) return { provenance: d.provenance };
   if ('allowed' in d && !d.allowed) {
     const why = d.reason === 'deny-rule' ? `被拒绝规则 ${d.rule} 拦截` : '「不询问」模式下未预先授权';
@@ -245,10 +244,13 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
     return null;
   }
   if (a.remember) {
-    const app = useApp.getState();
-    app.set({
-      rules: [...app.rules, { id: uid('rule'), behavior: 'allow', rule: a.remember.rule, matches: '由「允许并记住」添加', source: a.remember.destination }],
-    });
+    const { rule: remembered, destination } = a.remember;
+    if (destination === 'session') sessionRules.set(run.sid, [...(sessionRules.get(run.sid) ?? []), remembered]);
+    else {
+      const app = useApp.getState();
+      const workspaceId = app.sessions.find((s) => s.id === run.sid)?.workspaceId;
+      app.set({ rules: [...app.rules, { id: uid('rule'), behavior: 'allow', rule: remembered, scope: destination, workspaceId: destination === 'workspace' ? workspaceId : undefined }] });
+    }
   }
   const edited = a.command && a.command !== opts.command;
   if (edited) patch(run.sid, tool.id, { detail: a.command });

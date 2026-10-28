@@ -23,20 +23,6 @@ export interface ConfirmRequest {
   onConfirm: () => void;
 }
 
-export interface Sandbox {
-  enabled: boolean;
-  failIfUnavailable: boolean;
-  autoAllowBash: boolean;
-  allowUnsandboxed: boolean;
-  allowLocalBinding: boolean;
-  strictAllowlist: boolean;
-  allowedDomains: string[];
-  deniedDomains: string[];
-  allowWrite: string[];
-  denyRead: string[];
-  excluded: string[];
-}
-
 export interface Provider {
   kind: ProviderKind;
   configDir: 'default' | 'env' | 'custom';
@@ -45,13 +31,6 @@ export interface Provider {
   loggedIn: boolean;
   plan: string;
   envConflict: boolean;
-  apiKeyMasked: string;
-  baseUrl: string;
-  clientId: string;
-  region: string;
-  awsProfile: string;
-  gcpProject: string;
-  foundryResource: string;
   compatibleUrl: string;
   compatibleModel: string;
 }
@@ -65,14 +44,13 @@ interface AppState {
   prefs: Prefs;
   profiles: Profile[];
   rules: PermissionRule[];
-  sandbox: Sandbox;
   provider: Provider;
   env: EnvVar[];
   runtime: { debugLog: boolean; otel: boolean; otelEndpoint: string; otelMetrics: boolean; otelLogs: boolean; otelTraces: boolean; otelPrompts: boolean; otelTools: boolean };
   connection: 'online' | 'offline' | 'restored';
   toasts: Toast[];
   confirm: ConfirmRequest | null;
-  inspector: { open: boolean; wide: boolean; tab: InspectorTab; eventsSub: 'events' | 'stderr' | 'hooks' };
+  inspector: { open: boolean; width: number; tab: InspectorTab; eventsSub: 'events' | 'stderr' | 'hooks' };
   mockConsoleOpen: boolean;
   folderPickerOpen: boolean;
   /** Text pushed into a session's composer (suggestions, fork-and-edit). */
@@ -84,7 +62,6 @@ interface AppState {
   ask: (c: ConfirmRequest) => void;
   setPrefs: (p: Partial<Prefs>) => void;
   setProvider: (p: Partial<Provider>) => void;
-  setSandbox: (p: Partial<Sandbox>) => void;
   setInspector: (p: Partial<AppState['inspector']>) => void;
   upsertSession: (s: SessionSummary) => void;
   patchSession: (id: string, p: Partial<SessionSummary>) => void;
@@ -108,22 +85,16 @@ export const useApp = create<AppState>((set, get) => ({
   },
   profiles: PROFILES,
   rules: RULES,
-  sandbox: {
-    enabled: true, failIfUnavailable: true, autoAllowBash: true, allowUnsandboxed: false, allowLocalBinding: false,
-    strictAllowlist: false, allowedDomains: ['registry.npmjs.org', '*.github.com'], deniedDomains: ['pastebin.com'],
-    allowWrite: ['./', '/tmp'], denyRead: ['~/.ssh', '~/.aws', '.env'], excluded: ['docker *'],
-  },
   provider: {
     kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',
-    envConflict: true, apiKeyMasked: '', baseUrl: '', clientId: 'code-agent/0.1', region: 'us-east-1', awsProfile: 'default',
-    gcpProject: '', foundryResource: '', compatibleUrl: '', compatibleModel: '',
+    envConflict: false, compatibleUrl: '', compatibleModel: '',
   },
   env: ENV_VARS,
-  runtime: { debugLog: true, otel: false, otelEndpoint: '', otelMetrics: false, otelLogs: false, otelTraces: false, otelPrompts: false, otelTools: false },
+  runtime: { debugLog: false, otel: false, otelEndpoint: '', otelMetrics: false, otelLogs: false, otelTraces: false, otelPrompts: false, otelTools: false },
   connection: 'online',
   toasts: [],
   confirm: null,
-  inspector: { open: true, wide: false, tab: 'tasks', eventsSub: 'events' },
+  inspector: { open: true, width: 340, tab: 'tasks', eventsSub: 'events' },
   mockConsoleOpen: false,
   folderPickerOpen: false,
   fill: null,
@@ -138,7 +109,6 @@ export const useApp = create<AppState>((set, get) => ({
   ask: (c) => set({ confirm: c }),
   setPrefs: (p) => set({ prefs: { ...get().prefs, ...p } }),
   setProvider: (p) => set({ provider: { ...get().provider, ...p } }),
-  setSandbox: (p) => set({ sandbox: { ...get().sandbox, ...p } }),
   setInspector: (p) => set({ inspector: { ...get().inspector, ...p } }),
   upsertSession: (s) => {
     const list = get().sessions;

@@ -58,7 +58,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const fileInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const running = rt.state !== 'idle';
-  const draft = app.sessions.find((x) => x.id === sid)?.draft;
 
   // Reset per session; drafts are kept per session in memory.
   const drafts = useRef<Record<string, { text: string; atts: Attachment[] }>>({});
@@ -70,7 +69,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
     return () => { drafts.current[sid] = { text: ta.current?.value ?? '', atts: [] }; };
   }, [sid]);
 
-  // Text pushed from elsewhere (suggestion chip, fork-and-edit).
+  // Text pushed from elsewhere (fork-and-edit, "answer in your own words").
   const fill = app.fill;
   useEffect(() => {
     if (!fill || fill.sid !== sid) return;
@@ -223,13 +222,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
       onConfirm: () => api.setMode(sid, m),
     });
   };
-  const stopSession = () => app.ask({
-    title: t('停止这个会话？'),
-    body: t('会结束 Claude Code 进程。会话会被保存，之后可以随时恢复。'),
-    confirmLabel: t('停止会话'), danger: true,
-    onConfirm: () => api.stop(sid),
-  });
-
   const placeholder = disabled
     ? t('会话未运行')
     : rt.request?.kind === 'question'
@@ -312,7 +304,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
           <Progress value={ctxPct} color={ctxPct > 80 ? 'var(--warn)' : undefined} />
         </div>
         <div className="c-right">
-          {!disabled && !draft && <Button size="sm" variant="ghost" icon="stop" title={t('停止会话（结束 Claude Code 进程）')} onClick={stopSession}>{t('停止会话')}</Button>}
           {running ? (
             <>
               <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => onInterrupt(api.interrupt(sid).length)}>{t('中断')}</Button>

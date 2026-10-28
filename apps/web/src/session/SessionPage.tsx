@@ -5,14 +5,14 @@ import type { SessionRuntime, SessionSummary } from '../api/types';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
 import { Button } from '../components/ui';
-import { StateBadge } from '../components/SessionRow';
+import { StateBadge, useSessionActions } from '../components/SessionRow';
 import { useApp } from '../store/app';
 import { useSessions } from '../store/sessions';
 import { relTime, tokens as fmtTokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { Transcript } from './Transcript';
-import { ApprovalPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar, Suggestion } from './Dock';
+import { ApprovalPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar } from './Dock';
 import { Composer } from './Composer';
 import { Inspector } from './Inspector';
 import { RewindDialog } from './RewindDialog';
@@ -72,7 +72,6 @@ export function SessionPage() {
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />
-                {rt.suggestion && rt.state === 'idle' && <Suggestion sid={id} text={rt.suggestion} />}
                 <Composer rt={rt} workspaceId={sum.workspaceId} onInterrupt={(n) => setReceipt(n)} />
               </>
             )}
@@ -94,6 +93,7 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
   const mine = sessions.filter((s) => s.workspaceId === wsId && (!s.draft || s.id === current?.id)).sort((a, b) => b.lastActive - a.lastActive);
   const live = mine.filter((s) => s.live || s.draft);
   const saved = mine.filter((s) => !s.live && !s.draft).slice(0, 10);
+  const actions = useSessionActions();
 
   const item = (s: SessionSummary) => (
     <div key={s.id} className={cx('scol-item', s.id === current?.id && 'on')} onClick={() => { api.openSession(s.id); nav(`/s/${s.id}`); }}>
@@ -104,13 +104,18 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
           {s.draft ? t('未发送') : s.live && s.state === 'requires_action' ? t('等你处理') : s.live && s.state === 'running' ? t('运行中') : relTime(s.lastActive)}
         </div>
       </div>
+      <div className="scol-acts" onClick={(e) => e.stopPropagation()}>
+        {s.live && <Button size="sm" variant="ghost" icon="save" title={t('保存并结束（结束 Claude Code 进程，之后可以恢复）')} onClick={() => actions.save(s)} />}
+        <Button size="sm" variant="ghost" icon="trash" title={s.draft ? t('丢弃') : t('删除')} onClick={() => actions.remove(s)} />
+      </div>
     </div>
   );
 
   return (
     <div className="scol">
       <div className="scol-top">
-        <div className="row" style={{ marginBottom: 10 }}>
+        <Link to="/sessions" className="scol-all"><Icon name="list" size={15} />{t('全部会话')}<Icon name="chevRight" size={14} className="muted" /></Link>
+        <div className="row" style={{ margin: '10px 0' }}>
           <Icon name="folder" size={15} className="muted" />
           <b className="truncate grow" title={ws?.path}>{ws?.name ?? t('未选择工作区')}</b>
         </div>
@@ -123,7 +128,6 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
         {saved.map(item)}
         {mine.length === 0 && <div className="empty" style={{ padding: 16 }}>{t('这个工作区还没有会话')}</div>}
       </div>
-      <div className="scol-foot"><Link to="/sessions">{t('全部会话 →')}</Link></div>
     </div>
   );
 }
@@ -131,8 +135,6 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
 function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime }) {
   const t = useT();
   const ws = useApp((s) => s.workspaces.find((w) => w.id === sum.workspaceId));
-  const ins = useApp((s) => s.inspector);
-  const setInspector = useApp((s) => s.setInspector);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(sum.title);
   useEffect(() => setTitle(sum.title), [sum.title]);
@@ -162,17 +164,9 @@ function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime })
           {rt.tokens > 0 ? ` · ${t('第 {n} 轮', { n: rt.turn })} · ${fmtTokens(rt.tokens)} tokens` : ''}
         </div>
       </div>
-      <Button variant="ghost" icon="panelRight" title={ins.open ? t('收起右侧面板') : t('展开右侧面板')} onClick={() => setInspector({ open: !ins.open })} />
     </div>
   );
 }
-
-const EXAMPLES = [
-  { icon: 'bolt', text: 'CI 上结账测试偶尔失败，帮我修复。' },
-  { icon: 'list', text: '用 Redis 给 /orders 限流，先出计划。' },
-  { icon: 'chat', text: '给 /orders 接口加上限流，有选择就问我。' },
-  { icon: 'agent', text: '找出所有用到 CartTimer 的地方，同时在后台跑 e2e。' },
-];
 
 function TranscriptPane({ rt, sum, onFork, onRewind }: { rt: SessionRuntime; sum: SessionSummary; onFork: (id: string) => void; onRewind: (id: string) => void }) {
   const t = useT();
@@ -198,17 +192,8 @@ function TranscriptPane({ rt, sum, onFork, onRewind }: { rt: SessionRuntime; sum
       <div className="transcript-inner">
         {rt.items.length === 0 && sum.draft ? (
           <div className="draft-empty">
-            <div className="accent" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="chat" size={36} /></div>
-            <h2>{t('在 {w} 中开始新会话', { w: useApp.getState().workspaces.find((w) => w.id === sum.workspaceId)?.name ?? '' })}</h2>
-            <div className="muted">{t('第一条消息发出后才会启动 Claude Code 进程。下面的例子会触发不同的模拟场景。')}</div>
-            <div className="examples">
-              {EXAMPLES.map((e) => (
-                <button key={e.text} onClick={() => useApp.getState().fillComposer(rt.id, t(e.text))}>
-                  <Icon name={e.icon} size={16} className="accent" />
-                  <span>{t(e.text)}</span>
-                </button>
-              ))}
-            </div>
+            <h2>{t('新会话 · {w}', { w: useApp.getState().workspaces.find((w) => w.id === sum.workspaceId)?.name ?? '' })}</h2>
+            <div className="muted">{t('发出第一条消息后才会启动 Claude Code 进程。')}</div>
           </div>
         ) : (
           <Transcript rt={rt} onFork={onFork} onRewind={onRewind} />

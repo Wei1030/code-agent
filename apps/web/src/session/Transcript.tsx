@@ -252,7 +252,6 @@ function Notice({ tone, text, action, sid }: { tone: 'good' | 'info' | 'warn'; t
 }
 
 const BANNERS: Record<string, { tone: 'warn' | 'crit' | 'info'; icon: string; title: string; d: string; acts: string[] }> = {
-  maxTurns: { tone: 'warn', icon: 'warning', title: '已执行 50 轮后停止', d: '任务尚未完成（error_max_turns）。', acts: ['再继续 50 轮', '修改限制…'] },
   crash: { tone: 'crit', icon: 'x', title: '会话意外结束', d: 'Claude Code 以退出码 1 结束（error_during_execution）。对话记录已保存。', acts: ['恢复会话', '查看 stderr'] },
   rateLimit: { tone: 'warn', icon: 'warning', title: '5 小时限额已用 90%', d: '21:30 重置。之后的请求可能被拒绝。', acts: ['查看用量'] },
   startupFailure: { tone: 'crit', icon: 'x', title: '会话无法启动', d: '工作目录 D:\\old\\shop-api 已不存在（cwd_unavailable）。', acts: ['选择其他文件夹', '查看原文'] },
@@ -268,9 +267,7 @@ function Banner({ kind, id, resolved, sid }: { kind: string; id: string; resolve
   const [showRaw, setShowRaw] = useState(false);
   if (!b) return null;
   const act = (a: string) => {
-    if (a === '再继续 50 轮') api.continueAfterLimit(sid, id);
-    else if (a === '修改限制…') nav('/settings/profiles');
-    else if (a === '恢复会话') { api.resume(sid); api.retryBanner(sid, id); }
+    if (a === '恢复会话') { api.resume(sid); api.retryBanner(sid, id); }
     else if (a === '查看 stderr') useApp.getState().setInspector({ open: true, tab: 'events', eventsSub: 'stderr' });
     else if (a === '查看用量') nav('/usage');
     else if (a === '选择其他文件夹') useApp.getState().set({ folderPickerOpen: true });

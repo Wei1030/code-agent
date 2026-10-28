@@ -1,16 +1,16 @@
 /** P20 — configuration profiles: the options a new session starts with. */
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Effort, PermissionMode, Profile } from '../../api/types';
-import { EFFORT_LABEL, MODE_INFO, MODELS } from '../../mock/data';
+import { BUILTIN_TOOLS, EFFORT_LABEL, MODE_INFO, MODELS } from '../../mock/data';
 import { Button, Check, Chip, Field, Seg, Select, Toggle } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { cx, uid } from '../../lib/util';
 import { useT } from '../../lib/i18n';
-import { ChipsInput, Section } from './SettingsLayout';
+import { Section } from './SettingsLayout';
 
 const FEATURES: Array<{ key: string; label: string; hint: string }> = [
   { key: 'checkpoints', label: '文件检查点', hint: '每条消息前保存快照，可以回退' },
-  { key: 'suggestions', label: '下一步建议', hint: '每轮结束后给出一条建议' },
   { key: 'subagentText', label: '显示子代理的文字输出', hint: '' },
   { key: 'progressSummaries', label: '子代理进度摘要', hint: '后台子代理定期汇报进展' },
   { key: 'hookEvents', label: '记录钩子事件', hint: '在事件页中显示钩子的执行结果' },
@@ -85,16 +85,13 @@ export function Profiles() {
             <Section title={t('模型')}>
               <div className="form-grid">
                 <Field label={t('模型')}>
-                  <Select value={draft.model} onChange={(v) => set({ model: v, effort: MODELS.find((m) => m.id === v)!.efforts.includes(draft.effort) ? draft.effort : 'high' })}
+                  <Select value={draft.model} onChange={(v) => { const efforts = MODELS.find((m) => m.id === v)!.efforts; set({ model: v, effort: efforts.includes(draft.effort) ? draft.effort : efforts[efforts.length - 1] }); }}
                     options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
-                </Field>
-                <Field label={t('备用模型')} hint={t('主模型过载或拒绝时自动改用')}>
-                  <Select value={draft.fallback} onChange={(v) => set({ fallback: v })} options={[{ value: '', label: t('不使用') }, ...MODELS.filter((m) => m.id !== draft.model).map((m) => ({ value: m.id, label: m.label }))]} />
                 </Field>
                 <Field label={t('思考强度')} hint={t('使用第三方端点时可能不生效')}>
                   <Select<Effort> value={draft.effort} onChange={(v) => set({ effort: v })} options={model.efforts.map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
                 </Field>
-                <Field label={t('扩展思考')}>
+                <Field label={t('扩展思考')} hint={t('回答前先在内部推理。自适应：由模型决定想多少，深浅由思考强度控制')}>
                   <Seg value={draft.thinking} onChange={(v) => set({ thinking: v })} items={[{ value: 'adaptive', label: t('自适应') }, { value: 'budget', label: t('固定预算') }, { value: 'off', label: t('关闭') }]} />
                 </Field>
               </div>
@@ -113,30 +110,35 @@ export function Profiles() {
               <div style={{ margin: '10px 0' }}>
                 <Toggle on={draft.allowBypass} onChange={(v) => set({ allowBypass: v, mode: !v && draft.mode === 'bypassPermissions' ? 'default' : draft.mode })} label={t('允许切换到「跳过权限检查」')} hint={t('只建议在容器或虚拟机中开启')} />
               </div>
-              <div className="form-grid">
-                <Field label={t('直接允许的工具')} hint={t('例如 Read、Bash(npm test *)')}><ChipsInput values={draft.allowed} onChange={(v) => set({ allowed: v })} placeholder={t('输入后回车')} /></Field>
-                <Field label={t('禁用的工具')} hint={t('从 Claude 的工具列表中移除')}><ChipsInput values={draft.blocked} onChange={(v) => set({ blocked: v })} placeholder={t('输入后回车')} /></Field>
-              </div>
+              <div className="hint">{t('哪些操作直接执行、哪些先问你、哪些禁止，在')} <Link to="/settings/permissions">{t('权限规则')}</Link> {t('里设置。')}</div>
             </Section>
 
-            <Section title={t('运行')}>
-              <div className="form-grid">
-                <Field label={t('最大轮数')} hint={t('留空表示不限制')}><input className="input" inputMode="numeric" value={draft.maxTurns} onChange={(e) => set({ maxTurns: e.target.value.replace(/\D/g, '') })} /></Field>
-                <Field label={t('工具集')}>
-                  <Seg value={draft.toolsPreset} onChange={(v) => set({ toolsPreset: v })} items={[{ value: 'claude_code', label: t('Claude Code 全部工具') }, { value: 'custom', label: t('自定义') }]} />
-                </Field>
+            <Section title={t('Claude 可以使用的工具')} right={<span className="hint">{t('{n}/{m} 个已开启', { n: draft.tools.length, m: BUILTIN_TOOLS.length })}</span>}>
+              <div className="tool-grid">
+                {BUILTIN_TOOLS.map((tool) => {
+                  const on = draft.tools.includes(tool.name);
+                  return (
+                    <div key={tool.name} className={cx('tool-item', on && 'on')} onClick={() => set({ tools: on ? draft.tools.filter((x) => x !== tool.name) : [...draft.tools, tool.name] })}>
+                      <Check on={on} onChange={() => {}} label="" />
+                      <div className="grow">
+                        <b>{t(tool.label)}</b> <span className="mono muted">{tool.name}</span>
+                        {tool.desc && <div className="hint">{t(tool.desc)}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="col" style={{ marginTop: 10 }}>
-                <Toggle on={draft.taskTools} onChange={(v) => set({ taskTools: v })} label={t('任务清单工具')} />
-                <Toggle on={draft.questionPreviews} onChange={(v) => set({ questionPreviews: v })} label={t('提问时允许 HTML 预览')} />
-              </div>
+              <div className="hint" style={{ marginTop: 6 }}>{t('关掉的工具 Claude 看不到，也不会去用。')}</div>
+              {draft.tools.includes('AskUserQuestion') && (
+                <div style={{ marginTop: 10 }}><Toggle on={draft.questionPreviews} onChange={(v) => set({ questionPreviews: v })} label={t('提问时允许 HTML 预览')} /></div>
+              )}
             </Section>
 
             <Section title={t('读取的设置文件')}>
               <div className="row" style={{ gap: 18 }}>
-                <Check on={draft.sources.user} onChange={(v) => set({ sources: { ...draft.sources, user: v } })} label={<>{t('用户')} <span className="mono muted">~/.claude/settings.json</span></>} />
-                <Check on={draft.sources.project} onChange={(v) => set({ sources: { ...draft.sources, project: v } })} label={<>{t('项目')} <span className="mono muted">.claude/settings.json</span></>} />
-                <Check on={draft.sources.local} onChange={(v) => set({ sources: { ...draft.sources, local: v } })} label={<>{t('本地')} <span className="mono muted">.claude/settings.local.json</span></>} />
+                <Check on={draft.sources.user} onChange={(v) => set({ sources: { ...draft.sources, user: v } })} label={<>{t('所有工作区')} <span className="mono muted">~/.claude/settings.json</span></>} />
+                <Check on={draft.sources.local} onChange={(v) => set({ sources: { ...draft.sources, local: v } })} label={<>{t('这个工作区')} <span className="mono muted">.claude/settings.local.json</span></>} />
+                <Check on={draft.sources.project} onChange={(v) => set({ sources: { ...draft.sources, project: v } })} label={<>{t('仓库共享')} <span className="mono muted">.claude/settings.json</span></>} />
               </div>
               <div className="hint" style={{ marginTop: 6 }}>{t('CLAUDE.md、技能、钩子等也来自这些位置。全部取消时只使用这里的配置。')}</div>
             </Section>
