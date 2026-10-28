@@ -27,6 +27,7 @@ import { notify } from '../lib/notify';
 export { mockHeld, mockPeerMessage, rejectHeld, releaseHeld } from './peer';
 export { cancelWaiting, pump as pumpSlots } from './slots';
 export { decideReview, mockReview, reviewMarkdown, startReview, stopReview } from './review';
+export { applyImport, boardMarkdown, confirmItem, createItem, deleteItem, findingToBoard, importPreview, undoBoardRecord, updateItem } from './board';
 
 const MODEL_ID: Record<string, string> = { opus: 'claude-opus-5-5', fable: 'claude-fable-5-1', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5' };
 

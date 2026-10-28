@@ -12,6 +12,7 @@ import { Provider } from './pages/settings/Provider';
 import { Language } from './pages/settings/Language';
 import { Collaboration } from './pages/settings/Collaboration';
 import { General } from './pages/settings/General';
+import { Board } from './pages/Board';
 import { Mcp } from './pages/Mcp';
 import { Skills } from './pages/Skills';
 import { Hooks } from './pages/Hooks';
@@ -24,6 +25,7 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="sessions" element={<History />} />
         <Route path="s/:id" element={<SessionPage />} />
+        <Route path="board" element={<Board />} />
         <Route path="mcp" element={<Mcp />} />
         <Route path="skills" element={<Skills />} />
         <Route path="hooks" element={<Hooks />} />

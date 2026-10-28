@@ -11,6 +11,7 @@ import { addItem, emit, finishTool, isRunning, newTool, raw, rt, sleep, startRun
 import { bashStep, editStep, footer, pickScenario, playGroup, readGroup } from './scenarios';
 import { initRaw, openSession, resume } from './server';
 import { acquire } from './slots';
+import { recordTurn } from './board';
 import { notify } from '../lib/notify';
 
 const short = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -303,6 +304,7 @@ export async function scenarioSpawn(run: Run) {
   ], 8, 0);
   await streamText(run, '共用接口已写好：GET /orders/export?format=csv|xlsx，按格式调用两个会话各自实现的函数。等它们都完成后，我再跑一遍整体测试。');
   footer(sid, 6, (Date.now() - t0) / 1000);
+  recordTurn(sid, { kind: 'spawn' });
 }
 
 /** Look at the other sessions, then ask the one this work depends on. */

@@ -26,6 +26,7 @@ export function AppShell() {
       <TopBar />
       <nav className="navrail" aria-label={t('主导航')}>
         <button className={cx(onSessions && 'active')} onClick={goToSessions} title={t('进入所选工作区最近的会话；选择「所有工作区」时进入总览')}><Icon name="chat" size={22} />{t('会话')}</button>
+        <BoardNav />
         <NavLink to="/mcp" className={({ isActive }) => cx(isActive && 'active')}><Icon name="plug" size={22} />MCP</NavLink>
         <NavLink to="/skills" className={({ isActive }) => cx(isActive && 'active')}><Icon name="spark" size={22} />{t('技能')}</NavLink>
         <NavLink to="/hooks" className={({ isActive }) => cx(isActive && 'active')}><Icon name="hook" size={22} />{t('钩子')}</NavLink>
@@ -50,6 +51,19 @@ export function AppShell() {
       <MockConsole />
       <FolderPicker />
     </div>
+  );
+}
+
+/** 看板 in the left rail, with the selected workspace's count of items waiting for confirmation. */
+function BoardNav() {
+  const t = useT();
+  const ws = useApp((s) => s.currentWorkspaceId);
+  const n = useApp((s) => s.board.filter((x) => x.unconfirmed && (!ws || x.workspaceId === ws)).length);
+  return (
+    <NavLink to={ws ? `/board?ws=${ws}` : '/board'} className={({ isActive }) => cx('nav-badged', isActive && 'active')} title={n ? t('{n} 条自动记录的条目待确认', { n }) : undefined}>
+      <Icon name="board" size={22} />{t('看板')}
+      {n > 0 && <span className="nbadge">{n}</span>}
+    </NavLink>
   );
 }
 
@@ -114,7 +128,7 @@ function SearchBox() {
     const k = q.trim().toLowerCase();
     if (!k) return [];
     const pages = [
-      { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则'), to: '/settings/permissions' },
+      { label: t('看板'), to: '/board' }, { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则'), to: '/settings/permissions' },
       { label: t('MCP 服务器'), to: '/mcp' }, { label: t('技能、命令与插件'), to: '/skills' }, { label: t('钩子'), to: '/hooks' }, { label: t('作业'), to: '/jobs' },
       { label: t('设置 · 常规（同时运行的会话、通知）'), to: '/settings/general' }, { label: t('设置 · 会话协作'), to: '/settings/collaboration' }, { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
     ].filter((p) => p.label.toLowerCase().includes(k));

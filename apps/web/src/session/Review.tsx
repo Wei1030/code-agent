@@ -6,6 +6,7 @@ import { api } from '../api';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Modal, Select, Status } from '../components/ui';
 import { useApp } from '../store/app';
+import { BoardLink } from '../components/BoardLink';
 import { EFFORT_LABEL, MODELS } from '../mock/data';
 import { relTime, tokens as fmtTokens } from '../lib/format';
 import { cx, download } from '../lib/util';
@@ -266,9 +267,19 @@ function Rulings({ r }: { r: ReviewRound }) {
   );
 }
 
-/** A finding as raised; `history` adds the latest answer and ruling (used outside the per-round view). */
-function FindingRow({ f, history }: { f: ReviewFinding; history?: boolean }) {
+/** Offer to put an unresolved finding of a finished review on the board, or link to where it went. */
+function ToBoard({ ticket, f }: { ticket: ReviewTicket; f: ReviewFinding }) {
   const t = useT();
+  const wsId = useApp((s) => s.sessions.find((x) => x.id === ticket.sessionId)?.workspaceId ?? '');
+  const on = useApp((s) => s.board.find((x) => x.workspaceId === wsId && x.source.ref === `${ticket.id}:${f.id}`));
+  if (on) return <span className="muted" style={{ fontSize: 12 }}>{t('已记到看板')} <BoardLink id={on.id} wsId={wsId} /></span>;
+  return <Button size="sm" icon="board" onClick={() => api.findingToBoard(ticket.id, f.id)}>{t('记到看板')}</Button>;
+}
+
+/** A finding as raised; `history` adds the latest answer and ruling (used outside the per-round view). */
+function FindingRow({ f, history, ticket }: { f: ReviewFinding; history?: boolean; ticket?: ReviewTicket }) {
+  const t = useT();
+  const unresolved = (f.status === 'open' || f.status === 'disputed') && ticket && !RUNNING.includes(ticket.status) && !WAITING.includes(ticket.status);
   const sev = SEVERITY[f.severity];
   const st = FINDING_STATUS[f.status];
   return (
@@ -279,6 +290,7 @@ function FindingRow({ f, history }: { f: ReviewFinding; history?: boolean }) {
         <span className="grow" />
         <span className="muted" style={{ fontSize: 12 }}>{t('现在：')}</span>
         <Chip tone={st.tone}>{t(st.label)}</Chip>
+        {unresolved && <ToBoard ticket={ticket} f={f} />}
       </div>
       <div className="title">{f.title}</div>
       <div className="loc">{f.file}{f.line ? `:${f.line}` : ''}</div>
@@ -381,7 +393,7 @@ function RoundBlock({ ticket, r }: { ticket: ReviewTicket; r: ReviewRound }) {
       {raised.length > 0 && (
         <>
           <h5>{t('新意见')}</h5>
-          {raised.map((f) => <FindingRow key={f.id} f={f} />)}
+          {raised.map((f) => <FindingRow key={f.id} f={f} ticket={ticket} />)}
         </>
       )}
 

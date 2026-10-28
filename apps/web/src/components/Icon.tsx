@@ -57,6 +57,8 @@ const ICONS: Record<string, string> = {
   collapse: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
   filter: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
   pin: '<path d="M9 3h6l-1 6 4 4H6l4-4zM12 13v8"/>',
+  board: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16M5.5 8h1.5M11 8h2M17 8h1.5M11 11h2"/>',
+  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
   slash: '<path d="M16 4L8 20"/>',
   queue: '<path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15l3 3-3 3"/>',
   cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',

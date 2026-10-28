@@ -1,5 +1,5 @@
 /** Transcript items: messages, thinking, tool cards, plans, banners and notices. */
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Item, PeerCall, PlanDoc, SessionRef, SessionRuntime, ToolItem } from '../api/types';
 import { Icon } from '../components/Icon';
@@ -10,6 +10,7 @@ import { duration, tokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { ReviewCard } from './Review';
+import { BoardLink, linkify } from '../components/BoardLink';
 
 const TOOL_ICON: Record<string, string> = {
   Bash: 'terminal', PowerShell: 'terminal', Read: 'file', Write: 'file', Edit: 'pencil', Grep: 'search', Glob: 'search',
@@ -17,18 +18,19 @@ const TOOL_ICON: Record<string, string> = {
 };
 
 export function Transcript({ rt, onRewind, onFork }: { rt: SessionRuntime; onRewind: (userId: string) => void; onFork: (userId: string) => void }) {
+  const wsId = useApp((s) => s.sessions.find((x) => x.id === rt.id)?.workspaceId ?? '');
   let userN = 0;
   return (
     <>
       {rt.items.map((it) => {
         if (it.kind === 'user') userN += 1;
-        return <ItemView key={it.id} it={it} rt={rt} userN={userN} onRewind={onRewind} onFork={onFork} />;
+        return <ItemView key={it.id} it={it} rt={rt} wsId={wsId} userN={userN} onRewind={onRewind} onFork={onFork} />;
       })}
     </>
   );
 }
 
-function ItemView({ it, rt, userN, onRewind, onFork }: { it: Item; rt: SessionRuntime; userN: number; onRewind: (id: string) => void; onFork: (id: string) => void }) {
+function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: SessionRuntime; wsId: string; userN: number; onRewind: (id: string) => void; onFork: (id: string) => void }) {
   const t = useT();
   switch (it.kind) {
     case 'user':
@@ -39,7 +41,7 @@ function ItemView({ it, rt, userN, onRewind, onFork }: { it: Item; rt: SessionRu
               : <span className="avatar">W</span>}
           {it.from && <div className="from">{it.from.kind === 'receipt' ? t('回执 · 来自') : t('来自会话')} <SessionLink r={it.from} /></div>}
           {it.fromApp && <div className="from">Code Agent · {it.fromApp}</div>}
-          <div className="text">{it.text}</div>
+          <div className="text">{linkify(it.text, wsId)}</div>
           {(it.attachments.length > 0 || !!it.refs?.length) && (
             <div className="atts">
               {it.refs?.map((r) => <span key={r.sessionId} className="chip"><Icon name="chat" size={12} /><SessionLink r={r} /></span>)}
@@ -58,7 +60,7 @@ function ItemView({ it, rt, userN, onRewind, onFork }: { it: Item; rt: SessionRu
     case 'text':
       return (
         <div className="atext">
-          {renderInline(it.text)}
+          {renderInline(it.text, wsId)}
           {it.streaming && <span className="caret" />}
           {it.aborted && <span className="aborted-tag">{t('（已中断）')}</span>}
         </div>
@@ -87,13 +89,43 @@ function ItemView({ it, rt, userN, onRewind, onFork }: { it: Item; rt: SessionRu
       return <Banner kind={it.banner} id={it.id} resolved={it.resolved} sid={rt.id} />;
     case 'review':
       return <ReviewCard ticketId={it.ticketId} round={it.round} what={it.what} />;
+    case 'board':
+      return <BoardRecord it={it} sid={rt.id} wsId={wsId} />;
   }
 }
 
-/** Very small inline renderer: `code` spans only. */
-function renderInline(text: string): ReactNode {
+/** Very small inline renderer: `code` spans and board ids (F-3, I-12, N-4). */
+function renderInline(text: string, wsId?: string): ReactNode {
   const parts = text.split(/(`[^`]+`)/g);
-  return parts.map((p, i) => (p.startsWith('`') && p.endsWith('`') ? <code key={i}>{p.slice(1, -1)}</code> : p));
+  return parts.map((p, i) => (p.startsWith('`') && p.endsWith('`') ? <code key={i}>{p.slice(1, -1)}</code> : <Fragment key={i}>{linkify(p, wsId)}</Fragment>));
+}
+
+/** Board changes from the recorder or Claude's board tools, with one-click undo. */
+function BoardRecord({ it, sid, wsId }: { it: Extract<Item, { kind: 'board' }>; sid: string; wsId: string }) {
+  const t = useT();
+  const board = useApp((s) => s.board);
+  return (
+    <div className={cx('board-record', it.undone && 'undone')}>
+      <div className="head">
+        <Icon name="board" size={15} />
+        <b>{it.by === 'recorder' ? t('已自动记到看板') : t('Claude 记到了看板')}</b>
+        {it.model && <span className="muted">{t('后台识别 · {m}', { m: it.model })}</span>}
+        <span className="grow" />
+        {it.undone ? <span className="muted">{t('已撤销')}</span> : <button className="link-btn" onClick={() => api.undoBoardRecord(sid, it.id)}>{t('撤销')}</button>}
+      </div>
+      {it.changes.map((c) => {
+        const item = board.find((x) => x.workspaceId === wsId && x.id === c.itemId);
+        return (
+          <div key={c.itemId} className="chg">
+            <Chip tone={c.action === 'created' ? 'accent' : undefined}>{c.action === 'created' ? t('新建') : t('更新')}</Chip>
+            <BoardLink id={c.itemId} wsId={wsId} />
+            {item && <span className="title">{item.title}</span>}
+            <span className="muted">{c.text}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function Thinking({ text, seconds, streaming }: { text: string; seconds: number; streaming?: boolean }) {
@@ -191,6 +223,7 @@ export function ToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
 
 function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
   const t = useT();
+  const wsId = useApp((s) => s.sessions.find((x) => x.id === sid)?.workspaceId ?? '');
   const canBackground = !!tool.backgroundable && tool.status === 'running' && !tool.background;
   const hasBody = !!tool.output || !!tool.agent || !!tool.denialMessage || canBackground || !!tool.background || !!tool.rows?.length;
   const [open, setOpen] = useState(tool.tool !== 'Read');
@@ -242,7 +275,7 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
               {tool.rows.map((r, i) => (
                 <div key={i} className="nested-row">
                   <Icon name={r.icon} size={14} className="ink2" />
-                  <span className={cx('t', r.mono && 'mono')}>{r.text}</span>
+                  <span className={cx('t', r.mono && 'mono')}>{linkify(r.text, wsId)}</span>
                   {r.right && <span className="muted">{r.right}</span>}
                 </div>
               ))}

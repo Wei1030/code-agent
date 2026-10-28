@@ -308,3 +308,18 @@
 .rr-file-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: 12.5px; }
 .rr-file-head:hover { background: var(--surface-2); }
 .rr-file .diff { border-top: 1px solid var(--border); border-radius: 0; }
+
+/* Board ids and board changes in the conversation */
+.board-link { color: var(--accent); font-family: var(--mono); font-size: .92em; background: var(--accent-soft); border-radius: 4px; padding: 0 4px; cursor: pointer; white-space: nowrap; }
+.board-link:hover { text-decoration: underline; }
+.board-link.closed { color: var(--ink-2); background: var(--surface-3); }
+.board-peek { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; font-size: 13px; }
+.board-peek .t { font-weight: 600; }
+.board-peek .d { color: var(--ink-2); line-height: 1.55; }
+.board-record { border: 1px solid var(--accent-line); background: var(--surface); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.board-record .head { display: flex; align-items: center; gap: 8px; color: var(--accent); }
+.board-record .head b { color: var(--ink); }
+.board-record .chg { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.board-record .chg .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-record.undone { opacity: .6; }
+.board-record.undone .chg .title, .board-record.undone .chg .muted { text-decoration: line-through; }

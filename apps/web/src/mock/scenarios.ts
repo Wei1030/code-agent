@@ -8,6 +8,7 @@ import {
   streamText, userItem, waitFor, type Run,
 } from './engine';
 import { scenarioAskPeer, scenarioSpawn } from './peer';
+import { recordTurn, scenarioBoard } from './board';
 import { notify } from '../lib/notify';
 
 const short = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -208,6 +209,7 @@ export async function scenarioFix(run: Run) {
     ? '测试已经在后台运行，完成后会通知你。修复本身已经完成：计时器改用注入的时钟，并随购物车一起释放。'
     : '两个测试共用了一个从未清理的模块级计时器，导致后一个测试读到过期的时间。现在计时器改用注入的时钟，并随购物车一起释放，测试连续通过。');
   footer(sid, 9, (Date.now() - t0) / 1000);
+  recordTurn(sid, { kind: 'fix' });
 }
 
 export async function scenarioGeneric(run: Run, text: string) {
@@ -268,6 +270,7 @@ export async function scenarioQuestion(run: Run) {
   await playGroup(run, g, '读取 · {n} 个文件');
   await streamText(run, '下一步我会写出具体实现。要先看计划的话，把权限模式切到「规划模式」再让我继续。');
   footer(sid, 3, (Date.now() - t0) / 1000);
+  recordTurn(sid, { kind: 'decision', answers: ans.response ? [ans.response] : Object.values(ans.answers) });
 }
 
 const PLAN_V1 = {
@@ -338,6 +341,7 @@ export async function scenarioPlan(run: Run) {
   await bashStep(run, 'npm test -- rate-limit', ['> jest rate-limit', 'PASS  tests/rate-limit.test.ts (3.4 s)', 'Tests:       12 passed, 12 total'], { description: '运行限流测试' });
   await streamText(run, 'POST /orders 的限流已上线，补充了单元测试；文档的 429 说明也已加上。');
   footer(sid, 14, (Date.now() - t0) / 1000);
+  recordTurn(sid, { kind: 'plan', steps: plan.steps });
 }
 
 export async function scenarioSubagents(run: Run) {
@@ -547,6 +551,7 @@ export async function scenarioAck(run: Run, text: string) {
 }
 
 export function pickScenario(text: string, mode: string): (run: Run) => Promise<void> {
+  if (/看板|记成|记下来/.test(text)) return scenarioBoard;
   if (/拆成|拆开|分头|新建会话|并行做/.test(text)) return scenarioSpawn;
   if (/其他会话|别的会话|会话进展|问问/.test(text)) return scenarioAskPeer;
   if (/共享库|工作区外|外部目录|shared-lib/i.test(text)) return scenarioOutside;

@@ -1,11 +1,12 @@
 /** App-wide state: registries, preferences and UI chrome. Sessions live in ./sessions. */
 import { create } from 'zustand';
 import type {
-  CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PeerSettings, PermissionRule,
+  BoardItem, BoardSettings, CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PeerSettings, PermissionRule,
   PluginInfo, Prefs, Profile, ProviderKind, ReviewProfile, ReviewTicket, SessionSummary, SkillInfo, Workspace,
 } from '../api/types';
 import { COMMAND_FILES, FILE_HOOKS, HOOK_LOG, HOOK_RULES, MCP_SERVERS, PLUGINS, SKILLS } from '../mock/extensions';
 import { JOB_RUNS, JOBS } from '../mock/jobs';
+import { BOARD_ITEMS } from '../mock/boardSeed';
 import { ENV_VARS, PROFILES, RULES, SESSIONS, WORKSPACES } from '../mock/data';
 import { uid } from '../lib/util';
 
@@ -61,6 +62,8 @@ interface AppState {
   peer: PeerSettings;
   /** Claude Code processes running at once, across all workspaces. */
   maxRunning: number;
+  board: BoardItem[];
+  boardSettings: BoardSettings;
   reviews: ReviewTicket[];
   /** Check commands by workspace id; empty skips the checks. */
   reviewChecks: Record<string, string[]>;
@@ -130,6 +133,8 @@ export const useApp = create<AppState>((set, get) => ({
   jobRuns: JOB_RUNS,
   peer: { inbound: 'parity', maxHops: 6 },
   maxRunning: 4,
+  board: BOARD_ITEMS,
+  boardSettings: { recorder: true, recorderModel: 'haiku', startContext: true },
   reviews: [],
   reviewChecks: { 'ws-shop-api': ['npm run typecheck', 'npm test'] },
   reviewProfile: { model: 'opus', effort: 'high', tools: [], claudeMd: true, extraPrompt: '' },

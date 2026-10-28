@@ -183,7 +183,9 @@ export type Item =
   | { kind: 'divider'; id: string; label: string }
   | { kind: 'notice'; id: string; tone: 'good' | 'info' | 'warn'; text: string; action?: string }
   /** A step of a code review ticket; rendered from the ticket so it stays current. */
-  | { kind: 'review'; id: string; ticketId: string; round: number; what: 'check' | 'verdict' };
+  | { kind: 'review'; id: string; ticketId: string; round: number; what: 'check' | 'verdict' }
+  /** Board changes made by the recorder or by Claude's board tools; can be undone. */
+  | { kind: 'board'; id: string; by: 'recorder' | 'agent'; changes: Array<{ itemId: string; action: 'created' | 'updated'; text: string }>; model?: string; undone?: boolean };
 
 // ------------------------------------------------------------------ requests
 
@@ -693,4 +695,51 @@ export interface ReviewProfile {
   claudeMd: boolean;
   /** Appended to Code Agent's built-in review instructions. */
   extraPrompt: string;
+}
+
+// ------------------------------------------------------------------ board
+
+export type BoardKind = 'feature' | 'issue' | 'note';
+
+export type BoardStatus =
+  | 'todo' | 'doing' | 'done' | 'dropped'
+  | 'open' | 'confirmed' | 'fixing' | 'fixed' | 'wontfix'
+  | 'active' | 'outdated';
+
+/** Where an item came from. auto: the recorder after a turn; agent: Claude's board tools; review: an unresolved review finding. */
+export interface BoardSource {
+  kind: 'manual' | 'auto' | 'agent' | 'import' | 'review';
+  sessionId?: string;
+  /** External id (GitHub #311), or the review finding. */
+  ref?: string;
+  url?: string;
+}
+
+/** A workspace board item: F-3 (feature), I-12 (issue), N-4 (note). Kept in Code Agent's data directory. */
+export interface BoardItem {
+  id: string;
+  workspaceId: string;
+  kind: BoardKind;
+  title: string;
+  body: string;
+  status: BoardStatus;
+  priority: 'high' | 'normal' | 'low';
+  tasks: Array<{ id: string; text: string; done: boolean }>;
+  decisions: Array<{ id: string; text: string; outcome?: string }>;
+  source: BoardSource;
+  /** Recorded automatically; the user has not confirmed it yet. */
+  unconfirmed?: boolean;
+  /** Sessions that worked on it or mentioned it. */
+  sessions: string[];
+  log: Array<{ ts: number; text: string; sessionId?: string; auto?: boolean }>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BoardSettings {
+  /** After each turn, a cheap model records decisions, confirmed issues and finished work. */
+  recorder: boolean;
+  recorderModel: string;
+  /** Give new sessions the titles and ids of the features in progress. */
+  startContext: boolean;
 }
