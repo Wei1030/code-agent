@@ -23,6 +23,7 @@ import { addSessionAgents, cwdOf } from './sessions/options';
 import { addBusyCheck } from './sessions/slots';
 import { addQueueBlocker, pumpQueue } from './sessions/ops';
 import { head, isRepo, numstat, snapshot } from './git';
+import { readOnlyCommand } from '@code-agent/shared/readonly';
 import { addWorkspaceTools } from './peer';
 
 const GLOBAL_ROUNDS = 3;
@@ -276,13 +277,6 @@ function reviewing(sid: string): { t: ReviewTicket; n: number } | undefined {
   const t = activeTicket(sid);
   const p = t && pending.get(t.id);
   return t && p?.step === 'review' && t.status === 'reviewing' ? { t, n: p.round } : undefined;
-}
-
-const READ_ONLY_CMD = /^(git\s+(diff|log|show|status|blame|ls-files|ls-tree|grep|rev-parse|cat-file|merge-base|describe|shortlog|branch|tag|remote|config\s+--get)\b|ls|dir|cat|type|head|tail|wc|grep|rg|egrep|fgrep|find|tree|pwd|echo|sort|uniq|cut|awk|sed\s+-n|less|more|file|stat|du|which|where|Get-Content|Get-ChildItem|Select-String|Get-Item|Test-Path|Measure-Object)\b/i;
-
-function readOnlyCommand(cmd: string): boolean {
-  if (/[<>]|`|\$\(|\btee\b|-delete\b|-exec\b|--output\b/.test(cmd.replace(/2>&1/g, ''))) return false;
-  return cmd.split(/&&|\|\||;|\|/).map((s) => s.trim()).filter(Boolean).every((s) => READ_ONLY_CMD.test(s));
 }
 
 // The author may only start the reviewer when Code Agent asks; its prompt, model and effort are fixed here.

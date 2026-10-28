@@ -63,7 +63,7 @@ async function main() {
     const { createServer } = await import('vite');
     vite = await createServer({ root: WEB, configFile: path.join(WEB, 'vite.config.ts'), server: { middlewareMode: true, hmr: { server } }, appType: 'spa' });
   }
-  const dist = path.join(WEB, 'dist');
+  const dist = process.env.CODE_AGENT_WEB_DIST ?? path.join(WEB, 'dist');
   server.on('request', (req, res) => {
     if (vite) {
       vite.middlewares(req, res, () => {
@@ -72,8 +72,15 @@ async function main() {
       });
       return;
     }
-    const url = new URL(req.url ?? '/', 'http://x');
-    let file = path.join(dist, decodeURIComponent(url.pathname));
+    let file: string;
+    try {
+      file = path.join(dist, decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname));
+    } catch {
+      // A malformed path (e.g. /%E0%A4%A) must not take the server and its sessions down.
+      res.statusCode = 400;
+      res.end('Bad request');
+      return;
+    }
     if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(dist, 'index.html');
     if (!existsSync(file)) {
       res.statusCode = 500;
@@ -99,8 +106,11 @@ async function main() {
     console.log(`Code Agent ${VERSION} · http://${HOST}:${PORT} · data ${HOME}${DEV ? ' · dev' : ''}`);
   });
 
-  void checkLogin().then(() => probeMcp());
-  void scanExternal();
+  // Tests start the server without asking Claude Code anything.
+  if (!process.env.CODE_AGENT_NO_PROBE) {
+    void checkLogin().then(() => probeMcp());
+    void scanExternal();
+  }
   startScheduler();
   setInterval(() => void refreshBranches(), 30_000);
   setInterval(reloadDisk, 15_000);
@@ -113,5 +123,9 @@ async function main() {
   process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
 }
+
+// One failed operation must not end every running session with the server.
+process.on('unhandledRejection', (e) => console.error('[server] unhandled rejection:', e));
+process.on('uncaughtException', (e) => console.error('[server] uncaught exception:', e));
 
 void main();
