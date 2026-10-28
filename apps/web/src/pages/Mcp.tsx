@@ -3,13 +3,13 @@
  * one workspace on this machine (local scope), the repository's .mcp.json and plugins.
  */
 import { useState } from 'react';
-import type { McpServer, PermissionRule } from '../../api/types';
-import { Icon } from '../../components/Icon';
-import { Button, Chip, Field, Modal, Seg, Select, Status, Toggle } from '../../components/ui';
-import { useApp } from '../../store/app';
-import { tokens as fmtTokens } from '../../lib/format';
-import { cx, uid } from '../../lib/util';
-import { useT } from '../../lib/i18n';
+import type { McpServer, PermissionRule } from '../api/types';
+import { Icon } from '../components/Icon';
+import { Button, Chip, Field, Modal, Seg, Select, Status, Toggle } from '../components/ui';
+import { useApp } from '../store/app';
+import { tokens as fmtTokens } from '../lib/format';
+import { cx, uid } from '../lib/util';
+import { useT } from '../lib/i18n';
 
 const STATUS: Record<McpServer['status'], { tone: 'good' | 'warn' | 'crit' | 'info' | 'idle'; label: string }> = {
   connected: { tone: 'good', label: '已连接' },
@@ -46,39 +46,41 @@ export function Mcp() {
   ];
 
   return (
-    <>
-      <h1>{t('MCP 服务器')}</h1>
-      <p className="lead">{t('MCP 服务器给 Claude 提供额外的工具（GitHub、数据库、浏览器…）。配置保存在 Claude Code 自己的配置里，在终端里用 claude 时同样可用。')}</p>
-      <div className="row" style={{ marginBottom: 14 }}>
-        <span className="ink2">{t('查看工作区')}</span>
-        <Select value={wsId} onChange={(v) => { setWsId(v); setSelId(''); }} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
-        <span className="grow" />
-        <Button variant="primary" icon="plus" onClick={() => setEditing('new')}>{t('添加服务器')}</Button>
-      </div>
-
-      <div className="ext-layout">
-        <div className="ext-list">
-          {groups.filter((g) => g.items.length).map((g) => (
-            <div key={g.title}>
-              <h5>{g.title}{g.hint && <span className="mono" style={{ fontWeight: 400 }}>{g.hint}</span>}</h5>
-              {g.items.map((s) => (
-                <div key={s.id} className={cx('ext-item', s.id === sel?.id && 'on')} onClick={() => setSelId(s.id)}>
-                  <div className="top"><b>{s.name}</b><Chip>{s.type}</Chip><span className="grow" /><Status tone={STATUS[s.status].tone}>{t(STATUS[s.status].label)}</Status></div>
-                  {s.status === 'failed' ? <div className="sub err">{s.error}</div>
-                    : <div className="sub">{s.tools.length ? t('{n} 个工具', { n: s.tools.length }) : '—'}{s.prompts.length > 0 && <span>{t('{n} 个提示', { n: s.prompts.length })}</span>}</div>}
-                </div>
-              ))}
-            </div>
-          ))}
-          {list.length === 0 && <div className="empty">{t('这个工作区还没有 MCP 服务器')}</div>}
+    <div className="page">
+      <div className="page-inner">
+        <div className="page-title"><h1>{t('MCP 服务器')}</h1></div>
+        <p className="page-sub">{t('MCP 服务器给 Claude 提供额外的工具（GitHub、数据库、浏览器…）。配置保存在 Claude Code 自己的配置里，在终端里用 claude 时同样可用。')}</p>
+        <div className="row" style={{ marginBottom: 14 }}>
+          <span className="ink2">{t('查看工作区')}</span>
+          <Select value={wsId} onChange={(v) => { setWsId(v); setSelId(''); }} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+          <span className="grow" />
+          <Button variant="primary" icon="plus" onClick={() => setEditing('new')}>{t('添加服务器')}</Button>
         </div>
 
-        {sel ? <ServerDetail s={sel} wsId={wsId} wsName={ws?.name ?? ''} onEdit={() => setEditing(sel)} onRemoved={() => setSelId('')} /> : <div />}
-      </div>
+        <div className="ext-layout">
+          <div className="ext-list">
+            {groups.filter((g) => g.items.length).map((g) => (
+              <div key={g.title}>
+                <h5>{g.title}{g.hint && <span className="mono" style={{ fontWeight: 400 }}>{g.hint}</span>}</h5>
+                {g.items.map((s) => (
+                  <div key={s.id} className={cx('ext-item', s.id === sel?.id && 'on')} onClick={() => setSelId(s.id)}>
+                    <div className="top"><b>{s.name}</b><Chip>{s.type}</Chip><span className="grow" /><Status tone={STATUS[s.status].tone}>{t(STATUS[s.status].label)}</Status></div>
+                    {s.status === 'failed' ? <div className="sub err">{s.error}</div>
+                      : <div className="sub">{s.tools.length ? t('{n} 个工具', { n: s.tools.length }) : '—'}{s.prompts.length > 0 && <span>{t('{n} 个提示', { n: s.prompts.length })}</span>}</div>}
+                  </div>
+                ))}
+              </div>
+            ))}
+            {list.length === 0 && <div className="empty">{t('这个工作区还没有 MCP 服务器')}</div>}
+          </div>
 
-      <Behavior />
-      {editing && <ServerForm server={editing === 'new' ? null : editing} wsId={wsId} wsName={ws?.name ?? ''} onClose={(id) => { setEditing(null); if (id) setSelId(id); }} />}
-    </>
+          {sel ? <ServerDetail s={sel} wsId={wsId} wsName={ws?.name ?? ''} onEdit={() => setEditing(sel)} onRemoved={() => setSelId('')} /> : <div />}
+        </div>
+
+        <Behavior />
+        {editing && <ServerForm server={editing === 'new' ? null : editing} wsId={wsId} wsName={ws?.name ?? ''} onClose={(id) => { setEditing(null); if (id) setSelId(id); }} />}
+      </div>
+    </div>
   );
 }
 

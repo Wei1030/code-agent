@@ -10,9 +10,10 @@ import { Profiles } from './pages/settings/Profiles';
 import { Permissions } from './pages/settings/Permissions';
 import { Provider } from './pages/settings/Provider';
 import { Language } from './pages/settings/Language';
-import { Mcp } from './pages/settings/Mcp';
-import { Skills } from './pages/settings/Skills';
-import { Hooks } from './pages/settings/Hooks';
+import { Mcp } from './pages/Mcp';
+import { Skills } from './pages/Skills';
+import { Hooks } from './pages/Hooks';
+import { Jobs } from './pages/Jobs';
 
 export function App() {
   return (
@@ -21,6 +22,10 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="sessions" element={<History />} />
         <Route path="s/:id" element={<SessionPage />} />
+        <Route path="mcp" element={<Mcp />} />
+        <Route path="skills" element={<Skills />} />
+        <Route path="hooks" element={<Hooks />} />
+        <Route path="jobs" element={<Jobs />} />
         <Route path="usage" element={<Usage />} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="profiles" replace />} />
@@ -28,9 +33,6 @@ export function App() {
           <Route path="permissions" element={<Permissions />} />
           <Route path="provider" element={<Provider />} />
           <Route path="language" element={<Language />} />
-          <Route path="mcp" element={<Mcp />} />
-          <Route path="skills" element={<Skills />} />
-          <Route path="hooks" element={<Hooks />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

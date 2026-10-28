@@ -41,6 +41,8 @@ export interface SessionSummary {
   tokens: number;
   /** Not created on the server yet: no message has been sent. */
   draft?: boolean;
+  /** Started by a job run; kept out of the normal session lists. */
+  jobId?: string;
 }
 
 // ------------------------------------------------------------------ transcript
@@ -488,4 +490,53 @@ export interface HookLogEntry {
   result: string;
   ms: number;
   detail?: string;
+}
+
+// ------------------------------------------------------------------ jobs
+
+export interface JobSchedule {
+  kind: 'manual' | 'daily' | 'weekly' | 'hourly' | 'cron';
+  /** HH:MM for daily and weekly. */
+  time: string;
+  /** 1 = Monday … 7 = Sunday. */
+  weekdays: number[];
+  everyHours: number;
+  cron: string;
+  enabled: boolean;
+  /** Values for the prompt's {{variables}} on scheduled runs. */
+  vars: Record<string, string>;
+  /** What to do about runs missed while the Code Agent service was not running. */
+  missed: 'skip' | 'runOnce';
+}
+
+/** A reusable task whose answer must match a JSON Schema; run by hand or on a schedule. */
+export interface JobTemplate {
+  id: string;
+  name: string;
+  workspaceId: string;
+  prompt: string;
+  /** JSON Schema text. */
+  schema: string;
+  model: string;
+  effort: Effort;
+  mode: PermissionMode;
+  schedule: JobSchedule;
+  notify: 'never' | 'failure' | 'always';
+  /** Scheduled runs missed while the service was down. */
+  missedRuns?: number;
+}
+
+export interface JobRun {
+  id: string;
+  jobId: string;
+  trigger: 'manual' | 'schedule';
+  startedAt: number;
+  endedAt?: number;
+  vars: Record<string, string>;
+  status: 'running' | 'success' | 'invalid' | 'error';
+  error?: string;
+  output?: unknown;
+  turns: number;
+  tokens: number;
+  sessionId?: string;
 }

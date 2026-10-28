@@ -1,10 +1,11 @@
 /** App-wide state: registries, preferences and UI chrome. Sessions live in ./sessions. */
 import { create } from 'zustand';
 import type {
-  CommandFile, EnvVar, ExtraDir, FileHook, HookLogEntry, HookRule, McpServer, PermissionRule, PluginInfo, Prefs, Profile,
+  CommandFile, EnvVar, ExtraDir, FileHook, HookLogEntry, HookRule, JobRun, JobTemplate, McpServer, PermissionRule, PluginInfo, Prefs, Profile,
   ProviderKind, SessionSummary, SkillInfo, Workspace,
 } from '../api/types';
 import { COMMAND_FILES, FILE_HOOKS, HOOK_LOG, HOOK_RULES, MCP_SERVERS, PLUGINS, SKILLS } from '../mock/extensions';
+import { JOB_RUNS, JOBS } from '../mock/jobs';
 import { ENV_VARS, PROFILES, RULES, SESSIONS, WORKSPACES } from '../mock/data';
 import { uid } from '../lib/util';
 
@@ -55,6 +56,8 @@ interface AppState {
   hookRules: HookRule[];
   fileHooks: FileHook[];
   hookLog: HookLogEntry[];
+  jobs: JobTemplate[];
+  jobRuns: JobRun[];
   provider: Provider;
   env: EnvVar[];
   runtime: { debugLog: boolean; otel: boolean; otelEndpoint: string; otelMetrics: boolean; otelLogs: boolean; otelTraces: boolean; otelPrompts: boolean; otelTools: boolean };
@@ -106,6 +109,8 @@ export const useApp = create<AppState>((set, get) => ({
   hookRules: HOOK_RULES,
   fileHooks: FILE_HOOKS,
   hookLog: HOOK_LOG,
+  jobs: JOBS,
+  jobRuns: JOB_RUNS,
   provider: {
     kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',
     envConflict: false, compatibleUrl: '', compatibleModel: '',

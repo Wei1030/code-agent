@@ -13,7 +13,7 @@ export function Home() {
   const nav = useNavigate();
   const workspaces = useApp((s) => s.workspaces);
   const sessions = useApp((s) => s.sessions);
-  const recent = sessions.filter((s) => !s.draft).sort((a, b) => b.lastActive - a.lastActive).slice(0, 8);
+  const recent = sessions.filter((s) => !s.draft && !s.jobId).sort((a, b) => b.lastActive - a.lastActive).slice(0, 8);
   const openPicker = () => useApp.getState().set({ folderPickerOpen: true });
 
   const openWorkspace = useOpenWorkspace();

@@ -135,7 +135,6 @@
 .try-result .chip { align-self: flex-start; }
 .dir-row { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); }
 .dir-row .mono { font-size: 12.5px; }
-.settings-group { margin: 18px 12px 6px; font-size: 11px; font-weight: 700; color: var(--muted); }
 /* extensions: list + detail */
 .ext-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
 .ext-list { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 6px; }
@@ -171,3 +170,13 @@
 .hook-card.off b { color: var(--muted); }
 .hook-card.file { background: var(--surface-2); border-style: dashed; cursor: default; }
 .hook-test { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--surface-2); display: flex; flex-direction: column; gap: 8px; }
+/* jobs */
+.jobs-layout { display: grid; grid-template-columns: 250px minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.day-chip { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 14px; padding: 3px 10px; cursor: pointer; font-size: 12.5px; color: var(--ink-2); }
+.day-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.divider-line { border-top: 1px solid var(--border); }
+.run-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); cursor: pointer; font-size: 12.5px; }
+.run-row:hover { border-color: var(--accent-line); }
+.run-row.on { border-color: var(--accent); background: var(--accent-soft); }
+.ext-item .sub.sched { display: block; }
+.ext-item .sub.sched .icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }

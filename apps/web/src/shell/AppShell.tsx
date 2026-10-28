@@ -25,6 +25,10 @@ export function AppShell() {
       <TopBar />
       <nav className="navrail" aria-label={t('主导航')}>
         <button className={cx(onSessions && 'active')} onClick={goToSessions} title={t('进入所选工作区最近的会话；选择「所有工作区」时进入总览')}><Icon name="chat" size={22} />{t('会话')}</button>
+        <NavLink to="/mcp" className={({ isActive }) => cx(isActive && 'active')}><Icon name="plug" size={22} />MCP</NavLink>
+        <NavLink to="/skills" className={({ isActive }) => cx(isActive && 'active')}><Icon name="spark" size={22} />{t('技能')}</NavLink>
+        <NavLink to="/hooks" className={({ isActive }) => cx(isActive && 'active')}><Icon name="hook" size={22} />{t('钩子')}</NavLink>
+        <NavLink to="/jobs" className={({ isActive }) => cx(isActive && 'active')}><Icon name="braces" size={22} />{t('作业')}</NavLink>
         <NavLink to="/usage" className={({ isActive }) => cx(isActive && 'active')}><Icon name="chart" size={22} />{t('用量')}</NavLink>
         <NavLink to="/settings" className={({ isActive }) => cx(isActive && 'active')}><Icon name="gear" size={22} />{t('设置')}</NavLink>
         <button className="bottom mock-btn" title={t('模拟控制台：触发场景和异常状态')} onClick={() => useApp.getState().set({ mockConsoleOpen: !useApp.getState().mockConsoleOpen })}>
@@ -110,7 +114,7 @@ function SearchBox() {
     if (!k) return [];
     const pages = [
       { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则'), to: '/settings/permissions' },
-      { label: t('设置 · MCP 服务器'), to: '/settings/mcp' }, { label: t('设置 · 技能、命令与插件'), to: '/settings/skills' }, { label: t('设置 · 钩子'), to: '/settings/hooks' },
+      { label: t('MCP 服务器'), to: '/mcp' }, { label: t('技能、命令与插件'), to: '/skills' }, { label: t('钩子'), to: '/hooks' }, { label: t('作业'), to: '/jobs' },
       { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
     ].filter((p) => p.label.toLowerCase().includes(k));
     const ss = sessions.filter((s) => !s.draft && (s.title.toLowerCase().includes(k) || s.firstPrompt.toLowerCase().includes(k))).slice(0, 6);

@@ -1,12 +1,12 @@
 /** P16 — skills, slash commands and plugins available in a workspace. */
 import { useMemo, useState } from 'react';
-import type { CommandFile, PluginInfo, SkillInfo } from '../../api/types';
-import { Icon } from '../../components/Icon';
-import { Button, Chip, Field, Modal, Seg, Select, Status, Tabs, Toggle } from '../../components/ui';
-import { useApp } from '../../store/app';
-import { BUILTIN_COMMANDS } from '../../mock/extensions';
-import { cx, uid } from '../../lib/util';
-import { useT } from '../../lib/i18n';
+import type { CommandFile, PluginInfo, SkillInfo } from '../api/types';
+import { Icon } from '../components/Icon';
+import { Button, Chip, Field, Modal, Seg, Select, Status, Tabs, Toggle } from '../components/ui';
+import { useApp } from '../store/app';
+import { BUILTIN_COMMANDS } from '../mock/extensions';
+import { cx, uid } from '../lib/util';
+import { useT } from '../lib/i18n';
 
 const SOURCE_LABEL = { bundled: '内置', global: '所有工作区', workspace: '这个工作区', plugin: '插件' } as const;
 const INVOCABLE_LABEL = { both: '你 · Claude', user: '仅你（/ 命令）', model: '仅 Claude 自动使用' } as const;
@@ -42,24 +42,26 @@ export function Skills() {
   const commandCount = BUILTIN_COMMANDS.length + skills.filter((s) => s.invocable !== 'model').length + commandFiles.length + mcpPrompts.length;
 
   return (
-    <>
-      <h1>{t('技能、命令与插件')}</h1>
-      <p className="lead">{t('技能是写在 SKILL.md 里的做事方法，Claude 需要时自动使用，也可以用 / 命令调用；命令是可复用的提示词；插件把技能、命令、钩子和 MCP 服务器打包在一个文件夹里。')}</p>
-      <div className="row" style={{ marginBottom: 12 }}>
-        <span className="ink2">{t('查看工作区')}</span>
-        <Select value={wsId} onChange={setWsId} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+    <div className="page">
+      <div className="page-inner">
+        <div className="page-title"><h1>{t('技能、命令与插件')}</h1></div>
+        <p className="page-sub">{t('技能是写在 SKILL.md 里的做事方法，Claude 需要时自动使用，也可以用 / 命令调用；命令是可复用的提示词；插件把技能、命令、钩子和 MCP 服务器打包在一个文件夹里。')}</p>
+        <div className="row" style={{ marginBottom: 12 }}>
+          <span className="ink2">{t('查看工作区')}</span>
+          <Select value={wsId} onChange={setWsId} icon="folder" className="w-240" options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
+        </div>
+        <Tabs value={tab} onChange={setTab} items={[
+          { value: 'skills', label: t('技能'), count: skills.length },
+          { value: 'commands', label: t('命令'), count: commandCount },
+          { value: 'plugins', label: t('插件'), count: app.plugins.length },
+        ]} />
+        <div style={{ marginTop: 16 }}>
+          {tab === 'skills' && <SkillsTab skills={skills} wsId={wsId} wsName={ws?.name ?? ''} />}
+          {tab === 'commands' && <CommandsTab files={commandFiles} skills={skills} prompts={mcpPrompts} wsId={wsId} wsName={ws?.name ?? ''} />}
+          {tab === 'plugins' && <PluginsTab />}
+        </div>
       </div>
-      <Tabs value={tab} onChange={setTab} items={[
-        { value: 'skills', label: t('技能'), count: skills.length },
-        { value: 'commands', label: t('命令'), count: commandCount },
-        { value: 'plugins', label: t('插件'), count: app.plugins.length },
-      ]} />
-      <div style={{ marginTop: 16 }}>
-        {tab === 'skills' && <SkillsTab skills={skills} wsId={wsId} wsName={ws?.name ?? ''} />}
-        {tab === 'commands' && <CommandsTab files={commandFiles} skills={skills} prompts={mcpPrompts} wsId={wsId} wsName={ws?.name ?? ''} />}
-        {tab === 'plugins' && <PluginsTab />}
-      </div>
-    </>
+    </div>
   );
 }
 

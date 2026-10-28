@@ -91,7 +91,7 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
   const wsId = useApp((s) => current?.workspaceId ?? s.currentWorkspaceId);
   const ws = useApp((s) => s.workspaces.find((w) => w.id === wsId));
   const sessions = useApp((s) => s.sessions);
-  const mine = sessions.filter((s) => s.workspaceId === wsId && (!s.draft || s.id === current?.id)).sort((a, b) => b.lastActive - a.lastActive);
+  const mine = sessions.filter((s) => s.workspaceId === wsId && (!s.draft || s.id === current?.id) && (!s.jobId || s.id === current?.id)).sort((a, b) => b.lastActive - a.lastActive);
   const live = mine.filter((s) => s.live || s.draft);
   const saved = mine.filter((s) => !s.live && !s.draft).slice(0, 10);
   const actions = useSessionActions();

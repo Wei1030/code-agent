@@ -53,6 +53,10 @@ export function MockConsole() {
         <Button onClick={() => { const id = ensureSession(); void api.compact(id, ''); }}>自动压缩</Button>
         <Button onClick={() => api.connectionDrop()}>断线后重连</Button>
       </div>
+      <h4>作业</h4>
+      <div className="grid">
+        <Button onClick={() => api.fireScheduledJob()}>定时作业到点</Button>
+      </div>
       <h4>数据</h4>
       <div className="grid">
         <Button onClick={() => { api.resetSampleData(hasWs); nav('/'); }}>{hasWs ? '清空工作区（看空状态）' : '恢复示例工作区'}</Button>

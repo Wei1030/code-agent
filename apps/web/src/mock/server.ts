@@ -10,13 +10,15 @@ import { useApp } from '../store/app';
 import { emptyRuntime, useSessions } from '../store/sessions';
 import { uid } from '../lib/util';
 import { baseContext, genericTranscript, MODELS, WORKSPACES } from './data';
+import { JOB_OUTPUTS } from './jobs';
+import { fillVars } from '../lib/schedule';
 import {
   addItem, answer, cancelRun, currentRun, emit, isRunning, onAfterTurn, raw, rt, runHooks, startRun, streamText,
   userItem,
 } from './engine';
 import {
   bootAuth, bootDocs, bootFlaky, footer, pickScenario, scenarioAck,
-  scenarioCommand, scenarioElicitForm, scenarioElicitUrl, scenarioFix, scenarioHighRisk, scenarioOutside, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
+  scenarioCommand, scenarioElicitForm, scenarioElicitUrl, scenarioFix, scenarioHighRisk, scenarioJob, scenarioOutside, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
 } from './scenarios';
 
 const MODEL_ID: Record<string, string> = { opus: 'claude-opus-5-5', fable: 'claude-fable-5-1', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5' };
@@ -257,7 +259,7 @@ export function runningWork(sid: string): RunningWork {
  * new session, else the most recent saved one. Null when the workspace has no sessions.
  */
 export function latestSession(workspaceId: string): string | null {
-  const list = useApp.getState().sessions.filter((s) => s.workspaceId === workspaceId);
+  const list = useApp.getState().sessions.filter((s) => s.workspaceId === workspaceId && !s.jobId);
   const newest = (xs: typeof list) => (xs.length ? xs.reduce((a, b) => (b.lastActive > a.lastActive ? b : a)).id : null);
   return newest(list.filter((s) => s.live && !s.draft)) ?? newest(list.filter((s) => s.draft)) ?? newest(list);
 }
@@ -433,6 +435,66 @@ export function exportMarkdown(sid: string): string {
     else if (it.kind === 'footer') lines.push(`---`, `第 ${it.turn} 轮 · ${it.tokens} tokens`, '');
   }
   return lines.join('\n');
+}
+
+// ------------------------------------------------------------------ jobs
+
+/**
+ * Run a job: a single-message session in the job's workspace with outputFormat set to its schema.
+ * The real server's scheduler calls this at the scheduled times. Returns the run id.
+ */
+export function runJob(jobId: string, vars: Record<string, string>, trigger: 'manual' | 'schedule'): string {
+  const app = useApp.getState();
+  const job = app.jobs.find((j) => j.id === jobId)!;
+  const ws = app.workspaces.find((w) => w.id === job.workspaceId) ?? app.workspaces[0];
+  const prompt = fillVars(job.prompt, vars);
+  const sid = uid('s');
+  const runId = uid('run');
+  const started = Date.now();
+  app.upsertSession({
+    id: sid, workspaceId: ws.id, title: `作业 · ${job.name}`, firstPrompt: prompt, branch: ws.branch, createdAt: started, lastActive: started,
+    tag: '作业', live: true, state: 'running', forkedFrom: null, tokens: 0, jobId,
+  });
+  useSessions.getState().init(emptyRuntime(sid, { model: job.model, effort: job.effort, mode: job.mode }));
+  initRaw(sid);
+  userItem(sid, prompt);
+  app.set({ jobRuns: [{ id: runId, jobId, trigger, startedAt: started, vars, status: 'running', turns: 0, tokens: 0, sessionId: sid }, ...app.jobRuns] });
+  void startRun(sid, async (run) => {
+    const ok = await scenarioJob(run, jobId);
+    const r = rt(sid);
+    const patchRun = {
+      endedAt: Date.now(), status: ok ? 'success' as const : 'invalid' as const, output: ok ? JOB_OUTPUTS[jobId] ?? { summary: '已完成。' } : undefined,
+      error: ok ? undefined : '重试 3 次后仍没有符合结构的输出（error_max_structured_output_retries）',
+      turns: r?.turn ?? 1, tokens: r?.tokens ?? 0,
+    };
+    useApp.getState().set({ jobRuns: useApp.getState().jobRuns.map((x) => (x.id === runId ? { ...x, ...patchRun } : x)) });
+    // One message per run: the process ends; the session stays saved and can be resumed.
+    setTimeout(() => stop(sid), 0);
+    const notify = job.notify === 'always' || (job.notify === 'failure' && !ok);
+    if (notify && window.location.pathname !== '/jobs') {
+      useApp.getState().toast(ok ? `作业「${job.name}」已完成` : `作业「${job.name}」失败：没有符合结构的输出`, ok ? 'good' : 'warn', {
+        label: '查看', run: () => { window.history.pushState({}, '', '/jobs'); window.dispatchEvent(new PopStateEvent('popstate')); },
+      });
+    }
+  });
+  return runId;
+}
+
+/** Mock console: a scheduled job comes due. */
+export function fireScheduledJob() {
+  const app = useApp.getState();
+  const job = app.jobs.find((j) => j.schedule.kind !== 'manual' && j.schedule.enabled);
+  if (!job) { app.toast('没有启用定时的作业', 'warn'); return; }
+  runJob(job.id, job.schedule.vars, 'schedule');
+  app.toast(`定时作业「${job.name}」开始运行`, 'info');
+}
+
+/** Run once for the scheduled runs missed while the service was down. */
+export function catchUpJob(jobId: string) {
+  const app = useApp.getState();
+  const job = app.jobs.find((j) => j.id === jobId)!;
+  app.set({ jobs: app.jobs.map((j) => (j.id === jobId ? { ...j, missedRuns: 0 } : j)) });
+  return runJob(jobId, job.schedule.vars, 'schedule');
 }
 
 // ------------------------------------------------------------------ mock console

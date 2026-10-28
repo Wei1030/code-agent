@@ -3,14 +3,14 @@
  * from settings files, plugins and Code Agent itself are listed read-only. The log shows every run.
  */
 import { useMemo, useState } from 'react';
-import type { HookAction, HookRule } from '../../api/types';
-import { Icon } from '../../components/Icon';
-import { Button, Chip, Field, Seg, Select, Status, Toggle } from '../../components/ui';
-import { useApp } from '../../store/app';
-import { HOOK_EVENTS } from '../../mock/extensions';
-import { ACTION_INFO, actionLabel, actionsFor, condFieldsFor, hookOutput, isToolEvent, ruleMatches, sampleInput } from '../../lib/hooks';
-import { cx, uid } from '../../lib/util';
-import { useT } from '../../lib/i18n';
+import type { HookAction, HookRule } from '../api/types';
+import { Icon } from '../components/Icon';
+import { Button, Chip, Field, Seg, Select, Status, Toggle } from '../components/ui';
+import { useApp } from '../store/app';
+import { HOOK_EVENTS } from '../mock/extensions';
+import { ACTION_INFO, actionLabel, actionsFor, condFieldsFor, hookOutput, isToolEvent, ruleMatches, sampleInput } from '../lib/hooks';
+import { cx, uid } from '../lib/util';
+import { useT } from '../lib/i18n';
 
 const OPS = [
   { value: 'glob', label: '匹配通配符' },
@@ -43,63 +43,65 @@ export function Hooks() {
   };
 
   return (
-    <>
-      <h1>{t('钩子')}</h1>
-      <p className="lead">{t('钩子在 Claude 工作的特定时机自动执行：比如工具运行前拦截危险命令、每轮结束发通知。这里用规则配置，不用写代码。')}</p>
-      <div className="hooks-layout">
-        <div className="ext-list hook-events">
-          {HOOK_EVENTS.map((g) => (
-            <div key={g.group}>
-              <h5>{t(g.group)}</h5>
-              {g.events.map((e) => (
-                <div key={e.name} className={cx('hook-ev', e.name === event && 'on', count(e.name) === 0 && 'zero')} title={t(e.desc)}
-                  onClick={() => { setEvent(e.name); setSelId(app.hookRules.find((r) => r.event === e.name)?.id ?? null); }}>
-                  <span className="mono grow">{e.name}</span>
-                  {count(e.name) > 0 && <span className="cnt">{count(e.name)}</span>}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        <div className="ext-detail">
-          <div className="ext-head">
-            <h2 className="mono">{event}</h2>
-            <span className="muted">{info && t(info.desc)}</span>
-            <span className="grow" />
-            <Button variant="primary" icon="plus" onClick={create}>{t('新建规则')}</Button>
+    <div className="page">
+      <div className="page-inner">
+        <div className="page-title"><h1>{t('钩子')}</h1></div>
+        <p className="page-sub">{t('钩子在 Claude 工作的特定时机自动执行：比如工具运行前拦截危险命令、每轮结束发通知。这里用规则配置，不用写代码。')}</p>
+        <div className="hooks-layout">
+          <div className="ext-list hook-events">
+            {HOOK_EVENTS.map((g) => (
+              <div key={g.group}>
+                <h5>{t(g.group)}</h5>
+                {g.events.map((e) => (
+                  <div key={e.name} className={cx('hook-ev', e.name === event && 'on', count(e.name) === 0 && 'zero')} title={t(e.desc)}
+                    onClick={() => { setEvent(e.name); setSelId(app.hookRules.find((r) => r.event === e.name)?.id ?? null); }}>
+                    <span className="mono grow">{e.name}</span>
+                    {count(e.name) > 0 && <span className="cnt">{count(e.name)}</span>}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
 
-          {rules.length === 0 && fileHooks.length === 0 && <div className="empty panel">{t('这个时机还没有钩子')}</div>}
-          {rules.map((r) => (
-            <div key={r.id} className={cx('hook-card', r.id === sel?.id && 'on', !r.enabled && 'off')} onClick={() => setSelId(r.id)}>
-              <span onClick={(e) => e.stopPropagation()}><Toggle on={r.enabled} onChange={(v) => app.set({ hookRules: app.hookRules.map((x) => (x.id === r.id ? { ...x, enabled: v } : x)) })} /></span>
-              <div className="grow">
-                <div className="row"><b>{r.name}</b>{r.matcher && <Chip mono>{r.matcher}</Chip>}{r.async && <Chip>{t('异步')}</Chip>}</div>
-                <div className="mono ink2" style={{ fontSize: 12 }}>{r.cond?.value ? `${r.cond.field} ${t(OPS.find((o) => o.value === r.cond!.op)!.label)} ${r.cond.value}` : t('无条件')}</div>
-              </div>
-              <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
-                <Chip tone={ACTION_TONE[r.action]}>{t(actionLabel(r.event, r.action))}</Chip>
-                <span className="hint">{r.scope === 'global' ? t('所有工作区') : app.workspaces.find((w) => w.id === r.workspaceId)?.name}</span>
-              </div>
+          <div className="ext-detail">
+            <div className="ext-head">
+              <h2 className="mono">{event}</h2>
+              <span className="muted">{info && t(info.desc)}</span>
+              <span className="grow" />
+              <Button variant="primary" icon="plus" onClick={create}>{t('新建规则')}</Button>
             </div>
-          ))}
-          {fileHooks.map((h) => (
-            <div key={h.id} className="hook-card file">
-              <Icon name="lock" size={14} className="muted" />
-              <div className="grow">
-                <div className="row"><b className="ink2">{h.source}</b><Chip>{h.type === 'builtin' ? t('内置') : h.type}</Chip>{h.matcher && <Chip mono>{h.matcher}</Chip>}</div>
-                <div className="mono muted" style={{ fontSize: 12 }}>{h.detail}</div>
-              </div>
-              <span className="hint">{t('只读 · 与上面的规则一起执行')}</span>
-            </div>
-          ))}
 
-          {sel && <RuleEditor key={sel.id} rule={sel} onDeleted={() => setSelId(null)} />}
+            {rules.length === 0 && fileHooks.length === 0 && <div className="empty panel">{t('这个时机还没有钩子')}</div>}
+            {rules.map((r) => (
+              <div key={r.id} className={cx('hook-card', r.id === sel?.id && 'on', !r.enabled && 'off')} onClick={() => setSelId(r.id)}>
+                <span onClick={(e) => e.stopPropagation()}><Toggle on={r.enabled} onChange={(v) => app.set({ hookRules: app.hookRules.map((x) => (x.id === r.id ? { ...x, enabled: v } : x)) })} /></span>
+                <div className="grow">
+                  <div className="row"><b>{r.name}</b>{r.matcher && <Chip mono>{r.matcher}</Chip>}{r.async && <Chip>{t('异步')}</Chip>}</div>
+                  <div className="mono ink2" style={{ fontSize: 12 }}>{r.cond?.value ? `${r.cond.field} ${t(OPS.find((o) => o.value === r.cond!.op)!.label)} ${r.cond.value}` : t('无条件')}</div>
+                </div>
+                <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Chip tone={ACTION_TONE[r.action]}>{t(actionLabel(r.event, r.action))}</Chip>
+                  <span className="hint">{r.scope === 'global' ? t('所有工作区') : app.workspaces.find((w) => w.id === r.workspaceId)?.name}</span>
+                </div>
+              </div>
+            ))}
+            {fileHooks.map((h) => (
+              <div key={h.id} className="hook-card file">
+                <Icon name="lock" size={14} className="muted" />
+                <div className="grow">
+                  <div className="row"><b className="ink2">{h.source}</b><Chip>{h.type === 'builtin' ? t('内置') : h.type}</Chip>{h.matcher && <Chip mono>{h.matcher}</Chip>}</div>
+                  <div className="mono muted" style={{ fontSize: 12 }}>{h.detail}</div>
+                </div>
+                <span className="hint">{t('只读 · 与上面的规则一起执行')}</span>
+              </div>
+            ))}
+
+            {sel && <RuleEditor key={sel.id} rule={sel} onDeleted={() => setSelId(null)} />}
+          </div>
         </div>
+        <HookLog />
       </div>
-      <HookLog />
-    </>
+    </div>
   );
 }
 

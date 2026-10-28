@@ -491,6 +491,34 @@ export async function scenarioElicitUrl(run: Run) {
   footer(sid, 1, (Date.now() - t0) / 1000);
 }
 
+const JOB_READS: Record<string, Array<[string, string, string?]>> = {
+  'job-endpoints': [['Glob', 'src/routes/**/*.ts', '3 个文件'], ['Read', 'src/routes/orders.ts'], ['Read', 'src/routes/payments.ts'], ['Read', 'src/routes/health.ts'], ['Read', 'src/middleware/auth.ts']],
+  'job-audit': [['Read', 'package.json'], ['Bash', 'npm audit --json', '3 个问题'], ['Bash', 'npm outdated --json', '7 个包']],
+  'job-notes': [['Bash', 'git log --since=yesterday --name-only', '2 个文件'], ['Read', '工作/周会.md'], ['Read', '读书/重构.md']],
+  'job-triage': [['Bash', 'gh issue view 311 --json title,body,labels'], ['Grep', '"timeout" in src/**']],
+};
+
+/** A job run: gather what the prompt needs, then return structured output (or fail validation). */
+export async function scenarioJob(run: Run, jobId: string): Promise<boolean> {
+  const sid = run.sid;
+  const t0 = Date.now();
+  await streamText(run, '我先看一下相关文件。');
+  const g = readGroup(sid, '', JOB_READS[jobId] ?? [['Glob', '**/*', '24 个文件'], ['Read', 'README.md']]);
+  await playGroup(run, g, '读取 {n} 项');
+  if (jobId === 'job-triage') {
+    for (let i = 1; i <= 3; i++) {
+      await sleep(run, 500);
+      addItem(sid, { kind: 'notice', id: uid('note'), tone: 'warn', text: `结构化输出第 ${i} 次没有通过校验：缺少必填字段 priority` });
+    }
+    footer(sid, g.tools.length + 3, (Date.now() - t0) / 1000, 'error_max_structured_output_retries');
+    return false;
+  }
+  await sleep(run, 400);
+  await streamText(run, '已整理完毕，结果按要求的结构返回。');
+  footer(sid, g.tools.length + 1, (Date.now() - t0) / 1000);
+  return true;
+}
+
 export async function scenarioCommand(run: Run, cmd: string) {
   const t0 = Date.now();
   await streamText(run, `已运行 ${cmd}。（模拟：这里会显示该命令或技能的实际输出。）`);
