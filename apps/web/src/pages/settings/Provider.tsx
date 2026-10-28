@@ -91,7 +91,7 @@ export function Provider() {
             <Section title={t('登录')}>
               {p.loggedIn ? (
                 <dl className="kv">
-                  <dt>{t('账号')}</dt><dd>{p.account ?? '—'}</dd>
+                  <dt>{t('账号')}</dt><dd>{p.account ? p.account.replace(/^(.)[^@]*(@.*)$/, '$1***$2') : '—'}</dd>
                   <dt>{t('订阅')}</dt><dd>Claude {p.plan}</dd>
                   <dt>{t('配置目录')}</dt><dd className="mono">{dir}</dd>
                 </dl>
