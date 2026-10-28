@@ -121,7 +121,7 @@ export function ToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
     <div className={cx('tcard', tool.status === 'waiting' && 'waiting', tool.status === 'denied' && 'denied')}>
       <div className="thead" onClick={() => hasBody && setOpen(!open)}>
         <Icon name={TOOL_ICON[tool.tool] ?? 'plug'} size={15} className="ink2" />
-        <span className="name">{tool.tool}</span>
+        <span className="name">{tool.tool.startsWith('mcp__') ? tool.tool.split('__').slice(1).join(' · ') : tool.tool}</span>
         <span className="detail" title={tool.detail}>{tool.detail}</span>
         {tool.background && <Chip tone="accent" icon="layers">{t('后台运行')}</Chip>}
         {tool.provenance && tool.status !== 'waiting' && <Chip icon="shield" title={t('这次调用为什么被执行 / 拒绝')}>{tool.provenance}</Chip>}

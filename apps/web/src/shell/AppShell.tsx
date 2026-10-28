@@ -110,6 +110,7 @@ function SearchBox() {
     if (!k) return [];
     const pages = [
       { label: t('用量'), to: '/usage' }, { label: t('设置 · 配置方案'), to: '/settings/profiles' }, { label: t('设置 · 权限规则'), to: '/settings/permissions' },
+      { label: t('设置 · MCP 服务器'), to: '/settings/mcp' }, { label: t('设置 · 技能、命令与插件'), to: '/settings/skills' }, { label: t('设置 · 钩子'), to: '/settings/hooks' },
       { label: t('设置 · 模型服务与账号'), to: '/settings/provider' }, { label: t('设置 · 语言与地区'), to: '/settings/language' }, { label: t('全部会话'), to: '/sessions' },
     ].filter((p) => p.label.toLowerCase().includes(k));
     const ss = sessions.filter((s) => !s.draft && (s.title.toLowerCase().includes(k) || s.firstPrompt.toLowerCase().includes(k))).slice(0, 6);
@@ -186,10 +187,13 @@ function ApprovalsInbox() {
         {pending.length === 0 && <div className="empty"><b>{t('没有待处理的请求')}</b>{t('审批、提问和计划审阅会出现在这里')}</div>}
         {pending.map(({ rt, sum }) => {
           const req = rt.request!;
-          const what = req.kind === 'approval' ? `${req.tool} · ${req.command ?? req.diff?.path ?? ''}` : req.kind === 'question' ? t('Claude 有问题要问你') : t('计划待审阅');
+          const what = req.kind === 'approval' ? `${req.tool} · ${req.command ?? req.diff?.path ?? req.outside?.path ?? ''}`
+            : req.kind === 'question' ? t('Claude 有问题要问你')
+              : req.kind === 'elicitation' ? t('{s} 需要你提供信息', { s: req.server })
+                : t('计划待审阅');
           return (
             <div key={rt.id} className={cx('inbox-item', rt.id === currentId && 'current')} onClick={() => { setOpen(false); api.openSession(rt.id); nav(`/s/${rt.id}`); }}>
-              <Icon name={req.kind === 'approval' ? 'shield' : req.kind === 'question' ? 'chat' : 'list'} size={16} className="ink2" />
+              <Icon name={{ approval: 'shield', question: 'chat', elicitation: 'plug', plan: 'list' }[req.kind]} size={16} className="ink2" />
               <div className="grow">
                 <div className="t ellipsis">{sum!.title}</div>
                 <div className="d ellipsis">{what}</div>

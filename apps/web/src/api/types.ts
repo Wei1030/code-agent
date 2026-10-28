@@ -152,6 +152,21 @@ export type PendingRequest =
     since: number;
   }
   | { kind: 'question'; id: string; toolItemId: string; questions: Question[]; since: number }
+  | {
+    /** An MCP server asks the user for input during a tool call (form) or to finish a flow in the browser (url). */
+    kind: 'elicitation';
+    id: string;
+    toolItemId: string;
+    server: string;
+    source: string;
+    tool: string;
+    mode: 'form' | 'url';
+    /** Shown verbatim: server text is not translated. */
+    message: string;
+    fields?: ElicitationField[];
+    url?: string;
+    since: number;
+  }
   | { kind: 'plan'; id: string; planItemId: string; since: number };
 
 /** Where "allow and don't ask again" keeps the rule. Maps to the SDK's session / localSettings / userSettings. */
@@ -166,6 +181,24 @@ export interface QuestionAnswer {
   notes?: Record<string, string>;
   response?: string;
 }
+
+export interface ElicitationField {
+  key: string;
+  title: string;
+  type: 'string' | 'number' | 'boolean' | 'enum';
+  required?: boolean;
+  options?: string[];
+  min?: number;
+  max?: number;
+  default?: string | number | boolean;
+  description?: string;
+  multiline?: boolean;
+}
+
+export type ElicitationAnswer =
+  | { action: 'accept'; content: Record<string, string | number | boolean> }
+  | { action: 'decline' }
+  | { action: 'cancel' };
 
 export type PlanAnswer = { approve: true; mode: PermissionMode } | { approve: false; feedback: string };
 
@@ -335,4 +368,124 @@ export interface Prefs {
   numberStyle: 'intl' | 'cn';
   showRawSdkText: boolean;
   browserNotifications: boolean;
+}
+
+// ------------------------------------------------------------------ extensions
+
+/** Where an extension is configured. global / workspace / repo map to Claude Code's user, local and project scopes. */
+export type ExtScope = 'global' | 'workspace' | 'repo' | 'plugin';
+
+export type McpStatus = 'connected' | 'pending' | 'failed' | 'needs-auth' | 'disabled';
+
+export interface McpTool {
+  name: string;
+  desc: string;
+  annotations: Array<'readOnly' | 'destructive' | 'openWorld'>;
+  tokens: number;
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  type: 'stdio' | 'http' | 'sse';
+  scope: ExtScope;
+  workspaceId?: string;
+  plugin?: string;
+  command?: string;
+  args?: string[];
+  env?: Array<{ key: string; value: string }>;
+  url?: string;
+  headers?: Array<{ key: string; value: string }>;
+  timeout: number;
+  status: McpStatus;
+  error?: string;
+  version?: string;
+  instructionsTokens: number;
+  tools: McpTool[];
+  prompts: Array<{ name: string; desc: string }>;
+  /** Running sessions where the user switched this server off. */
+  offIn: string[];
+}
+
+export interface SkillInfo {
+  id: string;
+  name: string;
+  description: string;
+  source: 'bundled' | 'global' | 'workspace' | 'plugin';
+  workspaceId?: string;
+  plugin?: string;
+  /** Who may invoke it: you with /name, Claude on its own, or both. */
+  invocable: 'both' | 'user' | 'model';
+  enabled: boolean;
+  path: string;
+  content: string;
+}
+
+export interface CommandFile {
+  id: string;
+  name: string;
+  desc: string;
+  argHint: string;
+  source: 'global' | 'workspace' | 'plugin';
+  workspaceId?: string;
+  plugin?: string;
+  path: string;
+  content: string;
+}
+
+export interface PluginInfo {
+  id: string;
+  name: string;
+  path: string;
+  status: 'loaded' | 'error' | 'loading';
+  error?: string;
+  version?: string;
+  contents: { skills: number; commands: number; agents: number; mcp: number; hooks: number };
+  enabled: boolean;
+  /** Load its skills and hooks but not its MCP servers. */
+  skipMcp: boolean;
+}
+
+export type HookAction =
+  | 'allow' | 'deny' | 'ask' | 'defer' | 'rewrite'
+  | 'context' | 'block' | 'title' | 'rewriteOutput'
+  | 'log' | 'notify' | 'webhook';
+
+export interface HookRule {
+  id: string;
+  name: string;
+  event: string;
+  /** Tool name or pattern (Edit|Write, mcp__.*); empty matches everything. */
+  matcher: string;
+  cond?: { field: string; op: 'eq' | 'contains' | 'glob' | 'regex'; value: string };
+  action: HookAction;
+  /** Reason, context to add, title, URL… depending on the action. */
+  text: string;
+  timeout: number;
+  async: boolean;
+  enabled: boolean;
+  scope: 'global' | 'workspace';
+  workspaceId?: string;
+}
+
+/** A hook defined in a settings file or built into Code Agent; read-only here. */
+export interface FileHook {
+  id: string;
+  event: string;
+  type: 'command' | 'http' | 'mcp_tool' | 'prompt' | 'agent' | 'builtin';
+  matcher: string;
+  detail: string;
+  source: string;
+}
+
+export interface HookLogEntry {
+  id: string;
+  ts: number;
+  event: string;
+  rule: string;
+  target: string;
+  outcome: 'good' | 'crit' | 'info' | 'warn';
+  result: string;
+  ms: number;
+  detail?: string;
 }

@@ -1,10 +1,10 @@
 /** Scripted agent turns used by the mock backend. */
-import type { Item, PlanAnswer, QuestionAnswer, Task, ToolItem } from '../api/types';
+import type { ElicitationAnswer, Item, PlanAnswer, QuestionAnswer, Task, ToolItem } from '../api/types';
 import { useApp } from '../store/app';
 import { uid } from '../lib/util';
 import { baseContext } from './data';
 import {
-  addItem, authorize, Cancelled, emit, finishTool, lastUserId, newTool, patch, planItem, raw, rt, sleep,
+  addItem, authorize, Cancelled, emit, finishTool, lastUserId, newTool, patch, planItem, raw, rt, runHooks, sleep,
   streamText, userItem, waitFor, type Run,
 } from './engine';
 
@@ -137,6 +137,7 @@ export function footer(sid: string, toolCalls: number, seconds: number, stop = '
   const app = useApp.getState();
   const sum = app.sessions.find((x) => x.id === sid);
   if (sum) app.patchSession(sid, { tokens: sum.tokens + tok, lastActive: Date.now() });
+  runHooks(sid, 'Stop', {}, `第 ${turn} 轮结束`);
 }
 
 // ------------------------------------------------------------------ scenarios
@@ -424,6 +425,72 @@ export async function scenarioOutside(run: Run) {
   footer(sid, 2, (Date.now() - t0) / 1000);
 }
 
+/** An MCP tool asks for input with a form (postgres run_migration). */
+export async function scenarioElicitForm(run: Run) {
+  const sid = run.sid;
+  const t0 = Date.now();
+  await streamText(run, '我用 postgres 的 run_migration 在预发环境执行 orders 表的迁移。');
+  const tool = newTool(sid, 'mcp__postgres__run_migration', '20261027_orders_v2');
+  const ok = await authorize(run, tool, { title: '允许调用 postgres 的 run_migration？', reason: 'MCP 工具 run_migration 标记为「破坏性」，没有匹配的允许规则。' });
+  if (!ok) { await streamText(run, '好的，不执行迁移。'); footer(sid, 1, (Date.now() - t0) / 1000); return; }
+  patch(sid, tool.id, { status: 'waiting', right: '等待输入', provenance: ok.provenance });
+  raw(sid, 'system/elicitation', 'postgres · form', { server: 'postgres', mode: 'form' });
+  const a = await waitFor<ElicitationAnswer>(run, {
+    kind: 'elicitation', id: uid('el'), toolItemId: tool.id, server: 'postgres', source: '仓库 .mcp.json', tool: 'run_migration', mode: 'form',
+    message: 'Choose the target schema and confirm the batch settings before the migration runs.',
+    fields: [
+      { key: 'schema', title: 'Target schema', type: 'enum', required: true, options: ['orders_v2', 'orders_v2_shadow'], default: 'orders_v2' },
+      { key: 'dryRun', title: 'Dry run first', type: 'boolean', default: true },
+      { key: 'batch', title: 'Batch size', type: 'number', min: 100, max: 5000, default: 500, required: true },
+      { key: 'reason', title: 'Reason', type: 'string', multiline: true, description: 'Recorded in the migration log' },
+    ],
+    since: Date.now(),
+  });
+  if (a.action !== 'accept') {
+    finishTool(sid, tool, { status: 'error', right: a.action === 'decline' ? '已拒绝提供' : '已取消', provenance: ok.provenance });
+    await streamText(run, a.action === 'decline' ? '你没有提供迁移参数，我先不执行迁移。需要时告诉我目标 schema。' : '迁移已取消。');
+    footer(sid, 1, (Date.now() - t0) / 1000);
+    return;
+  }
+  patch(sid, tool.id, { status: 'running', right: undefined });
+  await sleep(run, 1500);
+  const c = a.content;
+  finishTool(sid, tool, { provenance: ok.provenance, seconds: 1.5, output: { type: 'text', text: `${c.dryRun ? 'Dry run passed. ' : ''}Migrated 1,204,331 rows to ${c.schema} in batches of ${c.batch}.` } });
+  await streamText(run, `迁移完成：1,204,331 行已迁到 ${c.schema}${c.dryRun ? '（先做了一次试运行）' : ''}。`);
+  footer(sid, 1, (Date.now() - t0) / 1000);
+}
+
+/** An MCP server needs the user to sign in in the browser (url mode). */
+export async function scenarioElicitUrl(run: Run) {
+  const sid = run.sid;
+  const t0 = Date.now();
+  await streamText(run, '我在 jira 里建一个跟进任务。');
+  const tool = newTool(sid, 'mcp__jira__create_issue', 'SHOP · 限流上线后观察 429 比例');
+  patch(sid, tool.id, { status: 'waiting', right: '等待登录' });
+  const a = await waitFor<ElicitationAnswer>(run, {
+    kind: 'elicitation', id: uid('el'), toolItemId: tool.id, server: 'jira', source: '所有工作区', tool: 'create_issue', mode: 'url',
+    message: 'Sign in to Atlassian to let this app create issues on your behalf.',
+    url: 'https://id.atlassian.com/authorize?client_id=claude-code&scope=write%3Ajira-work',
+    since: Date.now(),
+  });
+  if (a.action !== 'accept') {
+    finishTool(sid, tool, { status: 'error', right: a.action === 'decline' ? '已拒绝提供' : '已取消' });
+    await streamText(run, '没有登录 jira，我把任务内容写在这里，你可以手动创建。');
+    footer(sid, 1, (Date.now() - t0) / 1000);
+    return;
+  }
+  const app = useApp.getState();
+  app.set({ mcp: app.mcp.map((x) => (x.name === 'jira' ? { ...x, status: 'connected', version: 'atlassian-mcp 2.0.1', headers: [{ key: 'Authorization', value: 'Bearer ••••••••（已登录）' }], tools: [
+    { name: 'search_issues', desc: 'Search Jira issues with JQL', annotations: ['readOnly', 'openWorld'], tokens: 480 },
+    { name: 'create_issue', desc: 'Create a Jira issue', annotations: ['openWorld'], tokens: 520 },
+  ] } : x)) });
+  patch(sid, tool.id, { status: 'running', right: undefined });
+  await sleep(run, 800);
+  finishTool(sid, tool, { provenance: '已由你批准', seconds: 0.8, output: { type: 'text', text: 'Created SHOP-1432' } });
+  await streamText(run, '已创建 SHOP-1432「限流上线后观察 429 比例」。');
+  footer(sid, 1, (Date.now() - t0) / 1000);
+}
+
 export async function scenarioCommand(run: Run, cmd: string) {
   const t0 = Date.now();
   await streamText(run, `已运行 ${cmd}。（模拟：这里会显示该命令或技能的实际输出。）`);
@@ -440,6 +507,8 @@ export async function scenarioAck(run: Run, text: string) {
 
 export function pickScenario(text: string, mode: string): (run: Run) => Promise<void> {
   if (/共享库|工作区外|外部目录|shared-lib/i.test(text)) return scenarioOutside;
+  if (/迁移|migration/i.test(text)) return scenarioElicitForm;
+  if (/jira/i.test(text)) return scenarioElicitUrl;
   if (mode === 'plan' || /计划|规划|plan/i.test(text)) return scenarioPlan;
   if (/提问|选项|选择|问我|问题/.test(text)) return scenarioQuestion;
   if (/子代理|后台|subagent|并行/i.test(text)) return scenarioSubagents;

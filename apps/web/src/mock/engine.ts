@@ -3,10 +3,11 @@
  * answers to approvals / questions / plan reviews, and honours interrupts and queued messages.
  */
 import type {
-  ApprovalAnswer, Attachment, Item, PendingRequest, PermissionMode, PermissionRule, PlanAnswer, PlanDoc, QuestionAnswer,
+  ApprovalAnswer, Attachment, ElicitationAnswer, HookRule, Item, PendingRequest, PermissionMode, PermissionRule, PlanAnswer, PlanDoc, QuestionAnswer,
   SessionEvent, SessionRuntime, SessionState, ToolItem,
 } from '../api/types';
 import { evaluate } from '../lib/rules';
+import { hookOutput, ruleMatches as hookMatches } from '../lib/hooks';
 import { useApp } from '../store/app';
 import { useSessions } from '../store/sessions';
 import { uid, uuid } from '../lib/util';
@@ -170,7 +171,7 @@ export function waitFor<T>(run: Run, req: PendingRequest): Promise<T> {
   });
 }
 
-export function answer(sid: string, requestId: string, a: ApprovalAnswer | QuestionAnswer | PlanAnswer): boolean {
+export function answer(sid: string, requestId: string, a: ApprovalAnswer | QuestionAnswer | PlanAnswer | ElicitationAnswer): boolean {
   const w = waiters.get(requestId);
   if (!w) return false;
   waiters.delete(requestId);
@@ -204,6 +205,29 @@ export function outsideOf(sid: string, path: string): string[] | null {
   const out: string[] = [];
   for (let i = parts.length - 1; i >= 2; i--) out.push(parts.slice(0, i).join('\\'));
   return out;
+}
+
+const HOOK_RESULT: Record<HookRule['action'], string> = {
+  deny: '已拒绝', ask: '要求先问你', allow: '已允许', defer: '已延后', rewrite: '已改写输入', context: '已补充上下文',
+  block: '已拦截', title: '已设置标题', rewriteOutput: '已改写输出', log: '已记录', notify: '已通知', webhook: '已发送',
+};
+
+/**
+ * Run the user's hook rules for an event in a session: every matching rule is logged; the first
+ * permission decision (allow / deny / ask / defer) is returned for PreToolUse.
+ */
+export function runHooks(sid: string, event: string, input: Record<string, unknown>, target: string): HookRule | null {
+  const app = useApp.getState();
+  const ws = app.sessions.find((s) => s.id === sid)?.workspaceId;
+  const rules = app.hookRules.filter((r) => r.event === event && (r.scope === 'global' || r.workspaceId === ws) && hookMatches(r, { hook_event_name: event, ...input }));
+  let decision: HookRule | null = null;
+  for (const r of rules) {
+    const outcome = r.action === 'deny' || r.action === 'block' ? 'crit' : r.action === 'ask' || r.action === 'defer' ? 'warn' : 'good';
+    app.logHook({ event, rule: r.name, target, outcome, result: HOOK_RESULT[r.action], ms: r.action === 'webhook' ? 180 : 2 });
+    raw(sid, 'system/hook_response', `${event} · ${r.name} · ${HOOK_RESULT[r.action]}`, { hook_event_name: event, output: hookOutput(r) });
+    if (!decision && ['allow', 'deny', 'ask', 'defer'].includes(r.action)) decision = r;
+  }
+  return decision;
 }
 
 /** Rules "remembered" for one session only; they live as long as its process. */
@@ -242,8 +266,17 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
 }): Promise<{ provenance: string; command?: string } | null> {
   const r = rt(run.sid)!;
   const candidates = opts.path ? outsideOf(run.sid, opts.path) : null;
+  const target = opts.command ?? opts.path ?? opts.diff?.path ?? '';
+  const hook = runHooks(run.sid, 'PreToolUse', { tool_name: tool.tool, tool_input: { command: opts.command, file_path: opts.path ?? opts.diff?.path } }, `${tool.tool} · ${target}`);
+  if (hook?.action === 'deny') {
+    const why = `被钩子「${hook.name}」拒绝`;
+    patch(run.sid, tool.id, { status: 'denied', provenance: why, right: undefined });
+    raw(run.sid, 'system/permission_denied', `${tool.tool} · ${why}`, { tool_name: tool.tool, reason: hook.text });
+    return null;
+  }
   let d: Decision;
   if (opts.defaultToNo) d = { ask: true };
+  else if (hook && (hook.action === 'ask' || hook.action === 'defer')) d = { ask: true };
   else if (candidates) {
     const o = evaluate(rulesFor(run.sid), tool.tool, opts.path);
     if (o.kind === 'deny') d = { allowed: false, reason: 'deny-rule', rule: o.rule.rule };
@@ -251,6 +284,8 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
     else if (o.kind === 'allow') d = { allowed: true, provenance: `规则 ${o.rule.rule}` };
     else d = r.mode === 'dontAsk' ? { allowed: false, reason: 'dont-ask' } : { ask: true };
   } else d = decide(run.sid, r.mode, tool.tool, opts.command ?? opts.path);
+  // A hook "allow" skips the prompt, but deny and ask rules still apply.
+  if (hook?.action === 'allow' && 'ask' in d) d = { allowed: true, provenance: `钩子「${hook.name}」允许` };
   if ('allowed' in d && d.allowed) return { provenance: d.provenance };
   if ('allowed' in d && !d.allowed) {
     const why = d.reason === 'deny-rule' ? `被拒绝规则 ${d.rule} 拦截` : '「不询问」模式下未预先授权';
@@ -270,7 +305,7 @@ export async function authorize(run: Run, tool: ToolItem, opts: {
   } : {
     kind: 'approval', id: reqId, toolItemId: tool.id, tool: tool.tool,
     title: opts.title ?? (opts.command ? '允许执行这条命令？' : `允许修改 ${opts.diff?.path ?? '文件'}？`),
-    reason: opts.reason ?? (opts.command ? '没有匹配这条命令的允许规则；当前会话对未授权的操作会先询问。' : '当前会话在编辑文件前会先询问。'),
+    reason: hook ? `钩子「${hook.name}」${hook.action === 'defer' ? '把决定交给了你' : '要求先问你'}：${hook.text}` : opts.reason ?? (opts.command ? '没有匹配这条命令的允许规则；当前会话对未授权的操作会先询问。' : '当前会话在编辑文件前会先询问。'),
     command: opts.command, description: opts.description, diff: opts.diff, agent: opts.agent,
     suggestions: opts.defaultToNo ? [] : [rule, opts.command ? `Bash(${opts.command.split(' ')[0]} *)` : 'Edit'],
     defaultToNo: opts.defaultToNo, since: Date.now(),

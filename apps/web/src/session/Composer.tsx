@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Attachment, Effort, PermissionMode, SessionRuntime } from '../api/types';
 import { api } from '../api';
-import { COMMANDS, EFFORT_LABEL, fsTree, MODE_INFO, MODELS, type FsNode } from '../mock/data';
+import { COMMANDS, EFFORT_LABEL, fsTree, MODE_INFO, MODELS, type CommandInfo, type FsNode } from '../mock/data';
 import { Icon } from '../components/Icon';
 import { Button, MenuButton, Popover, Progress, Select } from '../components/ui';
 import { useApp } from '../store/app';
@@ -90,11 +90,23 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   // ------------------------------------------------------------ palette data
   const tree = useMemo(() => fsTree(workspaceId), [workspaceId]);
   const allPaths = useMemo(() => flatten(tree), [tree]);
+  // Built-in commands, then skills you can invoke, command files and MCP prompts for this workspace.
+  const allCommands = useMemo<CommandInfo[]>(() => {
+    const inWs = <T extends { source: string; workspaceId?: string }>(x: T) => x.source !== 'workspace' || x.workspaceId === workspaceId;
+    const where = (src: string, plugin?: string) => (src === 'plugin' ? `插件 · ${plugin}` : src === 'workspace' ? '这个工作区' : src === 'bundled' ? '内置包' : '所有工作区');
+    return [
+      ...COMMANDS,
+      ...app.skills.filter((k) => inWs(k) && k.invocable !== 'model').map((k) => ({ name: `/${k.name}`, hint: k.description, origin: `技能 · ${where(k.source, k.plugin)}`, icon: 'spark' })),
+      ...app.commandFiles.filter(inWs).map((c) => ({ name: `/${c.name}`, hint: [c.argHint, c.desc].filter(Boolean).join(' '), origin: `命令 · ${where(c.source, c.plugin)}`, icon: c.source === 'plugin' ? 'box' : 'file' })),
+      ...app.mcp.filter((m) => (m.scope === 'global' || m.scope === 'plugin' || m.workspaceId === workspaceId) && m.status === 'connected')
+        .flatMap((m) => m.prompts.map((p) => ({ name: `/mcp__${m.name}__${p.name}`, hint: p.desc, origin: `MCP · ${m.name}`, icon: 'plug' }))),
+    ];
+  }, [app.skills, app.commandFiles, app.mcp, workspaceId]);
   const commandItems = useMemo(() => {
     if (palette?.kind !== 'command') return [];
     const q = palette.query.toLowerCase();
-    return COMMANDS.filter((c) => c.name.slice(1).toLowerCase().includes(q));
-  }, [palette]);
+    return allCommands.filter((c) => c.name.slice(1).toLowerCase().includes(q));
+  }, [palette, allCommands]);
   const mentionItems = useMemo(() => {
     if (palette?.kind !== 'mention') return [] as Array<{ path: string; name: string; dir: boolean }>;
     const q = palette.query;

@@ -1,8 +1,10 @@
 /** App-wide state: registries, preferences and UI chrome. Sessions live in ./sessions. */
 import { create } from 'zustand';
 import type {
-  EnvVar, ExtraDir, PermissionRule, Prefs, Profile, ProviderKind, SessionSummary, Workspace,
+  CommandFile, EnvVar, ExtraDir, FileHook, HookLogEntry, HookRule, McpServer, PermissionRule, PluginInfo, Prefs, Profile,
+  ProviderKind, SessionSummary, SkillInfo, Workspace,
 } from '../api/types';
+import { COMMAND_FILES, FILE_HOOKS, HOOK_LOG, HOOK_RULES, MCP_SERVERS, PLUGINS, SKILLS } from '../mock/extensions';
 import { ENV_VARS, PROFILES, RULES, SESSIONS, WORKSPACES } from '../mock/data';
 import { uid } from '../lib/util';
 
@@ -45,6 +47,14 @@ interface AppState {
   profiles: Profile[];
   rules: PermissionRule[];
   dirs: ExtraDir[];
+  mcp: McpServer[];
+  mcpBehavior: { strict: boolean; toolSearch: 'auto' | 'on' | 'off'; firstTurnWait: number };
+  skills: SkillInfo[];
+  commandFiles: CommandFile[];
+  plugins: PluginInfo[];
+  hookRules: HookRule[];
+  fileHooks: FileHook[];
+  hookLog: HookLogEntry[];
   provider: Provider;
   env: EnvVar[];
   runtime: { debugLog: boolean; otel: boolean; otelEndpoint: string; otelMetrics: boolean; otelLogs: boolean; otelTraces: boolean; otelPrompts: boolean; otelTools: boolean };
@@ -70,6 +80,7 @@ interface AppState {
   addWorkspace: (path: string) => Workspace;
   saveProfile: (p: Profile) => void;
   fillComposer: (sid: string, text: string) => void;
+  logHook: (e: Omit<HookLogEntry, 'id' | 'ts'>) => void;
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -87,6 +98,14 @@ export const useApp = create<AppState>((set, get) => ({
   profiles: PROFILES,
   rules: RULES,
   dirs: [{ id: 'dir-1', path: 'D:\\src\\design-tokens', scope: 'workspace', workspaceId: 'ws-shop-web' }],
+  mcp: MCP_SERVERS,
+  mcpBehavior: { strict: false, toolSearch: 'auto', firstTurnWait: 30 },
+  skills: SKILLS,
+  commandFiles: COMMAND_FILES,
+  plugins: PLUGINS,
+  hookRules: HOOK_RULES,
+  fileHooks: FILE_HOOKS,
+  hookLog: HOOK_LOG,
   provider: {
     kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: true, plan: 'Max',
     envConflict: false, compatibleUrl: '', compatibleModel: '',
@@ -127,6 +146,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ workspaces: [ws, ...get().workspaces] });
     return ws;
   },
+  logHook: (e) => set({ hookLog: [{ ...e, id: uid('hl'), ts: Date.now() }, ...get().hookLog].slice(0, 200) }),
   fillComposer: (sid, text) => set({ fill: { sid, text, n: (get().fill?.n ?? 0) + 1 } }),
   saveProfile: (p) => set({ profiles: get().profiles.map((x) => (x.id === p.id ? p : p.isDefault ? { ...x, isDefault: false } : x)) }),
 }));

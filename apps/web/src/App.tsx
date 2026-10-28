@@ -10,6 +10,9 @@ import { Profiles } from './pages/settings/Profiles';
 import { Permissions } from './pages/settings/Permissions';
 import { Provider } from './pages/settings/Provider';
 import { Language } from './pages/settings/Language';
+import { Mcp } from './pages/settings/Mcp';
+import { Skills } from './pages/settings/Skills';
+import { Hooks } from './pages/settings/Hooks';
 
 export function App() {
   return (
@@ -25,6 +28,9 @@ export function App() {
           <Route path="permissions" element={<Permissions />} />
           <Route path="provider" element={<Provider />} />
           <Route path="language" element={<Language />} />
+          <Route path="mcp" element={<Mcp />} />
+          <Route path="skills" element={<Skills />} />
+          <Route path="hooks" element={<Hooks />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

@@ -11,6 +11,12 @@ const NAV = [
   { to: '/settings/language', label: '语言与地区', icon: 'globe' },
 ];
 
+const EXT_NAV = [
+  { to: '/settings/mcp', label: 'MCP 服务器', icon: 'plug' },
+  { to: '/settings/skills', label: '技能、命令与插件', icon: 'spark' },
+  { to: '/settings/hooks', label: '钩子', icon: 'hook' },
+];
+
 export function SettingsLayout() {
   const t = useT();
   return (
@@ -22,8 +28,14 @@ export function SettingsLayout() {
             <span className="row"><Icon name={n.icon} size={15} />{t(n.label)}</span>
           </NavLink>
         ))}
+        <h5 className="settings-group">{t('扩展')}</h5>
+        {EXT_NAV.map((n) => (
+          <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'active' : '')}>
+            <span className="row"><Icon name={n.icon} size={15} />{t(n.label)}</span>
+          </NavLink>
+        ))}
         <div className="hint" style={{ margin: '18px 12px 0', lineHeight: 1.6 }}>
-          {t('MCP 服务器、技能、子代理、钩子、插件和自定义工具将在后续版本中提供。')}
+          {t('子代理、作业和自定义工具将在后续版本中提供。')}
         </div>
       </nav>
       <div className="settings-main"><Outlet /></div>

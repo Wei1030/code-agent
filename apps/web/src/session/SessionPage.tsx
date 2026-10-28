@@ -12,7 +12,7 @@ import { relTime, tokens as fmtTokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { Transcript } from './Transcript';
-import { ApprovalPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar } from './Dock';
+import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar } from './Dock';
 import { Composer } from './Composer';
 import { Inspector } from './Inspector';
 import { RewindDialog } from './RewindDialog';
@@ -67,6 +67,7 @@ export function SessionPage() {
             {rt.request?.kind === 'approval' && <ApprovalPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'plan' && <PlanReviewBar key={rt.request.id} sid={id} req={rt.request} />}
+            {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.readOnly ? (
               <ReadOnlyBar sid={id} onFork={() => { const nid = api.forkAt(id); nav(`/s/${nid}`); }} />
             ) : (

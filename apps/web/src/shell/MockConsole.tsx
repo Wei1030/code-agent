@@ -31,7 +31,7 @@ export function MockConsole() {
 
   const scenarios: Array<[Scenario, string]> = [
     ['fix', '修复 bug（编辑 + 命令审批）'], ['question', '澄清提问（AskUserQuestion）'], ['plan', '规划模式与计划审阅'],
-    ['subagents', '子代理与后台任务'], ['highRisk', '高风险审批（默认拒绝）'], ['outside', '访问工作区外的目录'],
+    ['subagents', '子代理与后台任务'], ['highRisk', '高风险审批（默认拒绝）'], ['outside', '访问工作区外的目录'], ['elicitForm', 'MCP 征询（表单）'], ['elicitUrl', 'MCP 征询（登录链接）'],
   ];
   const banners: Array<[BannerKind, string]> = [
     ['crash', '会话崩溃'], ['apiRetry', 'API 过载重试'], ['rateLimit', '接近速率限制'],

@@ -105,15 +105,12 @@ export interface CommandInfo {
   icon: string;
 }
 
+/** Built-in commands; skills, command files and MCP prompts are added from the extension data. */
 export const COMMANDS: CommandInfo[] = [
   { name: '/compact', hint: '压缩历史记录（可附说明）', origin: '内置', icon: 'slash' },
   { name: '/clear', hint: '清空对话，重新开始', origin: '内置', icon: 'slash' },
   { name: '/context', hint: '查看上下文占用', origin: '内置', icon: 'slash' },
   { name: '/usage', hint: '查看用量与限额', origin: '内置', icon: 'slash' },
-  { name: '/code-review', hint: '[low|medium|high]', origin: '技能 · 内置包', icon: 'spark' },
-  { name: '/security-check', hint: '检查注入、权限和密钥泄露', origin: '技能 · 项目', icon: 'spark' },
-  { name: '/commit', hint: 'Commit staged changes', origin: '插件 · git-tools', icon: 'box' },
-  { name: '/cost-report', hint: '每周用量汇总', origin: '项目命令', icon: 'file' },
 ];
 
 export interface FsNode {

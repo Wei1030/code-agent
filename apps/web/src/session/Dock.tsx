@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { PendingRequest, QueuedMessage, RuleDestination } from '../api/types';
 import { describeRule } from '../lib/rules';
 import { Icon } from '../components/Icon';
-import { Button, Check, Chip, Radio, Select } from '../components/ui';
+import { Button, Check, Chip, Field, Radio, Select } from '../components/ui';
 import { api } from '../api';
 import { useApp } from '../store/app';
 import { cx } from '../lib/util';
@@ -325,6 +325,90 @@ export function InterruptReceipt({ sid, count, onDone }: { sid: string; count: n
       <span className="grow">{t('本轮已中断。有 {n} 条排队消息没有取消，要继续执行吗？', { n: count })}</span>
       <Button size="sm" onClick={() => { api.runQueued(sid); onDone(); }}>{t('保留并执行')}</Button>
       <Button size="sm" variant="danger-outline" onClick={() => { api.removeQueued(sid); onDone(); }}>{t('取消排队消息')}</Button>
+    </div>
+  );
+}
+
+/** An MCP server asks for input during a tool call: a form built from its schema, or a page to open. */
+export function ElicitationPanel({ sid, req }: { sid: string; req: Extract<PendingRequest, { kind: 'elicitation' }> }) {
+  const t = useT();
+  const fields = req.fields ?? [];
+  const [values, setValues] = useState<Record<string, string | number | boolean>>(
+    Object.fromEntries(fields.map((f) => [f.key, f.default ?? (f.type === 'boolean' ? false : '')])),
+  );
+  const [tried, setTried] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const errors: Record<string, string> = {};
+  fields.forEach((f) => {
+    const v = values[f.key];
+    if (f.required && (v === '' || v === undefined)) errors[f.key] = t('必填');
+    else if (f.type === 'number' && v !== '') {
+      const n = Number(v);
+      if (Number.isNaN(n)) errors[f.key] = t('请输入数字');
+      else if ((f.min !== undefined && n < f.min) || (f.max !== undefined && n > f.max)) errors[f.key] = t('应在 {a} 到 {b} 之间', { a: f.min ?? '', b: f.max ?? '' });
+    }
+  });
+  const submit = () => {
+    setTried(true);
+    if (Object.keys(errors).length) return;
+    const content = Object.fromEntries(fields.map((f) => [f.key, f.type === 'number' ? Number(values[f.key]) : values[f.key]]));
+    api.respondElicitation(sid, req.id, { action: 'accept', content });
+  };
+  const set = (k: string, v: string | number | boolean) => setValues({ ...values, [k]: v });
+
+  return (
+    <div className="dpanel question">
+      <div className="dpanel-head">
+        <Icon name={req.mode === 'url' ? 'link' : 'plug'} size={20} className="ink2" />
+        <div className="grow">
+          <b>{req.mode === 'url' ? t('{s} 需要你登录', { s: req.server }) : t('{s} 需要你提供信息', { s: req.server })}</b>
+          <div className="hint">{t('MCP 服务器 · {src} · 执行 {tool} 期间', { src: req.source, tool: req.tool })}</div>
+        </div>
+      </div>
+      <div className="dpanel-body">
+        <div className="server-msg">
+          <div className="hint">{t('服务器原文 · 不翻译')}</div>
+          <div>{req.message}</div>
+        </div>
+        {req.mode === 'form' && (
+          <div className="elicit-form">
+            {fields.map((f) => (
+              <Field key={f.key} label={<>{f.title}{f.required && <span style={{ color: 'var(--crit)' }}> *</span>}</>}
+                hint={tried && errors[f.key] ? <span style={{ color: 'var(--crit)' }}>{errors[f.key]}</span> : f.description ?? (f.type === 'number' && f.min !== undefined ? t('{a} – {b} 之间', { a: f.min, b: f.max ?? '' }) : undefined)}>
+                {f.type === 'enum' ? (
+                  <Select value={String(values[f.key])} onChange={(v) => set(f.key, v)} options={(f.options ?? []).map((o) => ({ value: o, label: <span className="mono">{o}</span> }))} />
+                ) : f.type === 'boolean' ? (
+                  <Check on={!!values[f.key]} onChange={(v) => set(f.key, v)} label={t('是')} />
+                ) : f.multiline ? (
+                  <textarea className="textarea" rows={2} value={String(values[f.key])} onChange={(e) => set(f.key, e.target.value)} />
+                ) : (
+                  <input className={cx('input', f.type === 'number' && 'mono')} inputMode={f.type === 'number' ? 'numeric' : undefined} value={String(values[f.key])} onChange={(e) => set(f.key, e.target.value)} />
+                )}
+              </Field>
+            ))}
+          </div>
+        )}
+        {req.mode === 'url' && (
+          <div className="col">
+            <span>{t('打开下面的页面完成后，会自动继续：')}</span>
+            <div className="code-block" style={{ color: 'var(--accent)' }}>{req.url}</div>
+            <div className="row">
+              <Button variant="primary" icon="link" disabled={opened} onClick={() => {
+                setOpened(true);
+                api.openElicitationUrl(sid, req.id);
+                useApp.getState().toast(t('模拟：已在新标签页打开登录页面'), 'info');
+              }}>{t('打开页面')}</Button>
+              {opened && <span className="row ink2"><span className="spinner" />{t('等待 {s} 确认…', { s: req.server })}</span>}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="dpanel-foot">
+        <Button onClick={() => api.respondElicitation(sid, req.id, { action: 'decline' })}>{t('拒绝提供')}</Button>
+        <span className="grow" />
+        <Button variant="ghost" onClick={() => api.respondElicitation(sid, req.id, { action: 'cancel' })}>{t('取消')}</Button>
+        {req.mode === 'form' && <Button variant="primary" onClick={submit}>{t('提交')}</Button>}
+      </div>
     </div>
   );
 }

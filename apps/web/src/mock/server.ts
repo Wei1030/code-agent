@@ -3,7 +3,7 @@
  * mutates in-memory data and pushes session events into the store.
  */
 import type {
-  ApprovalAnswer, Attachment, BannerKind, Effort, Item, PermissionMode, PlanAnswer, QuestionAnswer,
+  ApprovalAnswer, Attachment, BannerKind, Effort, ElicitationAnswer, Item, PermissionMode, PlanAnswer, QuestionAnswer,
   QueuedMessage,
 } from '../api/types';
 import { useApp } from '../store/app';
@@ -11,12 +11,12 @@ import { emptyRuntime, useSessions } from '../store/sessions';
 import { uid } from '../lib/util';
 import { baseContext, genericTranscript, MODELS, WORKSPACES } from './data';
 import {
-  addItem, answer, cancelRun, currentRun, emit, isRunning, onAfterTurn, raw, rt, startRun, streamText,
+  addItem, answer, cancelRun, currentRun, emit, isRunning, onAfterTurn, raw, rt, runHooks, startRun, streamText,
   userItem,
 } from './engine';
 import {
   bootAuth, bootDocs, bootFlaky, footer, pickScenario, scenarioAck,
-  scenarioCommand, scenarioFix, scenarioHighRisk, scenarioOutside, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
+  scenarioCommand, scenarioElicitForm, scenarioElicitUrl, scenarioFix, scenarioHighRisk, scenarioOutside, scenarioPlan, scenarioQuestion, scenarioSubagents, seedFlaky,
 } from './scenarios';
 
 const MODEL_ID: Record<string, string> = { opus: 'claude-opus-5-5', fable: 'claude-fable-5-1', sonnet: 'claude-sonnet-5', haiku: 'claude-haiku-4-5' };
@@ -112,6 +112,7 @@ export function send(sid: string, text: string, opts: SendOptions = {}) {
     return;
   }
   userItem(sid, text, opts.attachments);
+  runHooks(sid, 'UserPromptSubmit', { prompt: text }, text.length > 24 ? `${text.slice(0, 24)}…` : text);
   void startRun(sid, pickScenario(text, r.mode));
 }
 
@@ -204,6 +205,14 @@ export function respondQuestion(sid: string, requestId: string, a: QuestionAnswe
 }
 export function respondPlan(sid: string, requestId: string, a: PlanAnswer) {
   answer(sid, requestId, a);
+}
+export function respondElicitation(sid: string, requestId: string, a: ElicitationAnswer) {
+  answer(sid, requestId, a);
+}
+
+/** URL-mode elicitation: the user opened the page; the mock "server" reports completion shortly after. */
+export function openElicitationUrl(sid: string, requestId: string) {
+  setTimeout(() => answer(sid, requestId, { action: 'accept', content: {} }), 2500);
 }
 
 export function setModel(sid: string, model: string) {
@@ -428,15 +437,15 @@ export function exportMarkdown(sid: string): string {
 
 // ------------------------------------------------------------------ mock console
 
-export type Scenario = 'fix' | 'question' | 'plan' | 'subagents' | 'highRisk' | 'outside';
+export type Scenario = 'fix' | 'question' | 'plan' | 'subagents' | 'highRisk' | 'outside' | 'elicitForm' | 'elicitUrl';
 
 export function runScenario(sid: string, s: Scenario) {
   if (isRunning(sid)) return;
   const sum = useApp.getState().sessions.find((x) => x.id === sid);
   if (sum?.draft) useApp.getState().patchSession(sid, { draft: false, live: true, title: '模拟场景' });
-  const text = { fix: 'CI 上结账测试偶尔失败，帮我修复。', question: '给 /orders 接口加上限流，有选择就问我。', plan: '用 Redis 给 /orders 限流，先出计划。', subagents: '找出所有用到 CartTimer 的地方，同时在后台跑 e2e。', highRisk: '把旧的构建目录删掉。', outside: '金额是负数时显示不对，问题可能在共享库 shared-lib 里。' }[s];
+  const text = { fix: 'CI 上结账测试偶尔失败，帮我修复。', question: '给 /orders 接口加上限流，有选择就问我。', plan: '用 Redis 给 /orders 限流，先出计划。', subagents: '找出所有用到 CartTimer 的地方，同时在后台跑 e2e。', highRisk: '把旧的构建目录删掉。', outside: '金额是负数时显示不对，问题可能在共享库 shared-lib 里。', elicitForm: '在预发环境执行 orders 表的迁移。', elicitUrl: '在 jira 里建一个跟进任务：限流上线后观察 429 比例。' }[s];
   userItem(sid, text);
-  const fn = { fix: scenarioFix, question: scenarioQuestion, plan: scenarioPlan, subagents: scenarioSubagents, highRisk: scenarioHighRisk, outside: scenarioOutside }[s];
+  const fn = { fix: scenarioFix, question: scenarioQuestion, plan: scenarioPlan, subagents: scenarioSubagents, highRisk: scenarioHighRisk, outside: scenarioOutside, elicitForm: scenarioElicitForm, elicitUrl: scenarioElicitUrl }[s];
   void startRun(sid, fn);
 }
 
