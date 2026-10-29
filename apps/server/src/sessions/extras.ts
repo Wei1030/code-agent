@@ -17,7 +17,8 @@ import { restartWhenIdle } from './slots';
 import { cwdOf, workspaceOf } from './options';
 
 const run = promisify(execFile);
-const git = (cwd: string, ...args: string[]) => run('git', args, { cwd, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).then((r) => r.stdout.trim());
+// Only trailing whitespace goes: a status line starts with a space when the index is unchanged.
+const git = (cwd: string, ...args: string[]) => run('git', args, { cwd, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).then((r) => r.stdout.trimEnd());
 const inside = (file: string, dir: string) => {
   const rel = path.relative(path.resolve(dir), path.resolve(file));
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));

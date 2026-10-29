@@ -1,5 +1,6 @@
 /** English UI strings, keyed by the Chinese source text (see i18n.ts). */
 export const EN: Record<string, string> = {
+  " 秒": "s",
   "$ARGUMENTS 会替换成 / 命令后面的文字": "$ARGUMENTS is replaced with the text after the / command",
   "- 支付回调偶尔超时，需要修复\n- 订单列表需要支持按日期筛选": "- Payment callback occasionally times out and needs a fix\n- Order list needs to support filtering by date",
   "/ 命令展开成提示词时": "When a / command expands into a prompt",
@@ -1448,4 +1449,7 @@ export const EN: Record<string, string> = {
   "已由你批准": "Approved by you",
   "模式：自动接受编辑": "Mode: accept edits",
   "模式：跳过权限检查": "Mode: bypass permissions",
+  "默认：直接完成工作": "Default: just does the work",
+  "解释型：边做边讲实现上的取舍": "Explanatory: explains the trade-offs as it works",
+  "学习型：留一些代码让你自己写": "Learning: leaves some code for you to write",
 };
