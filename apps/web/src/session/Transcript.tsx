@@ -381,6 +381,7 @@ const BANNERS: Record<string, { tone: 'warn' | 'crit' | 'info'; icon: string; ti
   rateLimit: { tone: 'warn', icon: 'warning', title: () => '已达到用量限额', d: (d) => (d ? `${d} 重置。在那之前的请求会被拒绝。` : '在限额重置前，请求会被拒绝。'), acts: ['查看用量'] },
   startupFailure: { tone: 'crit', icon: 'x', title: () => '会话无法启动', d: (d) => `${(d && STARTUP[d]) || '启动失败'}${d ? `（${d}）` : ''}。`, acts: ['选择其他文件夹', '查看原文'] },
   workerShutdown: { tone: 'warn', icon: 'warning', title: () => 'Claude Code 正在退出', d: (d) => `原因：${d || '未说明'}。对话记录已保存。`, acts: ['恢复会话'] },
+  endpointRejected: { tone: 'crit', icon: 'x', title: () => '兼容端点拒绝了请求', d: (d) => `${d ?? ''}。重试也不会成功，这一轮已停下。检查端点的令牌和模型名后再发一次，或换一个模型。`, acts: ['打开模型服务设置'] },
   denials: { tone: 'warn', icon: 'warning', title: (d) => `本轮有 ${d ?? '多'} 次工具调用被拒绝`, d: () => '被拒绝的调用在上面标出了原因。可以调整权限规则，或切换权限模式。', acts: ['查看权限规则'] },
   notLoggedIn: { tone: 'crit', icon: 'x', title: () => 'Claude Code 尚未登录', d: (d) => `请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」${d ? `（${d}）` : ''}。Code Agent 不提供登录，也不读取你的凭据。`, acts: ['复制登录命令', '重新检测'] },
 };
@@ -395,6 +396,7 @@ function Banner({ kind, id, resolved, sid, detail }: { kind: string; id: string;
     if (a === '恢复会话') { api.resume(sid); api.retryBanner(sid, id); }
     else if (a === '查看 stderr') useApp.getState().setInspector({ open: true, tab: 'events', eventsSub: 'stderr' });
     else if (a === '查看用量') nav('/usage');
+    else if (a === '打开模型服务设置') nav('/settings/provider');
     else if (a === '选择其他文件夹') useApp.getState().set({ folderPickerOpen: true });
     else if (a === '查看原文') setShowRaw(!showRaw);
     else if (a === '查看权限规则') nav('/settings/permissions');

@@ -277,9 +277,10 @@ register({
     cancelWaiting(sid);
     await closeProcess(sid);
   },
-  resume: async (sid) => {
+  resume: async (sid, model) => {
     if (live(sid)) return true;
     if (!rt(sid)) await import('./history').then((h) => h.importTranscript(sid));
+    if (model && app.models.some((m) => m.id === model) && model !== rt(sid)?.model) emit(sid, { t: 'settings', patch: { model } });
     return acquire(sid, () => startProcess(sid, { resume: true }));
   },
   backgroundTool: async (sid, toolId) => {

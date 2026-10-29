@@ -20,7 +20,7 @@ import { addItem, emit, patchItem, rt, summary } from './sessions/registry';
 import { decorateTool, inTurn, interruptTurn, live, onProcessEnd, onSendTurn, onTurnEnd, sendTurn } from './sessions/live';
 import { cwdOf } from './sessions/options';
 import { agentRow } from './sessions/describe';
-import { envFor, reasoning, resolveModel } from './models';
+import { envFor, pointlessRetry, reasoning, resolveModel } from './models';
 import { systemClaude } from './claude/files';
 import { recordUsage } from './usage';
 import { addBusyCheck } from './sessions/slots';
@@ -325,6 +325,7 @@ async function runReviewer(id: string, n: number, attempt = 1) {
   const prof = app.reviewProfile;
   let out: Verdict | undefined;
   let err = '';
+  let rejected: string | null = null;
   let tokens = 0;
   try {
     const model = resolveModel(t.model);
@@ -344,6 +345,11 @@ async function runReviewer(id: string, n: number, attempt = 1) {
       },
     });
     for await (const m of q) {
+      if (m.type === 'system' && m.subtype === 'api_retry' && (rejected = pointlessRetry(t.model, m))) {
+        err = rejected;
+        abort.abort();
+        break;
+      }
       if (m.type === 'assistant' && !m.parent_tool_use_id) {
         for (const b of m.message.content as unknown as Array<{ type: string; name?: string; input?: Record<string, unknown>; text?: string }>) {
           if (b.type === 'tool_use' && b.name) agent = { ...agent, rows: [...agent.rows, agentRow(b.name, b.input ?? {}, cwd)].slice(-60), toolCalls: agent.toolCalls + 1 };
@@ -360,19 +366,19 @@ async function runReviewer(id: string, n: number, attempt = 1) {
       }
     }
   } catch (e) {
-    err = e instanceof Error ? e.message : String(e);
+    if (!rejected) err = e instanceof Error ? e.message : String(e);
   }
   reviewers.delete(id);
   emit(sid, { t: 'status', status: null });
   const seconds = Math.round((Date.now() - t0) / 100) / 10;
   agent = { ...agent, tokens };
-  if (abort.signal.aborted) {
+  if (abort.signal.aborted && !rejected) {
     patchItem(sid, cardId, { status: 'error', right: '已停止', seconds, agent });
     return;
   }
   if (!out) {
     patchItem(sid, cardId, { status: 'error', right: '失败', seconds, agent: { ...agent, summary: err.slice(0, 300) } });
-    if (attempt === 1 && get(id)?.status === 'reviewing') {
+    if (attempt === 1 && !rejected && get(id)?.status === 'reviewing') {
       void runReviewer(id, n, 2);
       return;
     }

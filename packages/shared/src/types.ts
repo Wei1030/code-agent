@@ -192,7 +192,7 @@ export interface PlanDoc {
 
 export type BannerKind =
   | 'crash' | 'apiRetry' | 'rateLimit' | 'modelFallback' | 'startupFailure'
-  | 'workerShutdown' | 'denials' | 'notLoggedIn';
+  | 'workerShutdown' | 'denials' | 'notLoggedIn' | 'endpointRejected';
 
 export type Item =
   | {
@@ -355,7 +355,7 @@ export interface QueuedMessage {
 export type TransientStatus =
   | { kind: 'working'; label: string }
   | { kind: 'compacting'; progress: number }
-  | { kind: 'retry'; attempt: number; max: number; seconds: number };
+  | { kind: 'retry'; attempt: number; max: number; seconds: number; reason?: string };
 
 export interface SessionRuntime {
   id: string;

@@ -77,7 +77,7 @@ export function SessionPage() {
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
             {sum.waiting && <WaitingBar sid={id} />}
             {rt.readOnly ? (
-              !sum.waiting && <ReadOnlyBar sid={id} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />
+              !sum.waiting && <ReadOnlyBar sid={id} model={rt.model} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />
@@ -234,7 +234,7 @@ function StatusLine({ rt }: { rt: SessionRuntime }) {
   return (
     <div className="status-line" style={{ color: 'var(--warn-ink)' }}>
       <Icon name="refresh" size={14} />
-      {t('API 暂时不可用，{s} 秒后重试（第 {a}/{m} 次）', { s: s.seconds, a: s.attempt, m: s.max })}
+      {s.reason ? t('请求失败（{r}），{s} 秒后重试（第 {a}/{m} 次）', { r: s.reason, s: s.seconds, a: s.attempt, m: s.max }) : t('API 暂时不可用，{s} 秒后重试（第 {a}/{m} 次）', { s: s.seconds, a: s.attempt, m: s.max })}
       <span className="muted">{t('可以中断')}</span>
     </div>
   );

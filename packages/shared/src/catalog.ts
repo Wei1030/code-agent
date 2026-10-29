@@ -134,3 +134,26 @@ export const NEW_JOB_SCHEMA = `{
     "summary": { "type": "string" }
   }
 }`;
+
+/** What a failed API call's category means (Claude Code's SDKAssistantMessageError). */
+export const API_ERROR_TEXT: Record<string, string> = {
+  authentication_failed: '认证失败：令牌无效或已过期',
+  billing_error: '账户计费有问题（余额或付款）',
+  rate_limit: '请求太频繁，被限流',
+  overloaded: '服务过载',
+  server_error: '服务端出错',
+  model_not_found: '找不到这个模型',
+  invalid_request: '请求被拒绝',
+  oauth_org_not_allowed: '组织不允许这样使用',
+  account_on_hold: '账户被暂停',
+  verification_required: '账户需要验证',
+  cloud_credential_error: '云服务凭证有误',
+  unknown: '未知错误',
+};
+
+/** Failures a retry cannot fix: the token, the account or the model name is wrong. */
+export const FATAL_API_ERRORS = ['authentication_failed', 'billing_error', 'model_not_found', 'oauth_org_not_allowed', 'account_on_hold', 'verification_required', 'cloud_credential_error'];
+
+export function apiErrorText(error: string, status: number | null): string {
+  return status ? `HTTP ${status} · ${API_ERROR_TEXT[error] ?? error}` : '连接失败或超时，没有收到响应';
+}

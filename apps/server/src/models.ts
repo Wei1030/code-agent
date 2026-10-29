@@ -5,7 +5,7 @@
  */
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
 import type { Endpoint, ModelInfo } from '@code-agent/shared/types';
-import { MODELS } from '@code-agent/shared/catalog';
+import { apiErrorText, FATAL_API_ERRORS, MODELS } from '@code-agent/shared/catalog';
 import { app, set } from './state';
 import { load, save } from './store';
 import { endpointKey, processEnv } from './claude/files';
@@ -91,4 +91,21 @@ export const isClaudeModel = (id: string) => !id.startsWith('ep:');
 /** A model that still exists: `id` itself, else the first one offered. */
 export function validModel(id: string): string {
   return app.models.some((m) => m.id === id) ? id : app.models[0]?.id ?? id;
+}
+
+/** The 默认 profile's model, or the first there is. */
+export function defaultModel(): string {
+  const prof = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
+  return validModel(prof?.model ?? '');
+}
+
+/**
+ * A failed API call Claude Code retries in vain (it retries 401s and the like for minutes): the
+ * endpoint refused the token, the account or the model. Returns what to tell the user. Claude's
+ * own login errors are left to Claude Code, which can refresh the login.
+ */
+export function pointlessRetry(modelId: string, m: { error?: unknown; error_status?: unknown }): string | null {
+  const error = String(m.error ?? '');
+  if (isClaudeModel(modelId) || !FATAL_API_ERRORS.includes(error)) return null;
+  return apiErrorText(error, typeof m.error_status === 'number' ? m.error_status : null);
 }

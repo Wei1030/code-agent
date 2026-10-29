@@ -6,7 +6,7 @@ import os from 'node:os';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { app } from './state';
 import { systemClaude } from './claude/files';
-import { envFor, reasoning, resolveModel } from './models';
+import { envFor, pointlessRetry, reasoning, resolveModel } from './models';
 import { recordUsage } from './usage';
 
 export interface OneShot {
@@ -46,6 +46,11 @@ export async function oneShot<T>(o: OneShot): Promise<T> {
       },
     });
     for await (const m of q) {
+      const rejected = m.type === 'system' && m.subtype === 'api_retry' ? pointlessRetry(o.model, m) : null;
+      if (rejected) {
+        abort.abort();
+        throw new Error(rejected);
+      }
       if (m.type !== 'result') continue;
       recordUsage(m.modelUsage as Parameters<typeof recordUsage>[0], o.workspaceId ?? '');
       if (m.subtype === 'success' && m.structured_output !== undefined) return m.structured_output as T;

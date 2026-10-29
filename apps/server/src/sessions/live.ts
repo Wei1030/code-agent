@@ -19,7 +19,8 @@ import { buildOptions } from './options';
 import { contextFrom } from './context';
 import { recordUsage, recordLimit } from '../usage';
 import { configDir } from '../claude/files';
-import { isClaudeModel } from '../models';
+import { apiErrorText } from '@code-agent/shared/catalog';
+import { defaultModel, isClaudeModel, pointlessRetry } from '../models';
 
 type Input = Record<string, unknown>;
 
@@ -80,6 +81,7 @@ export interface Live {
   curMsg: string;
   streamIdx: Map<number, StreamItem>;
   commands: SlashCommand[];
+  /** The model id the process was started with; it decides the service. */
   model: string;
   ready: Promise<void>;
   /** Called once when the process has ended. */
@@ -189,6 +191,12 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   const sum = summary(sid);
   const r = rt(sid);
   if (!sum || !r) throw new Error(`no session ${sid}`);
+  if (!isClaudeModel(r.model) && !app.models.some((m) => m.id === r.model)) {
+    // The model (or its endpoint) was deleted since: carry on with the default model.
+    const next = defaultModel();
+    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'warn', text: `模型 ${r.model.replace(/^ep:[^:]+:/, '')} 已经删除，改用 ${app.models.find((m) => m.id === next)?.label ?? next} 继续。` });
+    emit(sid, { t: 'settings', patch: { model: next } });
+  }
   const input = new InputQueue();
   let l!: Live;
   const opts = buildOptions(sid, {
@@ -871,7 +879,6 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
     case 'init': {
       const tools = (m.tools as string[] | undefined)?.length ?? 0;
       const mcp = (m.mcp_servers as Array<{ name: string; status: string }> | undefined) ?? [];
-      l.model = String(m.model ?? l.model);
       raw(sid, 'system/init', `${String(m.model)} · ${tools} 个工具 · ${mcp.length} 个 MCP · ${String(m.permissionMode)}`, m);
       emit(sid, { t: 'context', context: { ...rt(sid)!.context, model: String(m.model ?? '') } });
       return;
@@ -887,8 +894,16 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       return;
     }
     case 'api_retry': {
-      emit(sid, { t: 'status', status: { kind: 'retry', attempt: Number(m.attempt), max: Number(m.max_retries), seconds: Math.round(Number(m.retry_delay_ms) / 1000) } });
-      raw(sid, 'system/api_retry', `第 ${String(m.attempt)} 次重试 · ${String(m.error)}`, m);
+      const status = typeof m.error_status === 'number' ? m.error_status : null;
+      raw(sid, 'system/api_retry', `第 ${String(m.attempt)} 次重试 · ${status ?? '无响应'} ${String(m.error)}`, m);
+      const rejected = pointlessRetry(l.model, { error: m.error, error_status: m.error_status });
+      if (rejected && l.turn && !l.turn.interrupted) {
+        const ep = app.provider.endpoints.find((e) => l.model.startsWith(`ep:${e.id}:`));
+        addItem(sid, { kind: 'banner', id: randomUUID(), banner: 'endpointRejected', detail: `${ep?.name || ep?.url || '兼容端点'} · ${rejected}` });
+        void interruptTurn(sid);
+        return;
+      }
+      emit(sid, { t: 'status', status: { kind: 'retry', attempt: Number(m.attempt), max: Number(m.max_retries), seconds: Math.round(Number(m.retry_delay_ms) / 1000), reason: apiErrorText(String(m.error), status) } });
       return;
     }
     case 'compact_boundary': {

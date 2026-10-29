@@ -63,7 +63,8 @@ export interface ServerApi {
   setEffort(sid: string, effort: Effort): void;
   setMode(sid: string, mode: PermissionMode): void;
   stop(sid: string): void;
-  resume(sid: string): boolean;
+  /** `model` replaces the session's model first (e.g. one whose endpoint was deleted). */
+  resume(sid: string, model?: string): boolean;
   backgroundTool(sid: string, toolId: string): void;
   backgroundAll(sid: string): void;
   stopTask(sid: string, taskId: string): void;

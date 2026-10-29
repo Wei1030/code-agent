@@ -289,14 +289,26 @@ export function WaitingBar({ sid }: { sid: string }) {
   );
 }
 
-export function ReadOnlyBar({ sid, onFork }: { sid: string; onFork: () => void }) {
+export function ReadOnlyBar({ sid, model, onFork }: { sid: string; model: string; onFork: () => void }) {
   const t = useT();
+  const models = useApp((s) => s.models);
+  const fallback = useApp((s) => (s.profiles.find((p) => p.isDefault) ?? s.profiles[0])?.model ?? '');
+  const gone = !models.some((m) => m.id === model);
+  const [pick, setPick] = useState('');
+  const chosen = pick || (models.some((m) => m.id === fallback) ? fallback : models[0]?.id ?? '');
   return (
     <div className="readonly-bar">
       <Icon name="lock" size={16} className="muted" />
-      <span className="grow">{t('这是已保存的会话，Claude Code 进程没有运行。恢复后可以继续对话。')}</span>
+      <span className="grow">{gone
+        ? t('这是已保存的会话。它用的模型 {m} 已经删除，选一个模型后恢复：', { m: model.replace(/^ep:[^:]+:/, '') })
+        : t('这是已保存的会话，Claude Code 进程没有运行。恢复后可以继续对话。')}</span>
+      {gone && (
+        <div style={{ width: 220, flex: 'none' }}>
+          <Select size="sm" icon="cpu" width={260} value={chosen} onChange={setPick} options={models.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
+        </div>
+      )}
       <Button icon="branch" onClick={onFork}>{t('分叉')}</Button>
-      <Button variant="primary" icon="play" onClick={() => api.resume(sid)}>{t('恢复会话')}</Button>
+      <Button variant="primary" icon="play" onClick={() => api.resume(sid, gone ? chosen : undefined)}>{t('恢复会话')}</Button>
     </div>
   );
 }

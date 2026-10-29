@@ -11,6 +11,7 @@ import { app, onWrite, set } from './state';
 import { endpointKey, envCredentialVar, processEnv, setEndpointKey, systemClaude } from './claude/files';
 import { recordLimits } from './usage';
 import { register } from './hub';
+import { apiErrorText } from '@code-agent/shared/catalog';
 import { envFor, isClaudeModel, noteClaudeModels, reasoning, refreshModels, resolveModel } from './models';
 
 const DESC: Record<string, string> = {
@@ -93,6 +94,7 @@ async function testModel(modelId: string): Promise<{ ok: boolean; message: strin
   const timer = setTimeout(() => abort.abort(), 60_000);
   const t0 = Date.now();
   let result: { ok: boolean; message: string } = { ok: false, message: '没有回复' };
+  let failed = false;
   try {
     const exe = app.provider.executable === 'system' ? systemClaude() : undefined;
     const q = query({
@@ -103,6 +105,13 @@ async function testModel(modelId: string): Promise<{ ok: boolean; message: strin
       },
     });
     for await (const m of q) {
+      // Claude Code retries a failed call for minutes; for a test the first failure is the answer.
+      if (m.type === 'system' && m.subtype === 'api_retry') {
+        result = { ok: false, message: apiErrorText(m.error, m.error_status) };
+        failed = true;
+        abort.abort();
+        break;
+      }
       if (m.type === 'assistant' && m.error) result = { ok: false, message: String(m.error) };
       if (m.type !== 'result') continue;
       const text = m.subtype === 'success' ? m.result.trim() : '';
@@ -111,7 +120,7 @@ async function testModel(modelId: string): Promise<{ ok: boolean; message: strin
         : { ok: false, message: (m.subtype === 'success' ? m.result : (m as { errors?: string[] }).errors?.join('；')) || m.subtype };
     }
   } catch (e) {
-    result = { ok: false, message: abort.signal.aborted ? '60 秒内没有回复' : e instanceof Error ? e.message : String(e) };
+    if (!failed) result = { ok: false, message: abort.signal.aborted ? '60 秒内没有回复' : e instanceof Error ? e.message : String(e) };
   } finally {
     clearTimeout(timer);
   }
@@ -142,7 +151,7 @@ async function restart(sid: string) {
   const model = rt(sid)?.model ?? '';
   const gone = !app.models.some((m) => m.id === model);
   addItem(sid, gone
-    ? { kind: 'notice', id: randomUUID(), tone: 'warn', text: `模型 ${model.replace(/^ep:[^:]+:/, '')} 已经从兼容端点里删除，Claude Code 已退出。换一个模型后恢复会话。` }
+    ? { kind: 'notice', id: randomUUID(), tone: 'warn', text: `模型 ${model.replace(/^ep:[^:]+:/, '')} 已经从兼容端点里删除，Claude Code 已退出。恢复会话时可以选一个模型，默认用「默认」方案的模型。` }
     : { kind: 'notice', id: randomUUID(), tone: 'info', text: '兼容端点的设置改了，Claude Code 按新设置重新启动后接着这段对话。' });
   await closeProcess(sid);
   if (!gone) await startProcess(sid, { resume: true });
