@@ -64,7 +64,7 @@ export function Board() {
   const intro = t('这个工作区要做的功能、发现的问题和值得记住的笔记。Claude 可以查看和修改看板；每轮对话结束后，后台会把新的决定、确认的问题和完成的工作记下来。数据保存在 Code Agent 的数据目录，不放进仓库。');
   if (!wsId) {
     return (
-      <div className="page"><div className="page-inner">
+      <div className="page"><div className="page-inner full">
         <div className="page-title"><h1>{t('看板')}</h1></div>
         <p className="page-sub">{intro}</p>
         <NoWorkspace text={t('看板按工作区记录。添加一个工作区后，就能在这里新建、导入条目，Claude 也会在对话后自动记录。')} />
@@ -74,7 +74,7 @@ export function Board() {
 
   return (
     <div className="page">
-      <div className="page-inner">
+      <div className="page-inner full">
         <div className="page-title"><h1>{t('看板')}</h1></div>
         <p className="page-sub">{intro}</p>
         <div className="row board-bar">

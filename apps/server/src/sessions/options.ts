@@ -137,7 +137,8 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
     verbatimPrompts: !!prof.features.verbatim,
     includePartialMessages: true,
     perTaskStopAffordance: true,
-    env: envFor(r.model),
+    // Claude Code leaves the task tools out for current models unless asked to offer them.
+    env: { ...envFor(r.model), ...(prof.tools.includes('TaskCreate') ? { CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' } : {}) },
     stderr: ctx.stderr,
     ...(app.runtime.debugLog ? { debug: true, debugFile: path.join(LOGS_DIR, `${sid}.log`) } : {}),
     ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),

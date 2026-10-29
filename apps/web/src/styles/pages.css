@@ -191,7 +191,7 @@
 /* Board page */
 .board-bar { margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
 .board-tabs { margin-bottom: 14px; }
-.board-layout { grid-template-columns: 380px minmax(0, 1fr); }
+.board-layout { grid-template-columns: minmax(380px, 32%) minmax(0, 1fr); }
 .board-layout .ext-list h5 .muted { font-weight: 400; }
 .ext-item.focus { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .board-detail { display: flex; flex-direction: column; gap: 10px; }
