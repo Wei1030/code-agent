@@ -2,7 +2,6 @@
 // status: 'done' = built as shown; 'new' = a proposed screen; 'changed' = built, with proposed parts.
 // Proposed parts are injected with the app's own classes and outlined (.proto-new); their marks
 // have isNew and their snippet is shown under the screen for whoever implements it.
-import { PROPOSED } from './proposed.mjs';
 
 /** Open an inspector tab (click its rail button unless it is open already). */
 const inspector = async ({ eval: ev, sleep }, label) => {
@@ -128,7 +127,9 @@ export const SCREENS = [
     id: 'P05', group: '会话页', title: '输入框 — 引用文件和会话', status: 'done',
     summary: '输入 `@` 列出工作区里的文件和本工作区的其他会话；`/` 列出命令和技能。',
     frs: ['FR-IN-01', 'FR-IN-02', 'FR-IN-03', 'FR-IN-04', 'FR-SKILL-04'],
-    prepare: async (c) => { await openSession(c, c.ids.validate); await c.type('.c-input', '对照 @'); await c.sleep(900); },
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.type('.c-input', ''); await c.sleep(200); await c.type('.c-input', '对照 @'); await c.sleep(900); },
+    // Unsent text is kept per session; leave none behind for the screens after this one.
+    after: async (c) => { await c.type('.c-input', ''); await c.sleep(300); },
     marks: [
       { sel: '.palette', note: ['候选列表', '↑↓ 选择，回车 / 点击插入', '文件按路径匹配；会话显示状态和摘要，插入后 Claude 能读到它的标题、状态和最近的回复。'] },
       { sel: '.c-input', note: ['输入框', '输入', '`@` 引用文件 / 会话，`/` 命令；输入法组字时回车只确认候选词。'] },
@@ -485,5 +486,135 @@ export const SCREENS = [
       { sel: 'h3', text: '数字格式', note: ['数字格式', '选择', 'token 数等的显示方式。'] },
     ],
   },
-  ...PROPOSED,
+  {
+    id: 'P25b', group: '设置', title: '英文界面', status: 'done',
+    summary: '界面语言选 English（或跟随英文浏览器）时的样子。服务端生成的、带具体内容的提示暂时还是中文。',
+    frs: ['FR-I18N-01', 'FR-I18N-02'],
+    prepare: async (c) => {
+      await c.call('setState', { prefs: { ...c.slices().prefs, uiLanguage: 'en' } });
+      await openSession(c, c.ids.validate);
+      await inspector(c, '任务');
+      await scrollTo(c, 'top');
+    },
+    after: async (c) => { await c.call('setState', { prefs: { ...c.slices().prefs, uiLanguage: 'zh-CN' } }); },
+    marks: [
+      { sel: '.lang-btn', note: ['界面语言', '点击', '跟随浏览器 / 简体中文 / English，切换后立即生效，不用刷新。'] },
+      { sel: '.tgroup', note: ['翻译范围', '—', '界面文字和 Code Agent 的固定提示都已翻译；对话内容和 Claude 的回答不受影响（回复语言另在「语言与地区」设置）。'] },
+    ],
+  },
+  // ================================================================ added in v0.3
+  {
+    id: 'P34', group: '会话页', title: '会话信息', status: 'done',
+    summary: '检查器「信息」页：这个会话的身份和运行环境，以及在终端里接着用的命令。',
+    frs: ['FR-SES-17'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await inspector(c, '信息'); },
+    marks: [
+      { sel: '.ins-rail-btn', text: '信息', note: ['「信息」页', '点击', '检查器的图标栏。'] },
+      { sel: '.ins-body dl', note: ['会话信息', '—', '会话 ID、工作目录或工作树、模型和服务、Claude Code 版本和进程、权限模式、读取的设置和说明文件、MCP 服务器和状态、子代理、进程启动时间（Claude Code 每轮开头报告）。'] },
+      { sel: '.ins-body .btn', text: '在终端里继续', note: ['复制命令', '点击', '复制 `cd <目录> && claude --resume <会话 ID>`，在终端里接着这段对话；先在这里保存会话，避免两边同时写。'] },
+    ],
+  },
+  {
+    id: 'P33', group: '会话页', title: '文件预览', status: 'done',
+    summary: '点对话里工具卡片上的文件路径，或变更列表里的预览按钮，在检查器「文件」页看文件内容。',
+    frs: ['FR-FILE-02'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await scrollTo(c, 'top'); await c.click('.tcard .detail.link', 'src/orders.js'); await c.sleep(1200); },
+    marks: [
+      { sel: '.tcard .detail.link', text: 'src/orders.js', note: ['文件路径', '点击', '读、改、写文件的卡片上路径可以点；读文件的卡片会标出读的那几行。变更列表里每个文件也有预览按钮。'] },
+      { sel: '.ins-rail-btn', text: '文件', note: ['「文件」页', '—', '显示最近打开的文件。'] },
+      { sel: '.file-view', note: ['文件内容', '滚动 / 选中复制', '带行号、按语言着色；只能打开会话工作目录、工作区和额外目录里的文件。「在变更里看」跳到这个文件的差异。'] },
+    ],
+  },
+  {
+    id: 'P36', group: '会话页', title: '代码高亮', status: 'done',
+    summary: '回答里的代码块、改动差异和文件预览按语言着色。',
+    frs: ['FR-OUT-01'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await closeInspector(c); await scrollTo(c, 'function validateItems', 260); },
+    marks: [
+      { sel: '.md-code', note: ['代码块', '—', '按代码块标注的语言着色；没标注时自动判断，判断不出就不着色。'] },
+      { sel: '.diff', note: ['差异', '—', '改动差异按文件类型着色，+/- 标记保持原样。'] },
+    ],
+  },
+  {
+    id: 'P35', group: '会话', title: '全部会话 — 工作树', status: 'done',
+    summary: '「工作树」分页：Code Agent 为会话建的 git 工作树，看状态、打开会话、删除。',
+    frs: ['FR-WS-03'],
+    prepare: async (c) => { await c.go('/sessions'); await c.sleep(600); await c.click('.history-tabs button', '工作树'); await c.sleep(1500); },
+    marks: [
+      { sel: '.history-tabs', note: ['会话 / 工作树', '切换', '全部会话页的两个分页。'] },
+      { sel: '.wt-row .chip', note: ['分支', '—', '工作树的分支，比基准（工作区当前分支）多几个提交。'] },
+      { sel: '.wt-row .status', note: ['改动', '—', '有没有未提交的改动，悬停看文件。'] },
+      { sel: '.wt-row .btn.danger-outline', note: ['删除工作树', '点击', '先确认，写明会丢掉的未提交改动；分支合并了才一起删，没合并的保留。用它的会话先保存，之后只能查看。'] },
+    ],
+  },
+  {
+    id: 'P15', group: '扩展', title: '子代理', status: 'done',
+    summary: '技能页「子代理」分页：所有工作区、这个工作区、插件里和内置的子代理，可以开关、新建、编辑。',
+    frs: ['FR-AGT-01', 'FR-AGT-02'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.go('/skills'); await c.sleep(700); await c.click('.tabs button', '子代理'); await c.sleep(600); await c.click('.ext-item', 'test-writer').catch(() => {}); await c.sleep(400); },
+    marks: [
+      { sel: '.tabs button', text: '子代理', note: ['「子代理」分页', '点击', '和技能、命令、插件并列。'] },
+      { sel: '.ext-item.on', note: ['子代理列表', '点击 / 开关', '按位置分组；关掉后新会话里 Claude 不能用它（写成 Agent(名称) 拒绝规则）。内置和插件里的只能开关。'] },
+      { sel: '.panel input.mono', note: ['编辑', '填写后保存', '名称、模型、什么时候用、可用的工具、说明，保存成 `.claude/agents/<名称>.md`，Claude Code 命令行也能用。'] },
+      { sel: '.btn', text: '在运行中的会话里重新加载', note: ['重新加载', '点击', '运行中的会话读到新的子代理列表。'] },
+    ],
+  },
+  {
+    id: 'P32', group: '设置', title: '设置 — 项目说明与记忆', status: 'done',
+    summary: 'Claude 每个会话开始时都会读的说明文件，以及 Claude Code 自动记下的记忆，可以直接查看和编辑。',
+    frs: ['FR-PROMPT-03', 'FR-PROMPT-05'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.go('/settings/instructions'); await c.sleep(1200); await c.click('.ext-item', 'shop-api 约定').catch(() => {}); await c.sleep(800); },
+    marks: [
+      { sel: '.settings-nav a', text: '项目说明与记忆', note: ['入口', '点击', '设置侧栏。'] },
+      { sel: '.settings-main .seg', note: ['范围', '切换', '当前工作区（同时列出所有工作区的）或只看所有工作区的。'] },
+      { sel: '.ext-item.on', note: ['文件', '点击', '`~/.claude/CLAUDE.md`、仓库的 `CLAUDE.md`、`CLAUDE.local.md`、`.claude/rules/*.md` 和自动记忆；不存在的标「新建」，保存时创建。'] },
+      { sel: '.settings-main textarea', note: ['编辑', '修改后保存', '写回文件，对新会话生效。'] },
+    ],
+  },
+  {
+    id: 'P20b', group: '设置', title: '设置 — 配置方案（输出风格、计划模式）', status: 'done',
+    summary: '「默认」方案的输出风格和计划模式补充说明；关掉「向你提问」时说明后果。',
+    frs: ['FR-PROMPT-04', 'FR-PLAN-02', 'FR-ASK-05'],
+    prepare: async (c) => {
+      await c.go('/settings/profiles');
+      await c.sleep(800);
+      await c.click('.tool-item', 'AskUserQuestion');
+      await c.sleep(300);
+      await c.eval(`(() => { const h = [...document.querySelectorAll('h3')].find((x) => x.textContent === '输出风格'); h && h.scrollIntoView({ block: 'start' }); })()`);
+      await c.sleep(300);
+    },
+    marks: [
+      { sel: 'h3', text: '输出风格', note: ['输出风格', '下拉', 'Claude Code 内置的默认 / 解释型 / 学习型，以及 output-styles 文件夹里自定义的。'] },
+      { sel: 'h3', text: '计划模式补充说明', note: ['计划模式说明', '输入', '进入规划模式时代替默认的规划要求交给 Claude。'] },
+    ],
+  },
+  {
+    id: 'P20c', group: '设置', title: '设置 — 配置方案（应用到运行中的会话）', status: 'done',
+    summary: '保存方案后：对新会话生效；运行中的会话可以一键重启用上新方案，对话接着进行。',
+    frs: ['FR-CFG-01'],
+    prepare: async (c) => {
+      // Start from a profile without the text, so typing it makes a change to save.
+      await c.call('setState', { profiles: c.slices().profiles.map((p) => ({ ...p, planInstructions: '' })) });
+      await c.go('/settings/profiles');
+      await c.sleep(800);
+      await c.type('textarea[placeholder="例如：计划里写清楚要改的文件、测试方案和回滚方式"]', '计划里写清楚要改的文件、测试方案和回滚方式。');
+      await c.sleep(300);
+      await c.click('.btn.primary', '保存');
+      await c.sleep(600);
+    },
+    marks: [
+      { sel: '.modal-foot .hint', note: ['生效时间', '—', '方案在会话的 Claude Code 进程启动时生效：新会话直接用上；运行中的会话要重启。'] },
+      { sel: '.btn.primary', text: '应用到运行中的会话', note: ['应用到运行中的会话', '点击', '每个运行中的会话在空闲后（这一轮结束、没有等你处理的请求、没有排队的消息和运行中的后台任务）重新启动，接着原来的对话。'] },
+    ],
+  },
+  {
+    id: 'P23b', group: '会话页', title: '事件检查器 — 调试日志', status: 'done',
+    summary: '开了「保存调试日志」后，事件检查器多一个「调试日志」分类，显示这个会话日志的末尾。',
+    frs: ['FR-OBS-02'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await inspector(c, '事件'); await c.click('.ins-body .tabs button', '调试日志'); await c.sleep(1500); },
+    marks: [
+      { sel: '.ins-body .tabs button', text: '调试日志', note: ['「调试日志」分类', '点击', '只在设置里打开「保存调试日志」时出现。'] },
+      { sel: '.log-tail', note: ['日志末尾', '—', '每 3 秒刷新；可以复制文件路径用编辑器打开。'] },
+    ],
+  },
 ];

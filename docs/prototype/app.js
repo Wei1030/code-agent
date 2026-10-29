@@ -9,7 +9,7 @@
 
   const table = (head, rows) => `<table class="notes"><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
   document.getElementById('proposal-list').innerHTML = table(['', '功能', '在哪', '做什么', '需求', '工作量'], (window.PROPOSALS ?? []).map((p, i) =>
-    `<tr><td><span class="num num-new">${i + 1}</span></td><td class="el">${rich(p.name)}</td><td>${p.screens.map((s) => `<a href="#${s}">${s}</a>`).join(' ')}</td><td>${rich(p.what)}</td><td>${p.frs.map((f) => `<code>${esc(f)}</code>`).join(' ')}</td><td>${esc(p.size)}</td></tr>`));
+    `<tr><td><span class="num">${i + 1}</span></td><td class="el">${rich(p.name)}</td><td>${p.screens.map((s) => `<a href="#${s}">${s}</a>`).join(' ')}</td><td>${rich(p.what)}</td><td>${p.frs.map((f) => `<code>${esc(f)}</code>`).join(' ')}</td><td>${esc(p.size)}</td></tr>`));
   document.getElementById('left-out-list').innerHTML = table(['功能', '需求', '为什么不做'], (window.LEFT_OUT ?? []).map((p) =>
     `<tr><td class="el">${rich(p.name)}</td><td>${p.frs.map((f) => `<code>${esc(f)}</code>`).join(' ')}</td><td>${rich(p.why)}</td></tr>`));
 

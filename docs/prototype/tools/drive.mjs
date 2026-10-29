@@ -29,6 +29,7 @@ export async function drive(c, DEMO, log = console.log) {
     reviewProfile: { ...s().reviewProfile, model: PRO, effort: 'high', extraPrompt: '金额计算和参数校验要特别注意边界值。' },
     boardSettings: { ...s().boardSettings, recorderModel: LITE, recorderEffort: 'low' },
     maxRunning: 16,
+    runtime: { ...s().runtime, debugLog: true },
     env: [{ id: 'env-1', key: 'NODE_OPTIONS', value: '--max-old-space-size=4096', note: '大仓库跑测试时内存不够' }],
   });
 

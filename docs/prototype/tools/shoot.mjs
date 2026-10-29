@@ -99,6 +99,7 @@ async function capture(b, c, ids, screens) {
     const ctx = {
       ids, call: c.call, sleep,
       summary: (id) => c.state.sessions.get(id),
+      slices: () => c.state.slices,
       go: (p) => b.go(p).then(() => b.evaluate(PAGE_LIB)),
       click: (sel, text, nth) => b.evaluate(`__click(${JSON.stringify(sel)}, ${JSON.stringify(text ?? null)}, ${nth ?? 0})`),
       eval: (expr) => b.evaluate(expr),

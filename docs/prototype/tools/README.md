@@ -21,9 +21,10 @@ What it does:
    drives sessions into every state the screens need (finished work, a review loop, peer sessions,
    a subagent and a background task, waiting approval / question / plan / elicitation, a running
    command, an endpoint error), then adds board items, jobs and hook rules.
-4. Headless Chrome opens each screen of `screens.mjs` (built) and `proposed.mjs` (proposals, drawn in
-   with the app's own classes), records where each numbered mark goes, and writes
-   `../shots/<id>.webp` and `../screens.js`.
+4. Headless Chrome opens each screen of `screens.mjs`, records where each numbered mark goes, and
+   writes `../shots/<id>.webp` and `../screens.js`. A proposal is drawn into the real page with
+   `ctx.inject` (HTML using the app's own classes, outlined with `.proto-new`), its marks get
+   `isNew` and the screen a `snippet` with that HTML.
 
 `SHOOT_KEEP=1` leaves the demo running afterwards; `SHOOT_REUSE=1` shoots again from that running
 demo without rebuilding it, which is the quick loop when editing `screens.mjs`. Chrome is expected at

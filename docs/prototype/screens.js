@@ -132,9 +132,9 @@ window.SCREENS = [
    },
    {
     "box": [
-     1380,
+     1376,
      48,
-     60,
+     64,
      852
     ],
     "at": "tl",
@@ -265,7 +265,7 @@ window.SCREENS = [
   "marks": [
    {
     "box": [
-     530.875,
+     528.875,
      282,
      282.25,
      65.5
@@ -282,7 +282,7 @@ window.SCREENS = [
     "box": [
      377,
      778.25,
-     628,
+     624,
      57
     ],
     "at": "tl",
@@ -342,7 +342,7 @@ window.SCREENS = [
    {
     "box": [
      152,
-     152.5,
+     204,
      280,
      33.5
     ],
@@ -357,7 +357,7 @@ window.SCREENS = [
    {
     "box": [
      442,
-     152.5,
+     204,
      180,
      33.5
     ],
@@ -372,7 +372,7 @@ window.SCREENS = [
    {
     "box": [
      153,
-     201,
+     252.5,
      1198,
      74.5
     ],
@@ -492,9 +492,9 @@ window.SCREENS = [
   "marks": [
    {
     "box": [
-     479.375,
+     478.484375,
      120,
-     536.625,
+     533.515625,
      64.78125
     ],
     "at": "tl",
@@ -509,7 +509,7 @@ window.SCREENS = [
     "box": [
      328,
      196.78125,
-     688,
+     684,
      32
     ],
     "at": "tl",
@@ -524,7 +524,7 @@ window.SCREENS = [
     "box": [
      328,
      276.578125,
-     688,
+     684,
      32.75
     ],
     "at": "tl",
@@ -539,7 +539,7 @@ window.SCREENS = [
     "box": [
      328,
      401.875,
-     688,
+     684,
      403
     ],
     "at": "tl",
@@ -553,8 +553,8 @@ window.SCREENS = [
    {
     "box": [
      328,
-     2241.375,
-     688,
+     2259.375,
+     684,
      25.25
     ],
     "at": "tl",
@@ -567,7 +567,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1055,
+     1051,
      133.5,
      311,
      31.5
@@ -582,7 +582,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     936,
+     932,
      62.5,
      88,
      26
@@ -645,7 +645,7 @@ window.SCREENS = [
     "box": [
      377,
      778.25,
-     628,
+     624,
      57
     ],
     "at": "tl",
@@ -674,7 +674,7 @@ window.SCREENS = [
     "box": [
      328,
      650.75,
-     688,
+     684,
      108.5
     ],
     "at": "tl",
@@ -687,7 +687,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     845,
+     841,
      846.125,
      64,
      26
@@ -702,7 +702,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     915,
+     911,
      846.125,
      64,
      26
@@ -735,7 +735,7 @@ window.SCREENS = [
     "box": [
      328,
      210.1875,
-     688,
+     684,
      38
     ],
     "at": "tl",
@@ -750,7 +750,7 @@ window.SCREENS = [
     "box": [
      329,
      356,
-     686,
+     682,
      42.5
     ],
     "at": "tl",
@@ -765,7 +765,7 @@ window.SCREENS = [
     "box": [
      382,
      517.25,
-     606,
+     602,
      19.5
     ],
     "at": "tl",
@@ -793,7 +793,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     949,
+     945,
      718.25,
      52,
      30
@@ -810,7 +810,7 @@ window.SCREENS = [
     "box": [
      377,
      778.25,
-     628,
+     624,
      57
     ],
     "at": "tl",
@@ -870,7 +870,7 @@ window.SCREENS = [
     "box": [
      382,
      613.75,
-     606,
+     602,
      28
     ],
     "at": "tl",
@@ -885,7 +885,7 @@ window.SCREENS = [
     "box": [
      343,
      661.75,
-     658,
+     654,
      33.5
     ],
     "at": "tl",
@@ -898,7 +898,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     788.5,
+     784.5,
      259.125,
      212.5,
      18.75
@@ -959,7 +959,7 @@ window.SCREENS = [
     "box": [
      343,
      712.75,
-     572,
+     568,
      33.5
     ],
     "at": "tl",
@@ -1006,7 +1006,7 @@ window.SCREENS = [
     "box": [
      328,
      164.1875,
-     688,
+     684,
      240.75
     ],
     "at": "tl",
@@ -1021,7 +1021,7 @@ window.SCREENS = [
     "box": [
      328,
      416.9375,
-     688,
+     684,
      183
     ],
     "at": "tl",
@@ -1034,7 +1034,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1055,
+     1051,
      106,
      148,
      26
@@ -1049,7 +1049,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1094,
+     1090,
      268.5,
      88,
      26
@@ -1124,7 +1124,7 @@ window.SCREENS = [
   "marks": [
    {
     "box": [
-     1055,
+     1051,
      106,
      311,
      19.5
@@ -1139,7 +1139,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1055,
+     1051,
      572.75,
      88,
      26
@@ -1154,7 +1154,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1055,
+     1051,
      619,
      311,
      19.5
@@ -1169,7 +1169,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1055,
+     1051,
      878.5,
      311,
      19.5
@@ -1212,7 +1212,7 @@ window.SCREENS = [
   "marks": [
    {
     "box": [
-     1055,
+     1051,
      106,
      87.953125,
      37.5
@@ -1227,7 +1227,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1055,
+     1051,
      153.5,
      243,
      28
@@ -1242,7 +1242,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1340,
+     1336,
      154.5,
      26,
      26
@@ -1272,7 +1272,7 @@ window.SCREENS = [
     "box": [
      328,
      210.1875,
-     1028,
+     1024,
      85
     ],
     "at": "tl",
@@ -1287,7 +1287,7 @@ window.SCREENS = [
     "box": [
      328,
      307.1875,
-     1028,
+     1024,
      22.75
     ],
     "at": "tl",
@@ -1300,7 +1300,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     1185,
+     1181,
      846.125,
      64,
      26
@@ -1332,7 +1332,7 @@ window.SCREENS = [
     "box": [
      328,
      174.390625,
-     1028,
+     1024,
      103
     ],
     "at": "tl",
@@ -1375,7 +1375,7 @@ window.SCREENS = [
     "box": [
      328,
      830,
-     1028,
+     1024,
      56
     ],
     "at": "tl",
@@ -1400,7 +1400,7 @@ window.SCREENS = [
   "marks": [
    {
     "box": [
-     757.140625,
+     755.140625,
      114.484375,
      169.703125,
      21.25
@@ -1417,7 +1417,7 @@ window.SCREENS = [
     "box": [
      328,
      147.734375,
-     1028,
+     1024,
      83.75
     ],
     "at": "tl",
@@ -1432,7 +1432,7 @@ window.SCREENS = [
     "box": [
      328,
      243.484375,
-     1028,
+     1024,
      182
     ],
     "at": "tl",
@@ -1447,7 +1447,7 @@ window.SCREENS = [
     "box": [
      328,
      512.984375,
-     1028,
+     1024,
      276.5
     ],
     "at": "tl",
@@ -1462,7 +1462,7 @@ window.SCREENS = [
     "box": [
      328,
      1954.40625,
-     1028,
+     1024,
      130
     ],
     "at": "tl",
@@ -1574,7 +1574,7 @@ window.SCREENS = [
     "box": [
      328,
      210.1875,
-     1028,
+     1024,
      83.796875
     ],
     "at": "tl",
@@ -1587,9 +1587,9 @@ window.SCREENS = [
    },
    {
     "box": [
-     569.171875,
+     568.28125,
      411.03125,
-     739.828125,
+     736.71875,
      67.171875
     ],
     "at": "tl",
@@ -1823,7 +1823,7 @@ window.SCREENS = [
     "box": [
      358,
      524.5,
-     631,
+     627,
      19.5
     ],
     "at": "tl",
@@ -1836,7 +1836,7 @@ window.SCREENS = [
    },
    {
     "box": [
-     949,
+     945,
      718.25,
      52,
      30
@@ -2699,143 +2699,111 @@ window.SCREENS = [
   ]
  },
  {
+  "id": "P25b",
+  "group": "设置",
+  "title": "英文界面",
+  "status": "done",
+  "summary": "界面语言选 English（或跟随英文浏览器）时的样子。服务端生成的、带具体内容的提示暂时还是中文。",
+  "frs": [
+   "FR-I18N-01",
+   "FR-I18N-02"
+  ],
+  "marks": [
+   {
+    "box": [
+     1139.46875,
+     8.5,
+     57.46875,
+     30
+    ],
+    "at": "tl",
+    "note": [
+     "界面语言",
+     "点击",
+     "跟随浏览器 / 简体中文 / English，切换后立即生效，不用刷新。"
+    ],
+    "isNew": false
+   },
+   {
+    "box": [
+     328,
+     276.578125,
+     684,
+     32.75
+    ],
+    "at": "tl",
+    "note": [
+     "翻译范围",
+     "—",
+     "界面文字和 Code Agent 的固定提示都已翻译；对话内容和 Claude 的回答不受影响（回复语言另在「语言与地区」设置）。"
+    ],
+    "isNew": false
+   }
+  ]
+ },
+ {
   "id": "P34",
-  "group": "提议",
+  "group": "会话页",
   "title": "会话信息",
-  "status": "new",
-  "summary": "检查器新增「信息」页：这个会话的身份和运行环境，以及在终端里接着用的命令。",
+  "status": "done",
+  "summary": "检查器「信息」页：这个会话的身份和运行环境，以及在终端里接着用的命令。",
   "frs": [
    "FR-SES-17"
   ],
   "marks": [
    {
     "box": [
-     1384.5,
-     359,
-     52,
-     48.5
+     1378.5,
+     399,
+     60,
+     47
     ],
     "at": "tl",
     "note": [
      "「信息」页",
      "点击",
-     "检查器多一个图标。"
+     "检查器的图标栏。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     1055,
+     1051,
      118.5,
      311,
-     316.5
+     452.5
     ],
     "at": "tl",
     "note": [
      "会话信息",
      "—",
-     "会话 ID、工作目录或工作树、模型和服务、Claude Code 版本和进程、权限模式、读取的设置文件和说明文件、MCP 服务器、开始时间。数据来自 Claude Code 的初始化消息。"
+     "会话 ID、工作目录或工作树、模型和服务、Claude Code 版本和进程、权限模式、读取的设置和说明文件、MCP 服务器和状态、子代理、进程启动时间（Claude Code 每轮开头报告）。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     1147.21875,
-     461.5,
-     176,
+     1163.21875,
+     583.5,
+     196,
      26
     ],
     "at": "tl",
     "note": [
      "复制命令",
      "点击",
-     "复制 `claude --resume <会话 ID>`，在终端里接着这段对话。"
+     "复制 `cd <目录> && claude --resume <会话 ID>`，在终端里接着这段对话；先在这里保存会话，避免两边同时写。"
     ],
-    "isNew": true
+    "isNew": false
    }
-  ],
-  "snippet": "<div class=\"proto-new\" style=\"display:flex;flex-direction:column;gap:14px\">\n  <dl class=\"kv\">\n    <dt>会话 ID</dt><dd class=\"mono\">{sid}</dd>\n    <dt>工作目录</dt><dd class=\"mono\">{cwd}</dd>\n    <dt>分支</dt><dd>main</dd>\n    <dt>模型</dt><dd>demo-pro · 演示服务（兼容端点）</dd>\n    <dt>Claude Code</dt><dd>2.1.312 · 随 SDK 提供 · 进程 {pid}</dd>\n    <dt>权限模式</dt><dd>自动接受编辑</dd>\n    <dt>设置文件</dt><dd>用户 · 项目 · 本地</dd>\n    <dt>说明文件</dt><dd class=\"mono\">~/.claude/CLAUDE.md<br>CLAUDE.md</dd>\n    <dt>MCP</dt><dd>workspace、issue-tracker 已连接<br><span class=\"muted\">docs-search 连接失败</span></dd>\n    <dt>开始</dt><dd>{started} · 没有恢复过</dd>\n  </dl>\n  <div class=\"row\" style=\"gap:8px;flex-wrap:wrap\">\n    <button class=\"btn sm\">复制会话 ID</button>\n    <button class=\"btn sm\">复制「在终端里继续」的命令</button>\n  </div>\n  <div class=\"hint\">在终端里运行 <span class=\"mono\">claude --resume {short}…</span> 可以接着这段对话（先保存这个会话，避免两边同时写）。</div>\n</div>"
- },
- {
-  "id": "P32",
-  "group": "提议",
-  "title": "项目说明与记忆",
-  "status": "new",
-  "summary": "设置里新增一页：Claude 每次都读的说明文件和 Claude Code 自动记下的记忆，可以直接查看和编辑。",
-  "frs": [
-   "FR-PROMPT-03",
-   "FR-PROMPT-05"
-  ],
-  "marks": [
-   {
-    "box": [
-     74,
-     212,
-     199,
-     33.5
-    ],
-    "at": "tl",
-    "note": [
-     "设置入口",
-     "点击",
-     "设置侧栏新增「项目说明与记忆」。"
-    ],
-    "isNew": true
-   },
-   {
-    "box": [
-     312,
-     143.5,
-     187.265625,
-     28
-    ],
-    "at": "tl",
-    "note": [
-     "范围",
-     "切换",
-     "当前工作区（同时列出所有工作区的）或只看所有工作区的。"
-    ],
-    "isNew": true
-   },
-   {
-    "box": [
-     319,
-     309.25,
-     326,
-     56.25
-    ],
-    "at": "tl",
-    "note": [
-     "文件列表",
-     "点击",
-     "`~/.claude/CLAUDE.md`、仓库的 `CLAUDE.md`、`CLAUDE.local.md`、`.claude/rules/*.md`，以及自动记忆；不存在的可以直接新建。"
-    ],
-    "isNew": true
-   },
-   {
-    "box": [
-     685,
-     246.5,
-     710,
-     300
-    ],
-    "at": "tl",
-    "note": [
-     "编辑",
-     "直接改，保存",
-     "保存后写回文件；标出有多少个会话读过它。"
-    ],
-    "isNew": true
-   }
-  ],
-  "snippet": "<div class=\"proto-new\">\n  <h1>项目说明与记忆</h1>\n  <p class=\"lead\">Claude 每个会话开始时都会读的说明文件，以及 Claude Code 自动记下的记忆。改动对新会话生效，运行中的会话下次读取时生效。</p>\n  <div class=\"seg\"><button class=\"on\">shop-api</button><button>只看所有工作区</button></div>\n  <div class=\"ext-layout\" style=\"grid-template-columns:340px minmax(0,1fr);margin-top:14px\">\n    <div class=\"ext-list\">\n      <h5>所有工作区 <span class=\"mono\" style=\"font-weight:400\">~/.claude</span></h5>\n      <div class=\"ext-item\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">CLAUDE.md</b></div><div class=\"sub\">我的习惯 · 4 行</div></div>\n      <h5>shop-api</h5>\n      <div class=\"ext-item on\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">CLAUDE.md</b><span class=\"grow\"></span><span class=\"chip\">随仓库提交</span></div><div class=\"sub\">shop-api 约定 · 6 行</div></div>\n      <div class=\"ext-item\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">CLAUDE.local.md</b><span class=\"grow\"></span><span class=\"chip outline\">新建</span></div><div class=\"sub\">只在这台电脑上，不提交</div></div>\n      <div class=\"ext-item\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">.claude/rules/</b></div><div class=\"sub\">按路径生效的规则 · 还没有</div></div>\n      <h5>记忆 <span style=\"font-weight:400\">Claude Code 自动记下的</span></h5>\n      <div class=\"ext-item\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">MEMORY.md</b></div><div class=\"sub\">2 条 · 最近：金额一律用分为单位</div></div>\n    </div>\n    <div class=\"panel\"><div class=\"panel-head\"><h3 class=\"mono\">CLAUDE.md</h3><span class=\"sub mono\">{path}</span><span class=\"grow\"></span><span class=\"hint\">9 个会话读过</span></div>\n      <div class=\"panel-body\"><textarea class=\"editor\" rows=\"12\">{content}</textarea>\n        <div class=\"row\" style=\"justify-content:flex-end;gap:8px;margin-top:10px\"><button class=\"btn sm\">还原</button><button class=\"btn sm primary\">保存</button></div></div></div>\n  </div>\n</div>"
+  ]
  },
  {
   "id": "P33",
-  "group": "提议",
+  "group": "会话页",
   "title": "文件预览",
-  "status": "new",
-  "summary": "点对话里的文件路径，在检查器「文件」页看文件内容；读文件的卡片定位到读的那几行。",
+  "status": "done",
+  "summary": "点对话里工具卡片上的文件路径，或变更列表里的预览按钮，在检查器「文件」页看文件内容。",
   "frs": [
    "FR-FILE-02"
   ],
@@ -2844,55 +2812,54 @@ window.SCREENS = [
     "box": [
      400.34375,
      411.875,
-     367.703125,
+     363.703125,
      18
     ],
     "at": "tl",
     "note": [
      "文件路径",
      "点击",
-     "工具卡片、@ 引用和变更列表里的路径都可以点。"
+     "读、改、写文件的卡片上路径可以点；读文件的卡片会标出读的那几行。变更列表里每个文件也有预览按钮。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     1384.5,
-     359,
-     52,
-     48.5
+     1378.5,
+     350,
+     60,
+     47
     ],
     "at": "tl",
     "note": [
      "「文件」页",
      "—",
-     "检查器多一个图标，显示最近打开的文件。"
+     "显示最近打开的文件。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     1055,
-     148.5,
+     1051,
+     140,
      311,
-     613
+     628
     ],
     "at": "tl",
     "note": [
      "文件内容",
      "滚动 / 选中复制",
-     "带行号；从读文件的卡片打开时，读过的行高亮。「在变更里看」跳到这个文件的差异。"
+     "带行号、按语言着色；只能打开会话工作目录、工作区和额外目录里的文件。「在变更里看」跳到这个文件的差异。"
     ],
-    "isNew": true
+    "isNew": false
    }
-  ],
-  "snippet": "<div class=\"proto-new\" style=\"display:flex;flex-direction:column;gap:8px\">\n  <div class=\"row\" style=\"gap:8px\"><b class=\"mono\">src/orders.js</b><span class=\"hint\">{lines} 行 · 第 1 轮读过 · 改过 2 次</span><span class=\"grow\"></span><button class=\"btn sm ghost\">在变更里看</button></div>\n  <pre class=\"mono\" style=\"margin:0;font-size:12px;line-height:1.55;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 0;overflow:auto\">{code}</pre>\n</div>"
+  ]
  },
  {
   "id": "P36",
-  "group": "提议",
+  "group": "会话页",
   "title": "代码高亮",
-  "status": "new",
+  "status": "done",
   "summary": "回答里的代码块、改动差异和文件预览按语言着色。",
   "frs": [
    "FR-OUT-01"
@@ -2901,50 +2868,64 @@ window.SCREENS = [
    {
     "box": [
      328,
-     323.953125,
-     688,
+     1768.8125,
+     1024,
      157.625
     ],
     "at": "tl",
     "note": [
      "代码块",
      "—",
-     "按语言着色：关键字、字符串、数字、函数名、注释；语言取自代码块标注，没有就按内容猜。差异卡片和文件预览同样着色。"
+     "按代码块标注的语言着色；没标注时自动判断，判断不出就不着色。"
     ],
-    "isNew": true
+    "isNew": false
+   },
+   {
+    "box": [
+     341,
+     289.484375,
+     998,
+     308
+    ],
+    "at": "tl",
+    "note": [
+     "差异",
+     "—",
+     "改动差异按文件类型着色，+/- 标记保持原样。"
+    ],
+    "isNew": false
    }
-  ],
-  "snippet": "<style>.tok-kw{color:#8a3ffc}.tok-str{color:#0b7a3e}.tok-num{color:#b35900}.tok-fn{color:#1f5bd6}.tok-com{color:#8a8f98;font-style:italic}</style>\n<!-- 代码块里按语言标出 tok-kw / tok-str / tok-num / tok-fn / tok-com -->"
+  ]
  },
  {
   "id": "P35",
-  "group": "提议",
-  "title": "工作树",
-  "status": "new",
-  "summary": "全部会话页新增「工作树」：Code Agent 为会话建的 git 工作树，看状态、打开会话、删除。",
+  "group": "会话",
+  "title": "全部会话 — 工作树",
+  "status": "done",
+  "summary": "「工作树」分页：Code Agent 为会话建的 git 工作树，看状态、打开会话、删除。",
   "frs": [
    "FR-WS-03"
   ],
   "marks": [
    {
     "box": [
-     153,
-     201,
-     1198,
+     152,
+     152.5,
+     1200,
      37.5
     ],
     "at": "tl",
     "note": [
      "会话 / 工作树",
      "切换",
-     "全部会话页多一个「工作树」分页。"
+     "全部会话页的两个分页。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     533.796875,
-     268.75,
+     501.65625,
+     218.375,
      106.234375,
      20
     ],
@@ -2952,29 +2933,29 @@ window.SCREENS = [
     "note": [
      "分支",
      "—",
-     "工作树的分支和基准，比基准多几个提交。"
+     "工作树的分支，比基准（工作区当前分支）多几个提交。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     754.5,
-     268.25,
-     91.71875,
+     722.796875,
+     217,
+     107.71875,
      20
     ],
     "at": "tl",
     "note": [
      "改动",
      "—",
-     "有没有未提交的改动，列出文件。"
+     "有没有未提交的改动，悬停看文件。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     1254,
-     273.75,
+     1254.984375,
+     223.375,
      80,
      26
     ],
@@ -2982,19 +2963,18 @@ window.SCREENS = [
     "note": [
      "删除工作树",
      "点击",
-     "先确认；有未提交的改动或没合并的提交时写明会丢什么。会话保留。"
+     "先确认，写明会丢掉的未提交改动；分支合并了才一起删，没合并的保留。用它的会话先保存，之后只能查看。"
     ],
-    "isNew": true
+    "isNew": false
    }
-  ],
-  "snippet": "<div class=\"proto-new\">\n  <div class=\"tabs\"><button>会话</button><button class=\"on\">工作树<span class=\"count\">1</span></button></div>\n  <div class=\"panel\" style=\"margin-top:12px\"><div class=\"panel-body\" style=\"padding:4px 0\">\n    <div style=\"display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1.3fr) minmax(0,1.2fr) minmax(0,1.3fr) auto;gap:14px;align-items:center;padding:12px 16px\">\n      <div style=\"min-width:0\"><b>{title}</b><div class=\"hint mono truncate\">{path}</div></div>\n      <div><span class=\"chip mono\">{branch}</span><div class=\"hint\">基于 main · 比 main 多 0 个提交</div></div>\n      <div><span class=\"status warn\">1 个文件未提交</span><div class=\"hint\">docs/api.md</div></div>\n      <div>会话「{title}」<div class=\"hint\">空闲 · 进程在线</div></div>\n      <div class=\"row\" style=\"gap:6px\"><button class=\"btn sm\">打开会话</button><button class=\"btn sm danger-outline\">删除工作树</button></div>\n    </div>\n  </div></div>\n  <div class=\"hint\" style=\"margin-top:8px\">Code Agent 为会话建的 git 工作树（create_session 的 worktree）。删除时：有未提交的改动或没合并进 main 的提交会先提醒；会话保留，恢复后回到工作区目录。</div>\n</div>"
+  ]
  },
  {
   "id": "P15",
-  "group": "提议",
+  "group": "扩展",
   "title": "子代理",
-  "status": "new",
-  "summary": "技能页新增「子代理」：用户级、项目级、插件里和内置的子代理，可以查看、新建、编辑。",
+  "status": "done",
+  "summary": "技能页「子代理」分页：所有工作区、这个工作区、插件里和内置的子代理，可以开关、新建、编辑。",
   "frs": [
    "FR-AGT-01",
    "FR-AGT-02"
@@ -3013,22 +2993,22 @@ window.SCREENS = [
      "点击",
      "和技能、命令、插件并列。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
      159,
-     289,
+     352.75,
      366,
-     76
+     80
     ],
     "at": "tl",
     "note": [
      "子代理列表",
      "点击 / 开关",
-     "按位置分组：所有工作区、这个工作区（随仓库）、插件、内置（只读）。"
+     "按位置分组；关掉后新会话里 Claude 不能用它（写成 Agent(名称) 拒绝规则）。内置和插件里的只能开关。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
@@ -3040,20 +3020,107 @@ window.SCREENS = [
     "at": "tl",
     "note": [
      "编辑",
-     "填写",
-     "名称、什么时候用、可以用的工具、模型、说明；保存成 `.claude/agents/<名称>.md`。"
+     "填写后保存",
+     "名称、模型、什么时候用、可用的工具、说明，保存成 `.claude/agents/<名称>.md`，Claude Code 命令行也能用。"
     ],
-    "isNew": true
+    "isNew": false
+   },
+   {
+    "box": [
+     152,
+     965.03125,
+     222.078125,
+     26
+    ],
+    "at": "tl",
+    "note": [
+     "重新加载",
+     "点击",
+     "运行中的会话读到新的子代理列表。"
+    ],
+    "isNew": false
    }
+  ]
+ },
+ {
+  "id": "P32",
+  "group": "设置",
+  "title": "设置 — 项目说明与记忆",
+  "status": "done",
+  "summary": "Claude 每个会话开始时都会读的说明文件，以及 Claude Code 自动记下的记忆，可以直接查看和编辑。",
+  "frs": [
+   "FR-PROMPT-03",
+   "FR-PROMPT-05"
   ],
-  "snippet": "<div class=\"ext-layout proto-new\" style=\"grid-template-columns:380px minmax(0,1fr)\">\n  <div><div class=\"ext-list\">\n    <h5>所有工作区 <span class=\"mono\" style=\"font-weight:400\">~/.claude/agents</span></h5>\n    <div class=\"ext-item on\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">test-writer</b><span class=\"grow\"></span><label class=\"toggle on\"><span class=\"track\"></span></label></div><div class=\"sub truncate\" style=\"display:block\">为指定模块补测试；只写 test/ 下的文件</div><div class=\"sub\">工具 5 个 · 模型跟随会话</div></div>\n    <h5>shop-api <span class=\"mono\" style=\"font-weight:400\">.claude/agents</span></h5>\n    <div class=\"ext-item\"><div class=\"sub\">还没有。新建的子代理可以随仓库提交，团队共用。</div></div>\n    <h5>内置</h5>\n    <div class=\"ext-item\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">Explore</b><span class=\"grow\"></span><span class=\"chip\">只读</span></div><div class=\"sub\">快速搜索代码库，回答「在哪」「怎么用」</div></div>\n    <div class=\"ext-item\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">general-purpose</b></div><div class=\"sub\">多步骤的研究和执行</div></div>\n    <div class=\"ext-item\"><div class=\"top\"><b class=\"mono\" style=\"font-size:13px\">Plan</b><span class=\"grow\"></span><span class=\"chip\">只读</span></div><div class=\"sub\">规划实现方案</div></div>\n  </div><div class=\"hint\" style=\"margin-top:8px\">Claude 用「子代理」工具把任务交给它们；关掉后 Claude 看不到这个子代理。</div></div>\n  <div class=\"panel\"><div class=\"panel-head\"><h3 class=\"mono\">test-writer</h3><span class=\"sub\">~/.claude/agents/test-writer.md</span><span class=\"grow\"></span><button class=\"btn ghost sm\">删除</button></div>\n    <div class=\"panel-body\" style=\"display:flex;flex-direction:column;gap:12px\">\n      <div class=\"form-grid\"><div class=\"field\"><label>名称</label><input class=\"input mono\" value=\"test-writer\"></div><div class=\"field\"><label>模型</label><button class=\"select-btn\">跟随会话</button></div></div>\n      <div class=\"field\"><label>什么时候用（Claude 据此决定是否交给它）</label><input class=\"input\" value=\"为指定模块补测试；只写 test/ 下的文件\"></div>\n      <div class=\"field\"><label>可以使用的工具</label><div class=\"row\" style=\"gap:6px;flex-wrap:wrap\"><span class=\"chip\">Read</span><span class=\"chip\">Grep</span><span class=\"chip\">Glob</span><span class=\"chip\">Write</span><span class=\"chip\">Bash</span><button class=\"btn sm ghost\">+ 工具</button></div></div>\n      <div class=\"field\"><label>说明（子代理的系统提示词）</label><textarea class=\"editor\" rows=\"6\">你只负责写测试。先读被测模块，再按边界值、错误分支、正常路径补 node:test 用例，最后跑 `npm test`。</textarea></div>\n      <div class=\"row\" style=\"justify-content:flex-end;gap:8px\"><button class=\"btn sm\">还原</button><button class=\"btn sm primary\">保存</button></div>\n    </div></div>\n</div>"
+  "marks": [
+   {
+    "box": [
+     74,
+     212,
+     199,
+     33.5
+    ],
+    "at": "tl",
+    "note": [
+     "入口",
+     "点击",
+     "设置侧栏。"
+    ],
+    "isNew": false
+   },
+   {
+    "box": [
+     312,
+     146.25,
+     206,
+     28
+    ],
+    "at": "tl",
+    "note": [
+     "范围",
+     "切换",
+     "当前工作区（同时列出所有工作区的）或只看所有工作区的。"
+    ],
+    "isNew": false
+   },
+   {
+    "box": [
+     319,
+     314.75,
+     326,
+     56.25
+    ],
+    "at": "tl",
+    "note": [
+     "文件",
+     "点击",
+     "`~/.claude/CLAUDE.md`、仓库的 `CLAUDE.md`、`CLAUDE.local.md`、`.claude/rules/*.md` 和自动记忆；不存在的标「新建」，保存时创建。"
+    ],
+    "isNew": false
+   },
+   {
+    "box": [
+     685,
+     277.25,
+     710,
+     382
+    ],
+    "at": "tl",
+    "note": [
+     "编辑",
+     "修改后保存",
+     "写回文件，对新会话生效。"
+    ],
+    "isNew": false
+   }
+  ]
  },
  {
   "id": "P20b",
-  "group": "提议",
-  "title": "配置方案 — 补充项",
-  "status": "changed",
-  "summary": "「默认」方案补上输出风格和计划模式补充说明；关掉「向你提问」时说明后果。",
+  "group": "设置",
+  "title": "设置 — 配置方案（输出风格、计划模式）",
+  "status": "done",
+  "summary": "「默认」方案的输出风格和计划模式补充说明；关掉「向你提问」时说明后果。",
   "frs": [
    "FR-PROMPT-04",
    "FR-PLAN-02",
@@ -3063,56 +3130,82 @@ window.SCREENS = [
    {
     "box": [
      589,
-     281.25,
-     389,
+     243.421875,
+     806,
      18
     ],
     "at": "tl",
     "note": [
      "输出风格",
      "下拉",
-     "Claude Code 的输出风格（内置和 `~/.claude/output-styles` 里的），改变回答的写法。"
+     "Claude Code 内置的默认 / 解释型 / 学习型，以及 output-styles 文件夹里自定义的。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     1006,
-     281.25,
-     389,
+     589,
+     350.171875,
+     806,
      18
     ],
     "at": "tl",
     "note": [
      "计划模式说明",
      "输入",
-     "进入规划模式时追加给 Claude 的要求。"
+     "进入规划模式时代替默认的规划要求交给 Claude。"
     ],
-    "isNew": true
-   },
+    "isNew": false
+   }
+  ]
+ },
+ {
+  "id": "P20c",
+  "group": "设置",
+  "title": "设置 — 配置方案（应用到运行中的会话）",
+  "status": "done",
+  "summary": "保存方案后：对新会话生效；运行中的会话可以一键重启用上新方案，对话接着进行。",
+  "frs": [
+   "FR-CFG-01"
+  ],
+  "marks": [
    {
     "box": [
-     634,
-     833.75,
-     344,
-     34.5
+     597,
+     814.75,
+     496.5625,
+     31.25
     ],
     "at": "tl",
     "note": [
-     "关掉提问工具的提示",
+     "生效时间",
      "—",
-     "取消勾选「向你提问」时，说明 Claude 会自己做决定。"
+     "方案在会话的 Claude Code 进程启动时生效：新会话直接用上；运行中的会话要重启。"
     ],
-    "isNew": true
+    "isNew": false
+   },
+   {
+    "box": [
+     1244,
+     815.375,
+     143,
+     30
+    ],
+    "at": "tl",
+    "note": [
+     "应用到运行中的会话",
+     "点击",
+     "每个运行中的会话在空闲后（这一轮结束、没有等你处理的请求、没有排队的消息和运行中的后台任务）重新启动，接着原来的对话。"
+    ],
+    "isNew": false
    }
-  ],
-  "snippet": "<div class=\"proto-new\" style=\"display:flex;flex-direction:column;gap:12px;margin-bottom:18px\">\n  <div class=\"form-grid\">\n    <div class=\"field\"><label>输出风格</label><button class=\"select-btn\">默认</button><span class=\"hint\">Claude Code 内置的「解释型」「学习型」，或 ~/.claude/output-styles 里自定义的风格</span></div>\n    <div class=\"field\"><label>计划模式补充说明</label><textarea class=\"textarea\" rows=\"2\" placeholder=\"例如：计划里写清楚要改的文件、测试方案和回滚方式\"></textarea><span class=\"hint\">进入规划模式时追加给 Claude</span></div>\n  </div>\n</div>\n\n<div class=\"hint proto-new\" style=\"color:var(--warn-ink)\">关掉后，Claude 遇到需要你选择的地方会自己决定，不再停下来问。</div>"
+  ]
  },
  {
   "id": "P23b",
-  "group": "提议",
+  "group": "会话页",
   "title": "事件检查器 — 调试日志",
-  "status": "changed",
+  "status": "done",
   "summary": "开了「保存调试日志」后，事件检查器多一个「调试日志」分类，显示这个会话日志的末尾。",
   "frs": [
    "FR-OBS-02"
@@ -3120,35 +3213,34 @@ window.SCREENS = [
   "marks": [
    {
     "box": [
-     1268.640625,
-     239.84375,
-     13,
-     96
+     1307.484375,
+     106,
+     52,
+     37.5
     ],
     "at": "tl",
     "note": [
      "「调试日志」分类",
      "点击",
-     "和 SDK 消息、stderr、钩子并列；没开调试日志时不出现。"
+     "只在设置里打开「保存调试日志」时出现。"
     ],
-    "isNew": true
+    "isNew": false
    },
    {
     "box": [
-     1289.640625,
-     140,
-     346.796875,
-     287.1875
+     1051,
+     187.5,
+     311,
+     630
     ],
     "at": "tl",
     "note": [
      "日志末尾",
-     "滚动",
-     "这个会话 Claude Code 调试日志的最后部分，自动跟随；可以复制文件路径用编辑器打开。"
+     "—",
+     "每 3 秒刷新；可以复制文件路径用编辑器打开。"
     ],
-    "isNew": true
+    "isNew": false
    }
-  ],
-  "snippet": "<div class=\"proto-new\" style=\"display:flex;flex-direction:column;gap:8px\">\n  <div class=\"row\" style=\"gap:8px\"><span class=\"hint mono truncate\">~/.code-agent/logs/{short}.log</span><span class=\"grow\"></span><button class=\"btn sm ghost\">复制路径</button></div>\n  <pre class=\"mono\" style=\"margin:0;font-size:11.5px;line-height:1.55;background:#1f2430;color:#e6e8ef;border-radius:8px;padding:10px;overflow:auto;white-space:pre-wrap\">[DEBUG] Loaded settings from user, project, local\n[DEBUG] MCP server \"issue-tracker\": connected in 412ms\n[DEBUG] MCP server \"docs-search\": connect failed (ECONNREFUSED)\n[DEBUG] Permission check Edit src/orders.js → allow (mode acceptEdits)\n[DEBUG] Hook PostToolUse \"git diff --stat\" exited 0 in 88ms\n[DEBUG] API request demo-pro · 14.2k input · stream\n[DEBUG] Stream finished: stop_reason=end_turn, 412 output tokens\n[DEBUG] Turn 2 finished in 5.5s</pre>\n  <div class=\"hint\">只在「设置 → 模型服务与账号 → 运行与遥测 → 保存调试日志」打开时有内容。</div>\n</div>"
+  ]
  }
 ];

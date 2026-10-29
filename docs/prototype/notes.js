@@ -1,4 +1,4 @@
-/* The two lists at the top of the prototype: proposed features and the ones left out, with why. */
+/* The two lists at the top of the prototype: the features added in this version and the ones left out, with why. */
 window.PROPOSALS = [
   { name: '会话信息', screens: ['P34'], frs: ['FR-SES-17'], size: '小',
     what: '检查器加「信息」页：会话 ID、工作目录或工作树、模型和服务、Claude Code 版本、权限模式、读取了哪些设置和 CLAUDE.md、连着的 MCP 服务器、开始和恢复的时间；一键复制「在终端里接着这个会话」的命令（`claude --resume <id>`）。' },
@@ -16,8 +16,8 @@ window.PROPOSALS = [
     what: '「默认」方案加「输出风格」（Claude Code 内置和自定义的风格）和「计划模式补充说明」；关掉「向你提问」工具时提示 Claude 遇到选择会自己决定。' },
   { name: '调试日志', screens: ['P23b'], frs: ['FR-OBS-02'], size: '小',
     what: '开了「保存调试日志」后，事件检查器多一个「调试日志」页，显示这个会话日志的末尾，可以复制文件路径。' },
-  { name: '英文界面', screens: [], frs: ['FR-I18N-01', 'FR-I18N-02'], size: '中（翻译量）',
-    what: '交互定稿后补英文翻译、打开语言选项。界面文字已经都能翻译，不需要截图。' },
+  { name: '英文界面', screens: ['P25'], frs: ['FR-I18N-01', 'FR-I18N-02'], size: '中（翻译量）',
+    what: '界面文字有了英文翻译，语言选项里可以选 English，跟随浏览器时英文浏览器默认用英文。服务端生成的提示（带具体内容的通知、错误说明）暂时还是中文。' },
 ];
 
 window.LEFT_OUT = [
