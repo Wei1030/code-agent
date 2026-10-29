@@ -63,10 +63,12 @@ export function noteInit(init: SDKControlInitializeResponse) {
 }
 
 let checking: Promise<void> | null = null;
+let rerun: Promise<void> | null = null;
 
 /** Ask Claude Code who is logged in, which models it offers and how much of the plan is used. */
 export function checkLogin(): Promise<void> {
-  if (checking) return checking;
+  // A check asked for while one runs (e.g. the config dir just changed) runs once that one is done.
+  if (checking) return (rerun ??= checking.then(() => { rerun = null; return checkLogin(); }));
   checking = withProbe(os.homedir(), async (q) => {
     const init = await q.initializationResult();
     noteInit(init);

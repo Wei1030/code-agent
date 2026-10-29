@@ -30,7 +30,7 @@ interface ToolTrack {
   startedAt: number;
   /** Agent tool_use id this call runs under; null on the main thread. */
   parent: string | null;
-  /** Read-only group the item sits in. */
+  /** Group the item sits in. */
   group?: string;
 }
 
@@ -70,8 +70,8 @@ export interface Live {
   pending: Map<string, (a: unknown) => void>;
   tools: Map<string, ToolTrack>;
   streams: Map<string, StreamItem[]>;
-  /** Item id of the read-only group still open (no text or other tool since). */
-  group: { id: string; tools: ToolItem[] } | null;
+  /** The group still open (reads, or task-list updates) while no text or other tool came since. */
+  group: { id: string; key: GroupKey; tools: ToolItem[] } | null;
   taskTypes: Map<string, string>;
   /** Tool calls a Code Agent hook denied, with the reason shown on the card. */
   denied: Map<string, string>;
@@ -669,8 +669,10 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
   }
   if ((name === 'Bash' || name === 'PowerShell') && input.run_in_background) item.background = true;
   for (const d of decorators) d(sid, name, input, item);
-  // Consecutive read-only calls share one group.
-  if (READ_ONLY.has(name)) {
+  // Consecutive read-only calls share one group, and so do consecutive task-list updates.
+  const key = groupKey(name);
+  if (key) {
+    if (l.group && l.group.key !== key) closeGroup(l);
     if (l.group) {
       l.group.tools = [...l.group.tools, item];
       l.tools.get(id)!.group = l.group.id;
@@ -678,13 +680,13 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
       return;
     }
     const prev = rt(sid)!.items.at(-1);
-    if (prev?.kind === 'tool' && READ_ONLY.has(prev.tool) && l.tools.has(prev.id)) {
-      // Turn the previous read-only call into a group.
+    if (prev?.kind === 'tool' && groupKey(prev.tool) === key && l.tools.has(prev.id)) {
+      // Turn the previous call into a group.
       const gid = randomUUID();
       const tools = [prev, item];
       emit(sid, { t: 'item.remove', id: prev.id });
       addItem(sid, { kind: 'toolgroup', id: gid, label: groupLabel(tools), tools });
-      l.group = { id: gid, tools };
+      l.group = { id: gid, key, tools };
       l.tools.get(prev.id)!.group = gid;
       l.tools.get(id)!.group = gid;
       return;
@@ -696,7 +698,16 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
   addItem(sid, item);
 }
 
+type GroupKey = 'read' | 'tasks';
+const TASK_TOOLS = new Set(['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList', 'TodoWrite']);
+const groupKey = (tool: string): GroupKey | null => (READ_ONLY.has(tool) ? 'read' : TASK_TOOLS.has(tool) ? 'tasks' : null);
+
 function groupLabel(tools: ToolItem[]): string {
+  if (TASK_TOOLS.has(tools[0].tool)) {
+    const created = tools.filter((t) => t.tool === 'TaskCreate').length;
+    const updated = tools.filter((t) => t.tool === 'TaskUpdate' || t.tool === 'TodoWrite').length;
+    return ['任务清单', created ? `新建 ${created} 项` : '', updated ? `更新 ${updated} 次` : ''].filter(Boolean).join(' · ');
+  }
   const reads = tools.filter((t) => t.tool === 'Read').length;
   const searches = tools.length - reads;
   return [reads ? `读取 ${reads} 个文件` : '', searches ? `搜索 ${searches} 次` : ''].filter(Boolean).join(' · ');
@@ -738,25 +749,28 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
       ...(hookWhy ? { provenance: hookWhy, right: undefined } : !item.provenance && !denied && !track.name.startsWith('mcp__workspace__') ? { provenance: '无需审批' } : {}),
       ...(r.output ? { output: r.output } : {}), ...(r.right !== undefined ? { right: r.right } : {}),
     };
-    // A foreground subagent's task ends with its result.
-    const task = l.taskByTool.get(b.tool_use_id);
-    if (task && !p.background) {
-      const cur = rt(l.sid)!.background.find((x) => x.id === task);
-      if (cur?.status === 'running') upsertBg(l.sid, { ...cur, status: isError ? 'failed' : 'completed', endedAt: Date.now() });
-    }
     if (item.agent) {
       const text = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? (b.content as Block[]).map((x) => x.text ?? '').join('\n') : '';
-      p.agent = { ...item.agent, summary: item.agent.summary ?? (text ? text.slice(0, 300) : undefined) };
-      if (/running in the background|在后台/i.test(text) && !isError) {
+      // An agent started in the background answers with instructions meant for the model only.
+      const launched = /^Async agent launched/i.test(text.trim());
+      p.agent = { ...item.agent, summary: item.agent.summary ?? (text && !launched ? text.slice(0, 300) : undefined) };
+      if ((launched || /running in the background|在后台/i.test(text)) && !isError) {
         p.status = 'running';
         p.background = true;
         p.right = '后台运行';
+        if (launched) p.output = undefined;
       }
     }
     if ((track.name === 'Bash' || track.name === 'PowerShell') && (structured as { backgroundTaskId?: string } | undefined)?.backgroundTaskId) {
       p.status = 'running';
       p.background = true;
       p.right = '后台运行';
+    }
+    // A foreground task (subagent or command) ends with its result; one that went to the background goes on.
+    const task = l.taskByTool.get(b.tool_use_id);
+    if (task && !p.background) {
+      const cur = rt(l.sid)!.background.find((x) => x.id === task);
+      if (cur?.status === 'running') upsertBg(l.sid, { ...cur, status: isError ? 'failed' : 'completed', endedAt: Date.now() });
     }
     patchTool(l, b.tool_use_id, p);
     if (r.change && !isError) addChange(l, r.change);

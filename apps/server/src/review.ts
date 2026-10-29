@@ -451,7 +451,7 @@ addWorkspaceTools((sid) => [
     const known = a.answers.filter((x) => t.findings.some((f) => f.id === x.id));
     for (const x of known) setFinding(t.id, x.id, { status: x.status, response: x.text });
     setRound(t.id, p.round, (r) => ({ ...r, answers: [...r.answers.filter((y) => !known.some((k) => k.id === y.id)), ...known] }));
-    return { content: [{ type: 'text' as const, text: `Recorded ${known.length} answer(s). End your turn when you are done; Code Agent then starts the next round.` }] };
+    return { content: [{ type: 'text' as const, text: `已记录 ${known.length} 条答复。改完就结束这一轮，Code Agent 会接着做下一轮审核。` }] };
   }),
 ]);
 
