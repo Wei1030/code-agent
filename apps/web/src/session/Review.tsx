@@ -265,7 +265,7 @@ function Rulings({ r }: { r: ReviewRound }) {
         <div key={u.id} className="nested-row">
           <b className="mono">{u.id}</b>
           <Chip tone={RULING[u.status].tone}>{t(RULING[u.status].label)}</Chip>
-          <span className="t">{u.note}</span>
+          <span className="t">{t(u.note)}</span>
         </div>
       ))}
     </div>
@@ -342,7 +342,7 @@ export function ReviewRecord({ sid }: { sid: string }) {
           <span className="muted">· {t('意见 {n} 条，未解决 {u} 条', { n: ticket.findings.length, u: unresolved })}</span>
           <span className="muted">· {fmtTokens(ticket.tokens)} tokens · {t('开始于 {w}', { w: relTime(ticket.startedAt) })}</span>
         </div>
-        {ticket.note && <div className="ink2" style={{ marginTop: 6 }}>{ticket.note}</div>}
+        {ticket.note && <div className="ink2" style={{ marginTop: 6 }}>{t(ticket.note)}</div>}
         <div className="hint" style={{ marginTop: 6 }}>
           {t('基准 {b}', { b: ticket.base })} · {ticket.checks.length ? t('验证：{c}', { c: ticket.checks.join(' → ') }) : t('跳过验证')} · {t('审核者：{m} · 思考 {e}', { m: model, e: t(EFFORT_LABEL[ticket.effort]) })}
         </div>
@@ -388,7 +388,7 @@ function RoundBlock({ ticket, r }: { ticket: ReviewTicket; r: ReviewRound }) {
             {r.rulings.map((u) => (
               <div key={u.id} className="rr-line">
                 <b className="mono">{u.id}</b><Chip tone={RULING[u.status].tone}>{t(RULING[u.status].label)}</Chip>
-                <span className="grow"><span className="muted">{findingTitle(u.id)}</span><br />{u.note}</span>
+                <span className="grow"><span className="muted">{findingTitle(u.id)}</span><br />{t(u.note)}</span>
               </div>
             ))}
           </div>

@@ -318,6 +318,7 @@ function contentOf(m: Outgoing): SDKUserMessage['message']['content'] {
     } else if (mm && mm[1] === 'application/pdf') {
       blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: mm[2] }, title: a.name });
     } else if (!a.content) {
+      // i18n-ignore: the prompt Claude reads.
       blocks.push({ type: 'text', text: `（附件 ${a.name} 没有发送内容：${a.meta}）` });
     } else {
       blocks.push({ type: 'text', text: a.kind === 'paste' ? a.content : `<file name="${a.name}">\n${a.content}\n</file>` });
@@ -875,7 +876,7 @@ function onResult(l: Live, m: Extract<SDKMessage, { type: 'result' }>) {
   const sum = summary(sid);
   if (sum && !sum.jobId && !interrupted) {
     broadcast({ t: 'notify', n: {
-      kind: 'turnDone', sid, title: `「${sum.title}」${m.subtype === 'success' ? '这一轮已完成' : '这一轮已结束'}`, tone: m.subtype === 'success' ? 'good' : 'warn',
+      kind: 'turnDone', sid, title: m.subtype === 'success' ? `「${sum.title}」这一轮已完成` : `「${sum.title}」这一轮已结束`, tone: m.subtype === 'success' ? 'good' : 'warn',
       body: lastText ? lastText.text.replace(/\s+/g, ' ').slice(0, 60) : undefined,
     } });
   }
@@ -994,7 +995,7 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       raw(sid, 'system/task_notification', `${String(m.summary ?? '')} · ${st}`, m);
       const sum = summary(sid);
       if (cur && sum && !sum.jobId) {
-        broadcast({ t: 'notify', n: { kind: 'background', sid, title: `后台任务${st === 'completed' ? '已完成' : st === 'failed' ? '失败' : '已停止'}：${cur.name}`, tone: st === 'completed' ? 'good' : 'warn', action: '查看' } });
+        broadcast({ t: 'notify', n: { kind: 'background', sid, title: st === 'completed' ? `后台任务已完成：${cur.name}` : st === 'failed' ? `后台任务失败：${cur.name}` : `后台任务已停止：${cur.name}`, tone: st === 'completed' ? 'good' : 'warn', action: '查看' } });
       }
       return;
     }

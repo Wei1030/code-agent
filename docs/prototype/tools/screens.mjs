@@ -488,7 +488,7 @@ export const SCREENS = [
   },
   {
     id: 'P25b', group: '设置', title: '英文界面', status: 'done',
-    summary: '界面语言选 English（或跟随英文浏览器）时的样子。服务端生成的、带具体内容的提示暂时还是中文。',
+    summary: '界面语言选 English（或跟随英文浏览器）时的样子。服务端生成的提示（工具行、通知、错误、审核记录）也一并翻译；Code Agent 发给 Claude 的提示词保持中文。',
     frs: ['FR-I18N-01', 'FR-I18N-02'],
     prepare: async (c) => {
       await c.call('setState', { prefs: { ...c.slices().prefs, uiLanguage: 'en' } });
@@ -499,7 +499,7 @@ export const SCREENS = [
     after: async (c) => { await c.call('setState', { prefs: { ...c.slices().prefs, uiLanguage: 'zh-CN' } }); },
     marks: [
       { sel: '.lang-btn', note: ['界面语言', '点击', '跟随浏览器 / 简体中文 / English，切换后立即生效，不用刷新。'] },
-      { sel: '.tgroup', note: ['翻译范围', '—', '界面文字和 Code Agent 的固定提示都已翻译；对话内容和 Claude 的回答不受影响（回复语言另在「语言与地区」设置）。'] },
+      { sel: '.tgroup', note: ['翻译范围', '—', '界面文字和服务端生成的提示都已翻译，带名称和数字的也一样；对话内容和 Claude 的回答不受影响（回复语言另在「语言与地区」设置）。'] },
     ],
   },
   // ================================================================ added in v0.3

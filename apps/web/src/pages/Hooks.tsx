@@ -218,7 +218,7 @@ function HookLog() {
                 <td className="mono">{e.event}</td>
                 <td>{e.rule}</td>
                 <td className="ink2">{e.target}{open === e.id && e.detail && <div className="mono" style={{ color: 'var(--crit)', marginTop: 4 }}>{e.detail}</div>}</td>
-                <td><Status tone={e.outcome}>{e.result}</Status></td>
+                <td><Status tone={e.outcome}>{t(e.result)}</Status></td>
                 <td className="num" style={{ paddingRight: 16 }}>{e.ms >= 1000 ? `${(e.ms / 1000).toFixed(1)} s` : `${e.ms} ms`}</td>
               </tr>
             ))}

@@ -56,13 +56,13 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
       <div className="dpanel approval risky">
         <div className="dpanel-head">
           <Icon name="warning" size={20} className="st-error" />
-          <b>{req.title}</b>
+          <b>{t(req.title)}</b>
           <span className="grow" />
           <span className="muted">{t('已等待 {w}', { w: waited })}</span>
         </div>
         <div className="dpanel-body">
           <pre className="code-block"><span className="muted">$ </span>{req.command}</pre>
-          <div className="ink2">{req.reason}</div>
+          <div className="ink2">{t(req.reason ?? '')}</div>
           <div className="row">
             <Button variant="primary" className="focus-ring" onClick={() => api.respondApproval(sid, req.id, { behavior: 'deny', message: '用户拒绝了这次删除。' })}>{t('拒绝')}</Button>
             <span className="grow" />
@@ -78,7 +78,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
     <div className="dpanel approval">
       <div className="dpanel-head">
         <Icon name={req.outside ? 'folder' : 'shield'} size={20} className="ink2" />
-        <b>{req.title}</b>
+        <b>{t(req.title)}</b>
         {req.agent && <Chip icon="agent" tone="outline">{t('由子代理 {a} 发起', { a: req.agent })}</Chip>}
         <span className="grow" />
         <span className="muted">{t('已等待 {w}', { w: waited })}</span>
@@ -86,7 +86,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
       <div className="dpanel-body">
         <div className="row ink2">
           <Icon name="info" size={15} />
-          <span className="grow">{req.reason}</span>
+          <span className="grow">{t(req.reason ?? '')}</span>
           <button className="link-btn" onClick={() => setRawOpen(!rawOpen)}>{rawOpen ? t('收起原文') : t('SDK 原文')}</button>
         </div>
         {rawOpen && <pre className="code-block">{`decisionReason: "No allow rule matched ${req.tool}${req.command ? `(${req.command})` : ''}"\ntoolUseID: "${req.toolItemId}"\nrequestId: "${req.id}"`}</pre>}

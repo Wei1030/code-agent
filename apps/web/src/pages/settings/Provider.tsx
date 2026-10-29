@@ -179,8 +179,8 @@ function EndpointEditor({ ep, onChange, onRemove }: { ep: Endpoint; onChange: (p
             <span title={t('开启：发送思考（thinking）和思考强度。关闭：关掉思考；Claude Code 默认的思考强度如果被端点拒绝，它会自动去掉再发。端点不支持思考时请关闭。')}>
               <Toggle on={m.effort} onChange={(v) => onChange({ models: ep.models.map((x) => (x.name === m.name ? { ...x, effort: v } : x)) })} label={t('思考与思考强度')} />
             </span>
-            {m.test && <Chip tone={m.test.ok ? 'good' : 'crit'} title={`${relTime(m.test.at)} · ${m.test.message}`}>{m.test.ok ? t('可用') : t('失败')}</Chip>}
-            <Button size="sm" disabled={!ep.url} title={t('发一句很短的提示，看服务是否回复')} onClick={() => settled().then(() => api.testModel(`ep:${ep.id}:${m.name}`)).then((r) => app.toast(r.ok ? t('{m} 可用：{x}', { m: m.name, x: r.message }) : t('{m} 测试失败：{x}', { m: m.name, x: r.message }), r.ok ? 'good' : 'crit'))}>{t('测试')}</Button>
+            {m.test && <Chip tone={m.test.ok ? 'good' : 'crit'} title={`${relTime(m.test.at)} · ${t(m.test.message)}`}>{m.test.ok ? t('可用') : t('失败')}</Chip>}
+            <Button size="sm" disabled={!ep.url} title={t('发一句很短的提示，看服务是否回复')} onClick={() => settled().then(() => api.testModel(`ep:${ep.id}:${m.name}`)).then((r) => app.toast(r.ok ? t('{m} 可用：{x}', { m: m.name, x: t(r.message) }) : t('{m} 测试失败：{x}', { m: m.name, x: t(r.message) }), r.ok ? 'good' : 'crit'))}>{t('测试')}</Button>
             <Button size="sm" variant="ghost" icon="trash" title={t('删除这个模型')} onClick={() => onChange({ models: ep.models.filter((x) => x.name !== m.name) })} />
           </div>
         ))}

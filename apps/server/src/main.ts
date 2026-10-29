@@ -109,6 +109,7 @@ async function main() {
   });
 
   server.on('error', (e: NodeJS.ErrnoException) => {
+    // i18n-ignore: console output.
     console.error(e.code === 'EADDRINUSE' ? `端口 ${PORT} 已被占用。` : `服务启动失败：${e.message}`);
     process.exit(1);
   });

@@ -43,7 +43,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
             : it.fromApp ? <span className="avatar peer app" title={t('Code Agent 发给 Claude 的消息')}><Icon name="shield" size={13} /></span>
               : <span className="avatar">W</span>}
           {it.from && <div className="from">{it.from.kind === 'receipt' ? t('回执 · 来自') : t('来自会话')} <SessionLink r={it.from} /></div>}
-          {it.fromApp && <div className="from">Code Agent · {it.fromApp}</div>}
+          {it.fromApp && <div className="from">Code Agent · {t(it.fromApp)}</div>}
           <div className="text">{linkify(it.text, wsId)}</div>
           {(it.attachments.length > 0 || !!it.refs?.length) && (
             <div className="atts">
@@ -85,7 +85,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
         </div>
       );
     case 'divider':
-      return <div className="divider"><span>{it.label}</span></div>;
+      return <div className="divider"><span>{t(it.label)}</span></div>;
     case 'notice':
       return <Notice tone={it.tone} text={it.text} action={it.action} sid={rt.id} />;
     case 'banner':
@@ -188,7 +188,7 @@ function PeerCard({ tool }: { tool: ToolItem }) {
       <div className="thead" onClick={() => hasBody && setOpen(!open)}>
         <Icon name={info.icon} size={15} className="ink2" />
         <span className="name">{t(info.label)}</span>
-        <span className="detail plain">{p.target ? <SessionLink r={p.target} /> : tool.detail}</span>
+        <span className="detail plain">{p.target ? <SessionLink r={p.target} /> : t(tool.detail ?? '')}</span>
         {p.worktree && <Chip icon="branch" mono title={t('新会话在自己的 git worktree 和分支里工作')}>{p.worktree}</Chip>}
         {p.delivery && <Chip tone={DELIVERY[p.delivery].tone}>{t(DELIVERY[p.delivery].label)}</Chip>}
         <StatusIcon status={tool.status} />
@@ -203,7 +203,7 @@ function PeerCard({ tool }: { tool: ToolItem }) {
                 <div key={i} className="nested-row">
                   <Icon name={r.icon} size={14} className="ink2" />
                   <span className="t">{r.text}</span>
-                  {r.right && <span className="muted">{r.right}</span>}
+                  {r.right && <span className="muted">{t(r.right)}</span>}
                 </div>
               ))}
             </div>
@@ -232,8 +232,8 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
         <Icon name={TOOL_ICON[tool.tool] ?? 'plug'} size={15} className="ink2" />
         <span className="name">{tool.tool.startsWith('mcp__') ? tool.tool.split('__').slice(1).join(' · ') : tool.tool}</span>
         {tool.file
-          ? <span className="detail link" title={t('在右侧预览这个文件')} onClick={(e) => { e.stopPropagation(); openPreview(sid, tool.file!); }}>{tool.detail}</span>
-          : <span className="detail" title={tool.detail}>{tool.detail}</span>}
+          ? <span className="detail link" title={t('在右侧预览这个文件')} onClick={(e) => { e.stopPropagation(); openPreview(sid, tool.file!); }}>{t(tool.detail ?? '')}</span>
+          : <span className="detail" title={tool.detail}>{t(tool.detail ?? '')}</span>}
         {tool.background && <Chip tone="accent" icon="layers">{t('后台运行')}</Chip>}
         {tool.provenance && tool.status !== 'waiting' && <Chip icon="shield" title={t('这次调用为什么被执行 / 拒绝')}>{t(tool.provenance)}</Chip>}
         {tool.right && <span className="right">{t(tool.right)}</span>}
@@ -250,8 +250,8 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
                   {tool.agent.rows.map((r, i) => (
                     <div key={i} className="nested-row">
                       <Icon name={r.icon} size={14} className="ink2" />
-                      <span className={cx('t', r.mono && 'mono')}>{r.text}</span>
-                      {r.right && <span className="muted">{r.right}</span>}
+                      <span className={cx('t', r.mono && 'mono')}>{t(r.text)}</span>
+                      {r.right && <span className="muted">{t(r.right)}</span>}
                     </div>
                   ))}
                 </div>
@@ -273,8 +273,8 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
               {tool.rows.map((r, i) => (
                 <div key={i} className="nested-row">
                   <Icon name={r.icon} size={14} className="ink2" />
-                  <span className={cx('t', r.mono && 'mono')}>{linkify(r.text, wsId)}</span>
-                  {r.right && <span className="muted">{r.right}</span>}
+                  <span className={cx('t', r.mono && 'mono')}>{linkify(t(r.text), wsId)}</span>
+                  {r.right && <span className="muted">{t(r.right)}</span>}
                 </div>
               ))}
             </div>
@@ -372,18 +372,19 @@ function PlanCard({ plan, version, status }: { plan: PlanDoc; version: number; s
 }
 
 function Notice({ tone, text, action, sid }: { tone: 'good' | 'info' | 'warn'; text: string; action?: string; sid: string }) {
+  const t = useT();
   const nav = useNavigate();
   return (
     <div className={cx('notice', tone)}>
       <Icon name={tone === 'good' ? 'check' : tone === 'warn' ? 'warning' : 'info'} size={15} />
-      <span>{text}</span>
+      <span>{t(text)}</span>
       {action && (
         <button className="link-btn" onClick={() => {
           if (action === '打开用量') nav('/usage');
           else if (action === '查看审核记录') useApp.getState().set({ reviewRecord: sid });
           else useApp.getState().setInspector({ open: true, tab: 'background' });
           void sid;
-        }}>{action}</button>
+        }}>{t(action)}</button>
       )}
     </div>
   );
@@ -394,14 +395,20 @@ const STARTUP: Record<string, string> = {
   proxy_invalid: '代理设置无效', temp_dir_unusable: '临时目录不可用', managed_settings_invalid: '托管设置文件无效',
 };
 
-const BANNERS: Record<string, { tone: 'warn' | 'crit' | 'info'; icon: string; title: (d?: string) => string; d: (d?: string) => string; acts: string[] }> = {
-  crash: { tone: 'crit', icon: 'x', title: () => '会话意外结束', d: (d) => `Claude Code 进程异常结束${d ? `：${d}` : ''}。对话记录已保存。`, acts: ['恢复会话', '查看 stderr'] },
-  rateLimit: { tone: 'warn', icon: 'warning', title: () => '已达到用量限额', d: (d) => (d ? `${d} 重置。在那之前的请求会被拒绝。` : '在限额重置前，请求会被拒绝。'), acts: ['查看用量'] },
-  startupFailure: { tone: 'crit', icon: 'x', title: () => '会话无法启动', d: (d) => `${(d && STARTUP[d]) || '启动失败'}${d ? `（${d}）` : ''}。`, acts: ['选择其他文件夹', '查看原文'] },
-  workerShutdown: { tone: 'warn', icon: 'warning', title: () => 'Claude Code 正在退出', d: (d) => `原因：${d || '未说明'}。对话记录已保存。`, acts: ['恢复会话'] },
-  endpointRejected: { tone: 'crit', icon: 'x', title: () => '兼容端点拒绝了请求', d: (d) => `${d ?? ''}。重试也不会成功，这一轮已停下。检查端点的令牌和模型名后再发一次，或换一个模型。`, acts: ['打开模型服务设置'] },
-  denials: { tone: 'warn', icon: 'warning', title: (d) => `本轮有 ${d ?? '多'} 次工具调用被拒绝`, d: () => '被拒绝的调用在上面标出了原因。可以调整权限规则，或切换权限模式。', acts: ['查看权限规则'] },
-  notLoggedIn: { tone: 'crit', icon: 'x', title: () => 'Claude Code 尚未登录', d: (d) => `请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」${d ? `（${d}）` : ''}。Code Agent 不提供登录，也不读取你的凭据。`, acts: ['复制登录命令', '重新检测'] },
+type Tr = (s: string, vars?: Record<string, string | number>) => string;
+
+const BANNERS: Record<string, { tone: 'warn' | 'crit' | 'info'; icon: string; title: (t: Tr, d?: string) => string; d: (t: Tr, d?: string) => string; acts: string[] }> = {
+  crash: { tone: 'crit', icon: 'x', title: (t) => t('会话意外结束'), d: (t, d) => (d ? t('Claude Code 进程异常结束：{d}。对话记录已保存。', { d }) : t('Claude Code 进程异常结束。对话记录已保存。')), acts: ['恢复会话', '查看 stderr'] },
+  rateLimit: { tone: 'warn', icon: 'warning', title: (t) => t('已达到用量限额'), d: (t, d) => (d ? t('{d} 重置。在那之前的请求会被拒绝。', { d }) : t('在限额重置前，请求会被拒绝。')), acts: ['查看用量'] },
+  startupFailure: { tone: 'crit', icon: 'x', title: (t) => t('会话无法启动'), d: (t, d) => (d ? t('{what}（{d}）。', { what: t(STARTUP[d] ?? '启动失败'), d }) : t('启动失败。')), acts: ['选择其他文件夹', '查看原文'] },
+  workerShutdown: { tone: 'warn', icon: 'warning', title: (t) => t('Claude Code 正在退出'), d: (t, d) => t('原因：{d}。对话记录已保存。', { d: t(d || '未说明') }), acts: ['恢复会话'] },
+  endpointRejected: { tone: 'crit', icon: 'x', title: (t) => t('兼容端点拒绝了请求'), d: (t, d) => t('{d}。重试也不会成功，这一轮已停下。检查端点的令牌和模型名后再发一次，或换一个模型。', { d: t(d ?? '') }), acts: ['打开模型服务设置'] },
+  denials: { tone: 'warn', icon: 'warning', title: (t, d) => (d ? t('本轮有 {d} 次工具调用被拒绝', { d }) : t('本轮有多次工具调用被拒绝')), d: (t) => t('被拒绝的调用在上面标出了原因。可以调整权限规则，或切换权限模式。'), acts: ['查看权限规则'] },
+  notLoggedIn: {
+    tone: 'crit', icon: 'x', title: (t) => t('Claude Code 尚未登录'),
+    d: (t, d) => (d ? t('请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」（{d}）。Code Agent 不提供登录，也不读取你的凭据。', { d: t(d) }) : t('请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」。Code Agent 不提供登录，也不读取你的凭据。')),
+    acts: ['复制登录命令', '重新检测'],
+  },
 };
 
 function Banner({ kind, id, resolved, sid, detail }: { kind: string; id: string; resolved?: boolean; sid: string; detail?: string }) {
@@ -431,8 +438,8 @@ function Banner({ kind, id, resolved, sid, detail }: { kind: string; id: string;
     <div className={cx('banner', b.tone, resolved && 'resolved')}>
       <Icon name={b.icon} size={18} strokeWidth={2} />
       <div className="body">
-        <b>{t(b.title(detail))}</b>
-        <div className="d">{t(b.d(detail))}</div>
+        <b>{b.title(t, detail)}</b>
+        <div className="d">{b.d(t, detail)}</div>
         {showRaw && <pre className="code-block" style={{ marginTop: 8 }}>{JSON.stringify({ banner: kind, detail }, null, 2)}</pre>}
         {!resolved && <div className="acts">{b.acts.map((a, i) => <Button key={a} size="sm" variant={i === 0 && b.tone !== 'info' ? 'primary' : 'default'} onClick={() => act(a)}>{t(a)}</Button>)}</div>}
       </div>

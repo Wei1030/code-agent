@@ -22,11 +22,14 @@ export function relTime(ts: number, now = Date.now()): string {
     return `${EN_MONTHS[dt.getMonth()]} ${dt.getDate()}`;
   }
   if (d < 45_000) return '刚刚';
+  // i18n-ignore: the Chinese form; English has its own above.
   if (d < HOUR) return `${Math.max(1, Math.round(d / MIN))} 分钟前`;
+  // i18n-ignore
   if (d < DAY) return `${Math.round(d / HOUR)} 小时前`;
   if (d < 2 * DAY) return '昨天';
   if (d < 7 * DAY) return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][new Date(ts).getDay()];
   const dt = new Date(ts);
+  // i18n-ignore
   return `${dt.getMonth() + 1}月${dt.getDate()}日`;
 }
 
@@ -34,6 +37,7 @@ export function dateTime(ts: number): string {
   const d = new Date(ts);
   const p = (n: number) => String(n).padStart(2, '0');
   if (en()) return `${EN_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  // i18n-ignore
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
@@ -49,13 +53,16 @@ export function duration(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
   if (e) return `${m}m ${String(s).padStart(2, '0')}s`;
+  // i18n-ignore
   return `${m}分${String(s).padStart(2, '0')}秒`;
 }
 
 /** Compact token counts: 1234 → 1.2k, 18_400_000 → 18.4M (or 1840万 with the Chinese number style). */
 export function tokens(n: number): string {
   if (useApp.getState().prefs.numberStyle === 'cn') {
+    // i18n-ignore
     if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2).replace(/\.?0+$/, '')}亿`;
+    // i18n-ignore
     if (n >= 10_000) return `${(n / 10_000).toFixed(n >= 1_000_000 ? 0 : 1).replace(/\.0$/, '')}万`;
     return String(n);
   }

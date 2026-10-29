@@ -177,7 +177,7 @@ function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime })
           {sum.forkedFrom ? ` · ${t('分叉自「{f}」', { f: sum.forkedFrom })}` : ''}
           {sum.createdBy && <> · {t('由')}<SessionLink r={sum.createdBy} />{t('创建')}</>}
           {rt.tokens > 0 ? ` · ${t('第 {n} 轮', { n: rt.turn })} · ${fmtTokens(rt.tokens)} tokens` : ''}
-          {dirs.length > 0 && <span title={dirs.map((d) => `${d.path}（${d.scope === 'session' ? t('仅本会话') : d.scope === 'workspace' ? t('这个工作区') : t('所有工作区')}）`).join('\n')}> · {t('额外目录 {n} 个', { n: dirs.length })}</span>}
+          {dirs.length > 0 && <span title={dirs.map((d) => t('{path}（{scope}）', { path: d.path, scope: d.scope === 'session' ? t('仅本会话') : d.scope === 'workspace' ? t('这个工作区') : t('所有工作区') })).join('\n')}> · {t('额外目录 {n} 个', { n: dirs.length })}</span>}
         </div>
       </div>
       {!sum.draft && <ReviewButton sum={sum} rt={rt} />}

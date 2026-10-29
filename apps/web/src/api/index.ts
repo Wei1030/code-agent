@@ -10,6 +10,7 @@ import { MODELS } from '../lib/catalog';
 import { useApp } from '../store/app';
 import { emptyRuntime, useSessions } from '../store/sessions';
 import { notify } from '../lib/notify';
+import { t } from '../lib/i18n';
 
 export type { DryRun, ImportRow, SendOptions } from '@code-agent/shared/api';
 
@@ -94,7 +95,8 @@ function handle(m: ServerMessage) {
       waiting.delete(m.id);
       if (!w) break;
       if (m.error !== undefined) {
-        w.rej(new Error(m.error));
+        // The server's errors are in Chinese; the catalog has them in the UI language.
+        w.rej(new Error(t(m.error)));
         useApp.getState().toast(m.error, 'crit');
       } else w.res(m.result);
       break;

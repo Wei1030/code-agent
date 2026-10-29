@@ -3,6 +3,7 @@
  * system notification while the Code Agent tab is in the background.
  */
 import { useApp, type Toast } from '../store/app';
+import { t } from './i18n';
 
 export type NotifyKind = 'request' | 'turnDone' | 'background';
 
@@ -28,12 +29,15 @@ export function notify(kind: NotifyKind, n: {
   const inbox = n.path === '#inbox';
   const path = inbox ? undefined : n.path ?? (n.sid ? `/s/${n.sid}` : undefined);
   const open = n.open ?? (inbox ? () => useApp.getState().set({ inboxOpen: true }) : path ? () => go(path) : undefined);
+  // The server writes its text in Chinese; the catalog has it in the UI language.
+  const title = t(n.title);
+  const body = n.body ? t(n.body) : undefined;
   if (!path || window.location.pathname !== path) {
-    app.toast(n.body ? `${n.title}：${n.body}` : n.title, n.tone ?? 'info', open ? { label: n.action ?? '打开', run: open } : undefined);
+    app.toast(body ? t('{title}：{body}', { title, body }) : title, n.tone ?? 'info', open ? { label: t(n.action ?? '打开'), run: open } : undefined);
   }
   const away = document.hidden || !document.hasFocus();
   if (away && p.browserNotifications && 'Notification' in window && Notification.permission === 'granted') {
-    const sys = new Notification(n.title, { body: n.body, tag: `${kind}:${path ?? n.title}` });
+    const sys = new Notification(title, { body, tag: `${kind}:${path ?? n.title}` });
     sys.onclick = () => { window.focus(); open?.(); sys.close(); };
   }
 }
@@ -49,6 +53,6 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 
 export function testNotification(): boolean {
   if (notificationPermission() !== 'granted') return false;
-  new Notification('Code Agent', { body: '这是一条测试通知。会话等你处理或一轮完成时，会这样提醒你。' });
+  new Notification('Code Agent', { body: t('这是一条测试通知。会话等你处理或一轮完成时，会这样提醒你。') });
   return true;
 }

@@ -32,6 +32,7 @@ async function ours(port: number): Promise<boolean> {
 async function start() {
   for (let port = PORT; port <= PORT + TRIES; port++) {
     if (await free(port)) {
+      // i18n-ignore: console output.
       if (port !== PORT) console.log(`端口 ${port === PORT + 1 ? PORT : `${PORT}–${port - 1}`} 已被占用，改用 ${port}`);
       setPort(port);
       await import('./main');
@@ -39,11 +40,13 @@ async function start() {
     }
     if (await ours(port)) {
       const url = `http://${HOST}:${port}/`;
+      // i18n-ignore: console output.
       console.log(`Code Agent 已经在 ${url} 运行（数据目录 ${HOME}），不再启动第二个。`);
       openBrowser(url);
       process.exit(0);
     }
   }
+  // i18n-ignore: console output.
   console.error(`端口 ${PORT}–${PORT + TRIES} 都被占用了。设置环境变量 CODE_AGENT_PORT 换一个端口再启动。`);
   process.exit(1);
 }

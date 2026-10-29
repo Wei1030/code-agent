@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 import { cx } from '../lib/util';
 import { useApp } from '../store/app';
+import { useT } from '../lib/i18n';
 
 type BtnVariant = 'primary' | 'danger' | 'danger-outline' | 'soft' | 'ghost' | 'default';
 
@@ -312,6 +313,8 @@ export function ConfirmHost() {
 }
 
 export function Toasts() {
+  // Toasts from the server carry Chinese text; translating text that already is English is a no-op.
+  const tr = useT();
   const toasts = useApp((s) => s.toasts);
   const dismiss = useApp((s) => s.dismissToast);
   return createPortal(
@@ -319,9 +322,9 @@ export function Toasts() {
       {toasts.map((t) => (
         <div key={t.id} className={cx('toast', t.tone)}>
           <Icon name={t.tone === 'good' ? 'check' : t.tone === 'warn' ? 'warning' : t.tone === 'crit' ? 'x' : 'info'} size={15} />
-          <span>{t.text}</span>
-          {t.action && <button onClick={() => { t.action!.run(); dismiss(t.id); }}>{t.action.label}</button>}
-          <button onClick={() => dismiss(t.id)} aria-label="关闭"><Icon name="x" size={13} /></button>
+          <span>{tr(t.text)}</span>
+          {t.action && <button onClick={() => { t.action!.run(); dismiss(t.id); }}>{tr(t.action.label)}</button>}
+          <button onClick={() => dismiss(t.id)} aria-label={tr('关闭')}><Icon name="x" size={13} /></button>
         </div>
       ))}
     </div>,

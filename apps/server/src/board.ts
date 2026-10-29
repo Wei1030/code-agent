@@ -411,6 +411,7 @@ function applyImport(wsId: string, rows: ImportRow[]): string[] {
   return created;
 }
 
+// i18n-ignore: an exported file.
 function boardMarkdown(wsId: string): string {
   const ws = app.workspaces.find((w) => w.id === wsId);
   const lines = [`# 看板 · ${ws?.name ?? ''}`, ''];

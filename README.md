@@ -1,82 +1,91 @@
 # Code Agent
 
-A personal agent workbench: a local Node.js server that drives the
-[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) (TypeScript) and a browser UI
-that exposes everything the SDK can do — streaming sessions, tool approvals, clarifying questions,
-plan review, subagents and background tasks, file checkpoints, MCP servers, custom tools, hooks,
-skills, plugins, structured output, cost and context tracking.
+English | [简体中文](README.zh-CN.md)
 
-Phase 1 integrates the Claude Agent SDK only.
+Code Agent is a personal workbench for Claude Code that runs in your browser. A small local
+Node.js server drives Claude Code through the
+[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview), and the web UI shows
+everything a session does: streaming replies, tool approvals, questions, plans, subagents,
+background tasks, file changes, context and cost.
 
-> Code Agent is an independent tool built on the Claude Agent SDK. It is not Claude Code and is not
-> an Anthropic product.
+On top of that it adds:
 
-## Status
+- **Several sessions at once**, each in its own workspace or git worktree; sessions can read,
+  message and start each other.
+- **Models from more than one place**: your own Claude subscription and any number of
+  Anthropic-compatible endpoints, each with its own models.
+- **Code review loop**: checks you define run first, then a read-only reviewer in its own Claude
+  Code process sends findings back until the work passes.
+- **Workspace board** of features, issues and notes, kept up to date in the background after each turn.
+- **Settings in one place**: permission rules, MCP servers, skills, commands, subagents, hooks,
+  CLAUDE.md and memory files. They are Claude Code's own files, so changes show up in the `claude`
+  CLI as well, and the other way round.
+- Sessions you started in the `claude` CLI are listed too, and you can carry on with them here.
 
-Working app. `apps/server` runs one Claude Code process per session through the Agent SDK and
-serves the web app; `apps/web` is the browser UI. Besides what the SDK offers, Code Agent adds
-peer sessions (sessions of a workspace read, message and create each other), a code review loop
-(checks run by Code Agent, a read-only reviewer in its own Claude Code process, up to 5 rounds) and a workspace board
-(features, issues and notes, recorded in the background after each turn).
+The UI is in Simplified Chinese and English.
 
-### Running
+> Code Agent is an independent tool built on the Claude Agent SDK. It is not Claude Code and not an
+> Anthropic product.
 
-Node.js 22.13 or later (it brings the built-in SQLite the server stores its data in; nothing else to install). Log in to Claude Code yourself first (`claude`, then `/login`), and/or add
-compatible endpoints (with their models) in Settings → 模型服务与账号; every session, review, background run
-and job picks its model from both.
+## Deploying
 
-```
+Code Agent runs on your own machine (Windows, macOS or Linux) and is meant for one person.
+
+### Requirements
+
+- **Node.js 22.13 or later.** Its built-in SQLite holds Code Agent's data; there is no database to set up.
+- **A model to talk to**, at least one of:
+  - your Claude subscription: install [Claude Code](https://code.claude.com/docs/en/setup), run
+    `claude` and sign in with `/login`. Code Agent uses that login as it is; it never shows a
+    sign-in page and never reads your credentials;
+  - an Anthropic-compatible endpoint: its URL, a token and model names, added later in the app.
+- **git** for worktrees and code review; the **GitHub CLI** (`gh`) only to import GitHub issues to the board.
+
+### Install and start
+
+```bash
+git clone <this repository> code-agent
+cd code-agent
 npm install
-npm run dev        # server + Vite dev middleware: http://127.0.0.1:5180
-npm start          # builds the web app, then serves it: http://127.0.0.1:5180
+npm start
 ```
 
-- Data lives in `~/.code-agent/code-agent.db` (set `CODE_AGENT_HOME` to move it); the port is `CODE_AGENT_PORT`.
-- If the port is taken, the next ones are tried (up to 5 more). If Code Agent with the same data dir
-  already runs on one of them, that one is opened instead of starting a second server.
-- Once up, the address opens in the default browser (`CODE_AGENT_NO_OPEN=1` turns that off).
-- The server listens on 127.0.0.1 only and accepts WebSocket connections only from its own origin.
-- Workspaces, permission rules, MCP servers, skills, commands and hooks are Claude Code's own
-  files; changes made here show up in the `claude` CLI and the other way round.
+`npm start` builds the web app and starts the server at <http://127.0.0.1:5180>, then opens it
+in your default browser. In the app, add a workspace (a project folder); add compatible endpoints
+under Settings → Model services & account if you use them.
 
-`npm run typecheck` checks all three packages, `npm test` runs the tests, `npm run build` builds the web app.
+To update, pull the new version and run `npm install` and `npm start` again. Stop the server with
+Ctrl+C.
 
-| Document | Contents |
-| --- | --- |
-| [docs/requirements.md](docs/requirements.md) | Requirements specification, including a coverage matrix of every SDK function, option, method, message type, hook event and built-in tool |
-| [docs/requirements.zh-CN.md](docs/requirements.zh-CN.md) | The same specification in Simplified Chinese (kept in sync) |
-| [docs/prototype/index.html](docs/prototype/index.html) | Interaction prototype (Chinese UI): screenshots of the real app with numbered interaction notes, plus proposed features drawn in; regenerated by `docs/prototype/tools/shoot.mjs` |
+### Configuration
 
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `CODE_AGENT_PORT` | `5180` | Port. When it is taken, the next five are tried. |
+| `CODE_AGENT_HOME` | `~/.code-agent` | Data folder: the database, logs and worktrees. |
+| `CODE_AGENT_NO_OPEN` | not set | Set to `1` to not open the browser on start. |
 
-## Layout
+Starting a second time with the same data folder opens the running instance instead of starting
+another one.
 
+### Security
+
+- The server listens on 127.0.0.1 only and accepts connections only from its own page. To use it
+  from another computer, forward the port over SSH rather than exposing it.
+- Endpoint tokens stay in the local database and are never sent to the browser. A session on an
+  endpoint never gets your Claude login.
+- Code Agent does not touch Claude Code's own session files, except that deleting a session in
+  Code Agent deletes its Claude Code transcript as well.
+
+## Development
+
+```bash
+npm run dev         # server with the Vite dev middleware, same address
+npm run typecheck   # all three packages
+npm test
+npm run i18n:missing -w @code-agent/web   # UI text without an English entry
 ```
-code-agent/
-├── docs/                    # requirements (English, Simplified Chinese) and the prototype
-├── apps/
-│   ├── server/              # Node.js: WebSocket RPC, session engine on the Agent SDK, Code Agent features
-│   └── web/                 # browser single-page app
-└── packages/
-    └── shared/              # protocol types, catalogs and helpers used by both
-```
 
-## Stack
-
-- Node.js 22.13 or later, TypeScript (run with tsx), npm workspaces
-- Server: Node `http` + `ws`, `@anthropic-ai/claude-agent-sdk`; SQLite (`node:sqlite`, WAL, full-text index for transcripts) in `~/.code-agent/`
-- Web: React 19, Vite, Zustand, React Router; plain CSS
-- UI languages: Simplified Chinese (English prepared, not enabled yet)
-
-## Authentication
-
-Sessions authenticate in one of two ways:
-
-- **Your own Claude subscription**, through a login you made yourself in the official Claude Code
-  (`claude`, then `/login`). Code Agent only points the unmodified Claude Code binary at your Claude
-  config directory; it never shows a sign-in page and never reads or stores those credentials.
-  Intended for personal use on your own machine.
-- **Compatible endpoints**: any service that speaks the Anthropic Messages API, each with its own
-  models. Their tokens stay on the local server and are never sent to the browser; an endpoint
-  without a token gets a placeholder, never your Claude login.
-
-See §1.4 and FR-AUTH in the requirements for the rules behind this.
+`apps/server` is the Node.js server, `apps/web` the React app, `packages/shared` the protocol
+types both use. The requirements are in [docs/requirements.md](docs/requirements.md), and the
+interaction prototype is [docs/prototype/index.html](docs/prototype/index.html).

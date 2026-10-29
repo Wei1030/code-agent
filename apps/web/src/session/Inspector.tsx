@@ -234,7 +234,7 @@ function ContextTab({ rt }: { rt: SessionRuntime }) {
       </h4>
       <div className="hint">{c.model}</div>
       <div className="ctx-bar" role="img" aria-label={t('上下文占用 {p}', { p: pct((usedSum / c.max) * 100) })}>
-        {used.map((x, i) => <div key={x.name} title={`${x.name} · ${fmtTokens(x.tokens)}`} style={{ width: `${(x.tokens / c.max) * 100}%`, background: CTX_COLORS[i % CTX_COLORS.length] }} />)}
+        {used.map((x, i) => <div key={x.name} title={`${t(x.name)} · ${fmtTokens(x.tokens)}`} style={{ width: `${(x.tokens / c.max) * 100}%`, background: CTX_COLORS[i % CTX_COLORS.length] }} />)}
         <div className="hatch" title={`${t('压缩预留')} · ${fmtTokens(buffer)}`} style={{ width: `${(buffer / c.max) * 100}%` }} />
       </div>
       <table className="data-table ctx-table">
@@ -339,7 +339,7 @@ function EventsTab({ rt }: { rt: SessionRuntime }) {
                 <span className="muted">{e.seq}</span>
                 <span className="muted">{clock(e.ts)}</span>
                 <span className="ty">{e.type}</span>
-                <span className="sm">{e.summary}</span>
+                <span className="sm">{t(e.summary)}</span>
               </div>
             ))}
           </div>

@@ -138,9 +138,11 @@ onTurnEnd((sid, info) => {
   if (!to || !summary(to)) return;
   patchPeer(to, info.meta?.senderToolId, { delivery: 'handled' });
   const me = summary(sid)!;
+  // i18n-ignore: the prompt Claude reads.
   const gist = info.text ? short(info.text.replace(/\s+/g, ' '), 300) : '（这一轮没有文字回复）';
   deliver({
     from: sid, to, kind: 'receipt', hops: chainHops.get(sid) ?? 0, notify: false,
+    // i18n-ignore: the prompt Claude reads.
     text: `会话「${me.title}」处理完了你的消息${info.ok ? '' : '（这一轮出错结束）'}。最后的回复：${gist}\n需要更多内容时用 read_session("${sid}")。`,
   });
 });

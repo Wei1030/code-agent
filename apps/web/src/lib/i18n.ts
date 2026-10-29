@@ -19,31 +19,69 @@ function interpolate(s: string, vars?: Record<string, string | number>): string 
 }
 
 /**
- * Server text that carries a name or a number (no catalog key of its own): a few known shapes,
- * and labels joined with " · " part by part.
+ * Server text carrying names and numbers: the server writes it from templates, and the catalog
+ * has each template as a key with {placeholders} (scripts/i18n-missing.mjs lists them). Every
+ * such key matches as a pattern, the most specific first; what fills a placeholder is translated
+ * on its own when the catalog knows it, and kept as it is (a file name, a title) when not.
  */
-const PATTERNS: Record<Locale, Array<[RegExp, string]>> = {
-  'zh-CN': [],
-  en: [
-    [/^读取 (\d+) 个文件$/, 'Read $1 files'],
-    [/^搜索 (\d+) 次$/, '$1 searches'],
-    [/^新建 (\d+) 项$/, '$1 created'],
-    [/^更新 (\d+) 次$/, '$1 updates'],
-    [/^规则 (.+)$/, 'Rule $1'],
-    [/^正在使用 (.+)$/, 'Using $1'],
-  ],
-};
-function fromPatterns(locale: Locale, s: string): string | undefined {
-  for (const [re, out] of PATTERNS[locale]) if (re.test(s)) return s.replace(re, out);
-  if (s.includes(' · ')) {
-    const parts = s.split(' · ').map((p) => catalogs[locale][p] ?? fromPatterns(locale, p));
-    if (parts.every((p) => p !== undefined)) return parts.join(' · ');
+type Pattern = { re: RegExp; names: string[]; out: string; words: boolean };
+const patternCache = new Map<Locale, Pattern[]>();
+const CJK = /[㐀-鿿＀-￯　-〿]/;
+const WORDS = /[㐀-鿿]/;
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function patterns(locale: Locale): Pattern[] {
+  let list = patternCache.get(locale);
+  if (list) return list;
+  list = [];
+  const ranked: Array<[number, Pattern]> = [];
+  for (const [key, out] of Object.entries(catalogs[locale])) {
+    if (!key.includes('{')) continue;
+    const pieces = key.split(/\{(\w+)\}/);
+    const literal = pieces.filter((_, i) => i % 2 === 0).join('');
+    if (pieces.length < 3 || !CJK.test(literal)) continue;
+    const names: string[] = [];
+    const re = pieces.map((p, i) => (i % 2 ? (names.push(p), '([\\s\\S]*?)') : escape(p))).join('');
+    ranked.push([literal.length, { re: new RegExp(`^${re}$`), names, out, words: WORDS.test(literal) }]);
   }
-  return undefined;
+  list = ranked.sort((a, b) => b[0] - a[0]).map(([, p]) => p);
+  patternCache.set(locale, list);
+  return list;
+}
+
+const matched = new Map<string, string | null>();
+
+/**
+ * A key whose fixed text is only punctuation ("（{0}）", "{0}：{1}") matches only inside another
+ * match: on its own it would rewrite any text that happens to hold a full-width colon.
+ */
+function fromPatterns(locale: Locale, s: string, inner = false): string | undefined {
+  if (!CJK.test(s)) return undefined;
+  const memo = `${locale}${inner ? '+' : ''}\u0000${s}`;
+  const seen = matched.get(memo);
+  if (seen !== undefined) return seen ?? undefined;
+  let hit: string | undefined;
+  for (const p of patterns(locale)) {
+    if (!p.words && !inner) continue;
+    const m = p.re.exec(s);
+    if (!m) continue;
+    const vars: Record<string, string> = {};
+    p.names.forEach((n, i) => (vars[n] = m[i + 1] && (catalogs[locale][m[i + 1]] ?? fromPatterns(locale, m[i + 1], true) ?? m[i + 1])));
+    hit = interpolate(p.out, vars);
+    break;
+  }
+  // Labels joined with " · ", part by part.
+  if (hit === undefined && s.includes(' · ')) {
+    const parts = s.split(' · ').map((x) => catalogs[locale][x] ?? fromPatterns(locale, x));
+    if (parts.every((x) => x !== undefined)) hit = parts.join(' · ');
+  }
+  if (matched.size > 5000) matched.clear();
+  matched.set(memo, hit ?? null);
+  return hit;
 }
 
 export function translate(locale: Locale, s: string, vars?: Record<string, string | number>): string {
-  const hit = catalogs[locale][s] ?? (locale === 'zh-CN' ? undefined : fromPatterns(locale, s));
+  const hit = catalogs[locale][s] ?? (locale === 'zh-CN' || typeof s !== 'string' ? undefined : fromPatterns(locale, s));
   return interpolate(hit ?? s, vars);
 }
 

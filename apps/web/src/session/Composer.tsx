@@ -197,6 +197,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const pickMention = (i: number) => {
     if (i < nSess) {
       const s = sessionItems[i];
+      // i18n-ignore: text in the message.
       replaceToken(`@会话「${s.title}」 `);
       setRefs((r) => [...r.filter((x) => x.sessionId !== s.id), { sessionId: s.id, title: s.title }]);
       return;
@@ -250,6 +251,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const canSend = (text.trim().length > 0 || atts.length > 0) && !disabled;
   const doSend = (opts: { priority?: 'now' | 'next' | 'later'; contextOnly?: boolean; verbatim?: boolean } = {}) => {
     if (!canSend) return;
+    // i18n-ignore: text in the message.
     api.send(sid, text.trim(), { attachments: atts, refs: refs.filter((r) => text.includes(`@会话「${r.title}」`)), ...opts });
     if ((running || waiting) && rt.request?.kind !== 'question' && !opts.contextOnly && opts.priority !== 'now') app.toast(t('已加入队列'), 'info');
     setText('');

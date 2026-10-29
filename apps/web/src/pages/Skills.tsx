@@ -189,9 +189,11 @@ function NewFileDialog({ kind, wsId, wsName, onClose }: { kind: 'skill' | 'comma
   const create = () => {
     const id = `${where}:${where === 'workspace' ? wsId : ''}:${name}`;
     if (kind === 'skill') {
+      // i18n-ignore: the file's content.
       const content = `---\nname: ${name}\ndescription: ${desc.trim()}\n---\n\n# ${name}\n\n写下这项工作的具体做法。\n`;
       app.set({ skills: [...app.skills, { id, name, description: desc.trim(), source: where, workspaceId: where === 'workspace' ? wsId : undefined, invocable: 'both', enabled: true, path, content }] });
     } else {
+      // i18n-ignore: the file's content.
       const content = `---\ndescription: ${desc.trim()}\nargument-hint: ""\n---\n\n在这里写提示词。用 $ARGUMENTS 引用 / 命令后面的参数。\n`;
       app.set({ commandFiles: [...app.commandFiles, { id, name, desc: desc.trim(), argHint: '', source: where, workspaceId: where === 'workspace' ? wsId : undefined, path, content }] });
     }
@@ -318,7 +320,7 @@ function PluginsTab() {
                 </div>
                 <div className="mono muted" style={{ fontSize: 12 }}>{p.path}</div>
                 {p.status === 'error'
-                  ? <div className="mono" style={{ color: 'var(--crit)', fontSize: 12, marginTop: 4 }}>{p.error}</div>
+                  ? <div className="mono" style={{ color: 'var(--crit)', fontSize: 12, marginTop: 4 }}>{t(p.error ?? '')}</div>
                   : <div className="ink2" style={{ fontSize: 12.5, marginTop: 4 }}>{t('技能 {a} · 命令 {b} · 子代理 {c} · MCP {d} · 钩子 {e}', { a: p.contents.skills, b: p.contents.commands, c: p.contents.agents, d: p.contents.mcp, e: p.contents.hooks })}</div>}
               </div>
               <div className="col" style={{ gap: 6 }}>

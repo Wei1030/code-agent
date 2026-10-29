@@ -248,7 +248,7 @@ function ItemDetail({ item, onDeleted }: { item: BoardItem; onDeleted: () => voi
               return (
                 <div key={i} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
                   <span className="muted" style={{ width: 70, flex: 'none' }}>{relTime(l.ts)}</span>
-                  <span className="grow">{l.text}{s && <span className="muted"> · {s.title}</span>}</span>
+                  <span className="grow">{t(l.text)}{s && <span className="muted"> · {s.title}</span>}</span>
                   {l.auto && <Chip>{t('自动')}</Chip>}
                 </div>
               );
@@ -395,7 +395,7 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
                     options={[{ value: 'create', label: t('新建') }, { value: 'skip', label: t('跳过') },
                       ...items.map((x) => ({ value: x.id, label: t('合并到 {id}', { id: x.id }), desc: x.title }))]} />
                 </td>
-                <td className="muted">{r.reason}</td>
+                <td className="muted">{t(r.reason)}</td>
               </tr>
             ))}
           </tbody>

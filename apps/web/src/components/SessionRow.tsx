@@ -72,7 +72,7 @@ export function useSessionActions() {
         title: s.draft ? t('丢弃这个新会话？') : t('删除会话？'),
         body: s.draft
           ? t('还没有发送任何消息。')
-          : t('「{title}」的对话记录将被删除，无法撤销。', { title: s.title })
+          : t('「{title}」的对话记录将被删除，Claude Code 里的这个会话也一起删除，无法撤销。', { title: s.title })
             + (lines.length ? ['', '', t('以下正在进行的工作会被强制停止：'), ...lines, '', t('已经改动的文件不会被撤销。')].join('\n') : ''),
         confirmLabel: s.draft ? t('丢弃') : t('删除'),
         danger: true,
@@ -143,7 +143,7 @@ export function SessionRow({ s, wsName, detailed }: { s: SessionSummary; wsName:
       {!detailed && <div className="srow-ws ellipsis">{wsName}</div>}
       <div className="srow-state"><StateBadge s={s} /></div>
       <div className="srow-time">{relTime(s.lastActive)}</div>
-      <div className="srow-tag">{s.tag && <Chip icon="tag">{s.tag}</Chip>}</div>
+      <div className="srow-tag">{s.tag && <Chip icon="tag">{t(s.tag)}</Chip>}</div>
       <div className="srow-actions" onClick={(e) => e.stopPropagation()}>
         {s.live ? <Button size="sm" icon="chat" onClick={() => actions.open(s)}>{t('打开')}</Button>
           : <Button size="sm" icon="play" onClick={() => actions.resume(s)}>{t('恢复')}</Button>}

@@ -55,6 +55,7 @@ onTurnEnd((sid) => {
   setTimeout(() => pumpQueue(sid), 0);
 });
 
+// i18n-ignore: the prompt Claude reads.
 function refsBlock(refs: SessionRef[]): string {
   const lines = refs.map((r) => {
     const s = summary(r.sessionId);
@@ -174,6 +175,7 @@ async function forkAt(sid: string, beforeUserId?: string): Promise<string> {
   return newId;
 }
 
+// i18n-ignore: an exported file.
 function exportMarkdown(sid: string): string {
   const sum = summary(sid)!;
   const out = [`# ${sum.title}`, ''];

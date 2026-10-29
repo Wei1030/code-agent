@@ -219,6 +219,7 @@ async function runChecks(id: string, n: number, attempt: number) {
   updateTicket(id, (x) => ({ ...x, status: 'fixing' }));
   sendTurn(sid, {
     fromApp: `代码审核 · 第 ${n} 轮 · 验证`,
+    // i18n-ignore: the prompt Claude reads.
     text: `Code Agent 运行验证没有通过（第 ${attempt} 次，最多 ${MAX_CHECK_ATTEMPTS} 次）：\`${cmd}\` 失败。\n\n\`\`\`\n${output}\n\`\`\`\n\n请修复，然后结束这一轮。Code Agent 会重新运行验证。`,
   });
 }
@@ -314,7 +315,7 @@ async function runReviewer(id: string, n: number, attempt = 1) {
   const round = t.rounds[n - 1];
   updateTicket(id, (x) => ({ ...x, status: 'reviewing' }));
   const label = app.models.find((m) => m.id === t.model)?.label ?? t.model;
-  const task = `第 ${n} 轮${round.scope === 'global' ? '全局' : '增量'}审核`;
+  const task = round.scope === 'global' ? `第 ${n} 轮全局审核` : `第 ${n} 轮增量审核`;
   const cardId = randomUUID();
   let agent: AgentRun = { agentType: 'code-reviewer', task, model: label, rows: [], tokens: 0, toolCalls: 0, summary: '正在读取改动…' };
   addItem(sid, { kind: 'tool', id: cardId, tool: 'Agent', detail: `code-reviewer · ${task}`, status: 'running', provenance: '评审方案 · 只读 · 独立进程', right: label, agent });
@@ -424,6 +425,7 @@ function askAuthor(id: string, n: number) {
   const r = t.rounds[n - 1];
   sendTurn(sid, {
     fromApp: `代码审核 · 第 ${n} 轮 · 意见`,
+    // i18n-ignore: the prompt Claude reads.
     text: [
       `代码审核第 ${n} 轮打回：${r.reviewer?.summary ?? ''}`,
       '需要处理的意见：',
@@ -436,7 +438,7 @@ function askAuthor(id: string, n: number) {
 decorateTool((_sid, name, input, item) => {
   if (name === 'mcp__workspace__respond_findings') {
     const answers = (input.answers as Array<{ id: string; status: string; text: string }> | undefined) ?? [];
-    item.rows = answers.map((a) => ({ icon: a.status === 'fixed' ? 'check' : 'chat', text: `${a.id} ${a.status === 'fixed' ? '已修改' : '有异议'}：${a.text}` }));
+    item.rows = answers.map((a) => ({ icon: a.status === 'fixed' ? 'check' : 'chat', text: a.status === 'fixed' ? `${a.id} 已修改：${a.text}` : `${a.id} 有异议：${a.text}` }));
     item.detail = `${answers.length} 条`;
   }
 });
@@ -451,6 +453,7 @@ addWorkspaceTools((sid) => [
     const known = a.answers.filter((x) => t.findings.some((f) => f.id === x.id));
     for (const x of known) setFinding(t.id, x.id, { status: x.status, response: x.text });
     setRound(t.id, p.round, (r) => ({ ...r, answers: [...r.answers.filter((y) => !known.some((k) => k.id === y.id)), ...known] }));
+    // i18n-ignore: the prompt Claude reads.
     return { content: [{ type: 'text' as const, text: `已记录 ${known.length} 条答复。改完就结束这一轮，Code Agent 会接着做下一轮审核。` }] };
   }),
 ]);
@@ -531,6 +534,7 @@ function decideReview(sid: string, choice: 'accept' | 'more' | 'takeover') {
     pending.set(t.id, { step: 'more', round: last.n, changesAt: rt(sid)?.changes.length ?? 0 });
     sendTurn(sid, {
       fromApp: '代码审核 · 追加轮次',
+      // i18n-ignore: the prompt Claude reads.
       text: `用户追加了审核轮数（现在最多 ${t.maxRounds + 2} 轮）。请按第 ${last.n} 轮的意见修改：能改的改掉，不同意的写明理由，用 respond_findings 逐条答复，然后结束这一轮。`,
     });
     return;
@@ -540,6 +544,7 @@ function decideReview(sid: string, choice: 'accept' | 'more' | 'takeover') {
   addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'info', text: `代码审核结束：${note}。`, action: '查看审核记录' });
 }
 
+// i18n-ignore: an exported file.
 function reviewMarkdown(id: string): string {
   const t = get(id);
   if (!t) return '';
