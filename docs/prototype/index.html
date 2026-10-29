@@ -3,76 +3,59 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Code Agent — 交互稿</title>
+  <title>Code Agent — 交互稿 v0.3</title>
   <link rel="stylesheet" href="prototype.css">
 </head>
 <body>
   <aside id="toc">
-    <div class="toc-head">
-      <div class="brand">Code Agent</div>
-      <div class="sub">交互稿 · v0.2</div>
-    </div>
+    <div class="brand">Code Agent</div>
+    <div class="sub">交互稿 v0.3 · 以现有实现为准</div>
     <label class="toggle"><input type="checkbox" id="toggle-markers" checked> 显示标注</label>
     <nav id="toc-links">
       <a href="#how-to-read">阅读说明</a>
-      <a href="#global">全局交互规则</a>
+      <a href="#proposals">提议的功能</a>
+      <a href="#left-out">没有纳入的功能</a>
     </nav>
   </aside>
 
   <main>
     <header class="intro">
       <h1>Code Agent — 交互稿</h1>
-      <p>
-        基于 Claude Agent SDK（TypeScript）的本地 Web 工作台。下面每个页面的界面和布局全部用 SVG 绘制。
-        编号标注指向可交互的元素；每页下方的表格说明交互方式、界面行为以及所依赖的 SDK 接口。
-        需求编号（FR-…）对应 <a href="../requirements.zh-CN.md">docs/requirements.zh-CN.md</a>
-        （英文版 <a href="../requirements.md">docs/requirements.md</a>）。
-      </p>
+      <p>本地的 Claude Code 工作台。v0.3 起交互稿直接用<b>真实界面的截图</b>：每页都是当前实现的样子，编号标注说明可交互的元素。
+        还没做、建议做的功能直接画进相关页面，用<b style="color:#e8590c">橙色编号</b>和虚线框标出，页面标为「提议」。</p>
     </header>
 
     <section id="how-to-read" class="doc">
       <h2>阅读说明</h2>
       <div class="legend">
-        <div><svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="11.5" fill="#fff"/><circle cx="13" cy="13" r="10" fill="#e5197d"/><text x="13" y="17" font-size="11" font-weight="700" fill="#fff" text-anchor="middle" font-family="system-ui">1</text></svg>
-          标注。点击标注跳到对应说明；鼠标悬停在说明上会高亮对应标注。</div>
-        <div><span class="sw" style="background:#3b5bdb"></span> 强调色 —— 主要操作、选中项、运行中状态。</div>
-        <div><span class="sw" style="background:#fab219"></span> 警示 —— 需要用户处理（总是配合图标和文字）。</div>
-        <div><span class="sw" style="background:#d03b3b"></span> 危险 —— 错误、破坏性操作、跳过权限检查。</div>
-        <div><span class="sw" style="background:#0ca30c"></span> 正常 —— 已完成、已连接、已批准。</div>
-        <div><span class="sw dash"></span> 虚线框 —— 折叠或次要内容（思考过程、草稿）。</div>
+        <div><span class="num">1</span>已实现的元素。鼠标移到编号或说明行上，截图里会框出对应元素；点编号跳到说明。</div>
+        <div><span class="num num-new">2</span>提议新增的元素（截图里用虚线框画出）。</div>
       </div>
-      <p>
-        画布尺寸为 1440 × 900（1440 像素宽的桌面浏览器）。每页都可以单独打开或下载 SVG。
-        交互稿是静态的：交互之后的状态以单独页面或「变体」的形式给出。
-        界面文字为简体中文；代码、命令、工具名、SDK 字段和第三方内容保持原文，这本身也是多语言需求（FR-I18N）的一部分，详见 P25。
-      </p>
+      <ul>
+        <li>截图来自真实运行的 Code Agent：脚本搭一套演示仓库，用一个按剧本回复的演示模型服务驱动会话，把每个页面带到要展示的状态再截图（1440 × 900）。所以审批、提问、计划、后台任务、审核循环这些状态都是真实流程跑出来的，演示模型叫 <code>demo-pro</code> / <code>demo-lite</code>。</li>
+        <li>提议部分是用应用自己的样式类写的界面片段，注入真实页面后截图；每个提议页下面附了片段源码，实现时照着做就能还原。</li>
+        <li>界面改了以后重新生成：<code>node docs/prototype/tools/shoot.mjs</code>（全部）或加页面编号只重拍几页，详见 <code>tools/README.md</code>。</li>
+        <li>页面编号沿用 v0.2：同一编号还是同一个页面；v0.2 之后新增的页面从 P26 开始。需求编号（FR-…）对应 <code>docs/requirements.zh-CN.md</code>（v0.2，暂不修改）。</li>
+      </ul>
     </section>
 
-    <section id="global" class="doc">
-      <h2>全局交互规则</h2>
-      <table class="notes">
-        <thead><tr><th>方面</th><th>规则</th></tr></thead>
-        <tbody>
-          <tr><td>快捷键</td><td><kbd>Ctrl K</kbd> 命令 / 搜索 · <kbd>Ctrl N</kbd> 新建会话 · <kbd>Enter</kbd> 发送，<kbd>Shift Enter</kbd> 换行 · <kbd>Esc</kbd> 中断当前轮（输入框为空时）· <kbd>Ctrl B</kbd> 把运行中的工作转入后台 · <kbd>Shift Tab</kbd> 循环切换权限模式 · <kbd>1</kbd>–<kbd>4</kbd> 在审批 / 提问面板中选择选项 · <kbd>Ctrl .</kbd> 开关检查器 · <kbd>Alt ↑/↓</kbd> 切换运行中的会话。</td></tr>
-          <tr><td>输入法</td><td>输入法组字期间按 <kbd>Enter</kbd> 只确认候选词，永远不会发送或提交。适用于所有「回车提交」的输入框。快捷键避开常见的输入法切换组合。</td></tr>
-          <tr><td>实时性</td><td>每个运行中的会话通过一条 WebSocket 推送事件，每个事件带序号；重连后客户端请求最后序号之后的事件，服务端重放。界面上没有「发出即不管」的操作：每个命令都显示 进行中 → 完成 / 失败。</td></tr>
-          <tr><td>会话状态</td><td>SDK 的 <code>session_state_changed</code> 驱动一个处处一致的指示：蓝色圆环 = 运行中，琥珀色圆点 + 「等待…」 = 需要你处理，灰色 = 空闲。浏览器标签页标题加前缀（● / !），网站图标加角标。</td></tr>
-          <tr><td>待处理优先</td><td>会话需要你处理（审批、提问、计划、征询）时，请求停靠在输入框上方。若你在其他会话或标签页，顶栏铃铛计数，并（可选）发送浏览器通知。在任一处处理后，所有地方同步消失。</td></tr>
-          <tr><td>破坏性操作</td><td>删除会话、回退文件、跳过权限检查和清空对话一律先确认，并说明哪些内容无法撤销。</td></tr>
-          <tr><td>版本适配</td><td>当前运行的 Claude Code 版本（从 init 消息读取）不支持的功能会隐藏，或禁用并在提示中注明最低版本。</td></tr>
-          <tr><td>语言</td><td>界面语言即时切换无需刷新（顶栏地球图标或 P25）。SDK 返回的代码映射为本地化文案并可展开原文；第三方内容和工具输出保持原文；Claude 生成的内容由「回复语言」决定。</td></tr>
-          <tr><td>空、加载、错误</td><td>列表为空时显示一句说明和主要操作；加载时用骨架行；出错时显示本地化提示、SDK 原文和重试操作。会话级状态见 P24。</td></tr>
-        </tbody>
-      </table>
+    <section id="proposals" class="doc">
+      <h2>提议的功能</h2>
+      <p>从需求 v0.2 里还没做、或只做了一半的功能里挑出来的，排除了用处不大、场景不符、和现有设计冲突或重叠、工作量大、有安全要求的（见下一节）。按建议的先后排列。</p>
+      <div id="proposal-list"></div>
+    </section>
+
+    <section id="left-out" class="doc">
+      <h2>没有纳入的功能</h2>
+      <p>需求 v0.2 里没做、这次也不建议做的，以及原因。用户已经明确砍掉的（自动权限模式、快速模式、费用显示、新建会话对话框等）不在这里重复，见 <code>notes/cut-list.md</code>。</p>
+      <div id="left-out-list"></div>
     </section>
 
     <div id="screens"></div>
   </main>
 
-  <script src="kit.js"></script>
-  <script src="screens-1.js"></script>
-  <script src="screens-2.js"></script>
-  <script src="screens-3.js"></script>
+  <script src="notes.js"></script>
+  <script src="screens.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
