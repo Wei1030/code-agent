@@ -8,6 +8,7 @@ import { useApp, type InspectorTab } from '../store/app';
 import { clock, duration, relTime, tokens as fmtTokens, pct } from '../lib/format';
 import { cx, download } from '../lib/util';
 import { useT } from '../lib/i18n';
+import { MODE_INFO } from '../lib/catalog';
 import { highlightLines, languageOf } from '../lib/highlight';
 import { openPreview } from '../lib/preview';
 import { DiffLines } from './Transcript';
@@ -47,8 +48,8 @@ export function Inspector({ rt, onRewind }: { rt: SessionRuntime; onRewind: (use
     e.preventDefault();
     const startX = e.clientX;
     const startW = ins.width;
-    // Keep the conversation column at least CENTER_MIN wide (nav rail + session list + icon rail = 364 px).
-    const max = Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - 364 - CENTER_MIN));
+    // Keep the conversation column at least CENTER_MIN wide (nav rail + session list + icon rail = 368 px).
+    const max = Math.max(MIN_W, Math.min(MAX_W, window.innerWidth - 368 - CENTER_MIN));
     setDragging(true);
     const move = (ev: PointerEvent) => setInspector({ width: Math.round(Math.min(max, Math.max(MIN_W, startW + startX - ev.clientX))) });
     const up = () => {
@@ -410,6 +411,8 @@ function FileTab({ rt }: { rt: SessionRuntime }) {
   );
 }
 
+const MCP_STATUS: Record<string, string> = { connected: '已连接', failed: '连接失败', 'needs-auth': '需要登录', pending: '连接中', disabled: '已关闭' };
+
 /** What the session's Claude Code process reported about itself, and how to continue it in a terminal. */
 function InfoTab({ rt }: { rt: SessionRuntime }) {
   const t = useT();
@@ -432,11 +435,11 @@ function InfoTab({ rt }: { rt: SessionRuntime }) {
         {sum?.worktree && <><dt>{t('工作树分支')}</dt><dd className="mono">{sum.worktree}</dd></>}
         <dt>{t('模型')}</dt><dd>{model ? `${model.label} · ${model.endpoint ? t('{e}（兼容端点）', { e: model.desc }) : t('Claude 订阅')}` : rt.model}{info.apiModel && <div className="hint mono">{info.apiModel}</div>}</dd>
         <dt>Claude Code</dt><dd>{info.version ? `${info.version}` : '—'} · {app.provider.executable === 'system' ? t('系统中安装的 claude') : t('随 SDK 提供')}{info.pid ? ` · ${t('进程 {p}', { p: info.pid })}` : ''}</dd>
-        <dt>{t('权限模式')}</dt><dd>{rt.mode}</dd>
+        <dt>{t('权限模式')}</dt><dd>{t(MODE_INFO[rt.mode]?.label ?? rt.mode)}</dd>
         <dt>{t('设置文件')}</dt><dd>{sources}</dd>
         {memory.length > 0 && <><dt>{t('说明文件')}</dt><dd className="mono">{memory.join('\n')}</dd></>}
-        {info.outputStyle && <><dt>{t('输出风格')}</dt><dd>{info.outputStyle}</dd></>}
-        <dt>MCP</dt><dd>{info.mcp?.length ? info.mcp.map((m) => <div key={m.name}>{m.name} <span className={m.status === 'connected' ? 'muted' : 'del-n'}>{m.status === 'connected' ? t('已连接') : m.status}</span></div>) : '—'}</dd>
+        {info.outputStyle && <><dt>{t('输出风格')}</dt><dd>{info.outputStyle === 'default' ? t('默认') : info.outputStyle}</dd></>}
+        <dt>MCP</dt><dd>{info.mcp?.length ? info.mcp.map((m) => <div key={m.name}>{m.name} <span className={m.status === 'connected' ? 'muted' : 'del-n'}>{t(MCP_STATUS[m.status] ?? m.status)}</span></div>) : '—'}</dd>
         {info.agents?.length ? <><dt>{t('子代理')}</dt><dd>{info.agents.join('、')}</dd></> : null}
         <dt>{t('进程')}</dt><dd>{sum?.live ? (info.startedAt ? t('{t} 启动 · 第 {n} 次', { t: relTime(info.startedAt), n: info.starts ?? 1 }) : t('运行中')) : t('没有运行（已保存）')}</dd>
       </dl>

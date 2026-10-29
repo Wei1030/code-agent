@@ -1,5 +1,10 @@
-/** Locale-aware formatting helpers (zh-CN for now). */
+/** Locale-aware formatting helpers (Simplified Chinese or English, by the UI language). */
 import { useApp } from '../store/app';
+import { resolveLocale } from './i18n';
+
+const en = () => resolveLocale(useApp.getState().prefs.uiLanguage) === 'en';
+const EN_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -7,6 +12,15 @@ const DAY = 24 * HOUR;
 
 export function relTime(ts: number, now = Date.now()): string {
   const d = now - ts;
+  if (en()) {
+    if (d < 45_000) return 'just now';
+    if (d < HOUR) return `${Math.max(1, Math.round(d / MIN))} min ago`;
+    if (d < DAY) return `${Math.round(d / HOUR)} h ago`;
+    if (d < 2 * DAY) return 'yesterday';
+    if (d < 7 * DAY) return EN_DAYS[new Date(ts).getDay()];
+    const dt = new Date(ts);
+    return `${EN_MONTHS[dt.getMonth()]} ${dt.getDate()}`;
+  }
   if (d < 45_000) return '刚刚';
   if (d < HOUR) return `${Math.max(1, Math.round(d / MIN))} 分钟前`;
   if (d < DAY) return `${Math.round(d / HOUR)} 小时前`;
@@ -19,6 +33,7 @@ export function relTime(ts: number, now = Date.now()): string {
 export function dateTime(ts: number): string {
   const d = new Date(ts);
   const p = (n: number) => String(n).padStart(2, '0');
+  if (en()) return `${EN_MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
@@ -29,9 +44,11 @@ export function clock(ts: number): string {
 }
 
 export function duration(sec: number): string {
-  if (sec < 60) return `${sec < 10 ? sec.toFixed(1) : Math.round(sec)} 秒`;
+  const e = en();
+  if (sec < 60) return `${sec < 10 ? sec.toFixed(1) : Math.round(sec)}${e ? 's' : ' 秒'}`;
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
+  if (e) return `${m}m ${String(s).padStart(2, '0')}s`;
   return `${m}分${String(s).padStart(2, '0')}秒`;
 }
 
@@ -48,7 +65,7 @@ export function tokens(n: number): string {
 }
 
 export function num(n: number): string {
-  return n.toLocaleString('zh-CN');
+  return n.toLocaleString(en() ? 'en-US' : 'zh-CN');
 }
 
 export function pct(n: number, digits = 0): string {
