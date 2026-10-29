@@ -7,7 +7,8 @@ import path from 'node:path';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { DEV, HOME, HOST, PORT, VERSION } from './paths';
+import { DEV, HOME, HOME_TAG, HOST, PORT, VERSION } from './paths';
+import { openBrowser } from './open';
 import { allowedOrigin, attach, onHello, register, caller } from './hub';
 import { app, clientSet } from './state';
 import { flush } from './store';
@@ -65,6 +66,7 @@ async function main() {
   }
   const dist = process.env.CODE_AGENT_WEB_DIST ?? path.join(WEB, 'dist');
   server.on('request', (req, res) => {
+    res.setHeader('x-code-agent-home', HOME_TAG);
     if (vite) {
       vite.middlewares(req, res, () => {
         res.statusCode = 404;
@@ -102,8 +104,13 @@ async function main() {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   });
 
+  server.on('error', (e: NodeJS.ErrnoException) => {
+    console.error(e.code === 'EADDRINUSE' ? `端口 ${PORT} 已被占用。` : `服务启动失败：${e.message}`);
+    process.exit(1);
+  });
   server.listen(PORT, HOST, () => {
     console.log(`Code Agent ${VERSION} · http://${HOST}:${PORT} · data ${HOME}${DEV ? ' · dev' : ''}`);
+    openBrowser(`http://${HOST}:${PORT}/`);
   });
 
   // Tests start the server without asking Claude Code anything.

@@ -32,6 +32,9 @@ npm start          # builds the web app, then serves it: http://127.0.0.1:5180
 ```
 
 - Data lives in `~/.code-agent/code-agent.db` (set `CODE_AGENT_HOME` to move it); the port is `CODE_AGENT_PORT`.
+- If the port is taken, the next ones are tried (up to 5 more). If Code Agent with the same data dir
+  already runs on one of them, that one is opened instead of starting a second server.
+- Once up, the address opens in the default browser (`CODE_AGENT_NO_OPEN=1` turns that off).
 - The server listens on 127.0.0.1 only and accepts WebSocket connections only from its own origin.
 - Workspaces, permission rules, MCP servers, skills, commands and hooks are Claude Code's own
   files; changes made here show up in the `claude` CLI and the other way round.

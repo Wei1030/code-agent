@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/main.ts --dev",
-    "start": "tsx src/main.ts",
+    "dev": "tsx src/start.ts --dev",
+    "start": "tsx src/start.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

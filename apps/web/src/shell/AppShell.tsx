@@ -277,8 +277,8 @@ function ApprovalsInbox() {
           </div>
         ))}
         <div className="foot">
-          <Toggle on={notify} onChange={(v) => { useApp.getState().setPrefs({ browserNotifications: v }); if (v) void requestNotificationPermission(); }} label={t('标签页不在前台时发送系统通知')} />
-          <button className="link-btn" style={{ marginTop: 6 }} onClick={() => { setOpen(false); nav('/settings/general'); }}>{t('提醒设置 →')}</button>
+          <Toggle on={notify} onChange={(v) => { useApp.getState().setPrefs({ browserNotifications: v }); if (v) void requestNotificationPermission(); }} label={t('系统通知')} />
+          <button className="link-btn" onClick={() => { setOpen(false); nav('/settings/general'); }}>{t('提醒设置 →')}</button>
         </div>
       </Popover>
     </>
