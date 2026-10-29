@@ -62,7 +62,7 @@ function handle(m: ServerMessage) {
   switch (m.t) {
     case 'hello': {
       applySlices(m.slices);
-      useApp.setState({ sessions: m.sessions, booted: true });
+      useApp.setState({ sessions: m.sessions, booted: true, userName: m.user });
       const app = useApp.getState();
       if (!app.workspaces.some((w) => w.id === app.currentWorkspaceId)) useApp.setState({ currentWorkspaceId: app.workspaces[0]?.id ?? '' });
       // Reload the transcripts in view: events may have been missed while disconnected.

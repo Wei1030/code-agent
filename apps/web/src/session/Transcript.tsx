@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Item, PeerCall, PlanDoc, SessionRef, SessionRuntime, ToolItem } from '../api/types';
 import { Icon } from '../components/Icon';
-import { Button, Chip } from '../components/ui';
+import { Button, Chip, UserAvatar } from '../components/ui';
 import { api } from '../api';
 import { useApp } from '../store/app';
 import { duration, tokens } from '../lib/format';
@@ -41,7 +41,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
         <div className={cx('umsg', (it.from || it.fromApp) && 'peer')}>
           {it.from ? <span className="avatar peer" title={t('来自其他会话的消息')}><Icon name="link" size={13} /></span>
             : it.fromApp ? <span className="avatar peer app" title={t('Code Agent 发给 Claude 的消息')}><Icon name="shield" size={13} /></span>
-              : <span className="avatar">W</span>}
+              : <UserAvatar size={12} />}
           {it.from && <div className="from">{it.from.kind === 'receipt' ? t('回执 · 来自') : t('来自会话')} <SessionLink r={it.from} /></div>}
           {it.fromApp && <div className="from">Code Agent · {t(it.fromApp)}</div>}
           <div className="text">{linkify(it.text, wsId)}</div>

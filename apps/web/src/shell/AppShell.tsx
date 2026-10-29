@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
-import { Button, ConfirmHost, Popover, Select, Toasts, Toggle } from '../components/ui';
+import { Button, ConfirmHost, Popover, Select, Toasts, Toggle, UserAvatar } from '../components/ui';
 import { useApp } from '../store/app';
 import { useSessions } from '../store/sessions';
 import { useT } from '../lib/i18n';
@@ -122,7 +122,7 @@ function TopBar() {
       <LanguageButton />
       <ApprovalsInbox />
       <div className="account" onClick={() => nav('/settings/provider')} title={t('模型服务与账号')}>
-        <span className="avatar">W</span>
+        <UserAvatar />
         <span className="lines">
           <span className="muted">{authKind}</span>
           <b>{authState}</b>

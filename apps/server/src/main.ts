@@ -7,7 +7,7 @@ import path from 'node:path';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { DEV, HOME, HOME_TAG, HOST, PORT, VERSION } from './paths';
+import { DEV, HOME, HOME_TAG, HOST, PORT, USER_NAME, VERSION } from './paths';
 import { openBrowser } from './open';
 import { allowedOrigin, attach, onHello, register, caller } from './hub';
 import { app, clientSet } from './state';
@@ -38,7 +38,7 @@ register({
   setState: (patch) => clientSet(patch, caller),
 });
 
-onHello(() => ({ t: 'hello', slices: app, sessions: allSummaries(), version: VERSION }));
+onHello(() => ({ t: 'hello', slices: app, sessions: allSummaries(), version: VERSION, user: USER_NAME }));
 
 function reloadDisk() {
   reloadRules();

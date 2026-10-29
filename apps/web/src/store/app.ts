@@ -31,6 +31,8 @@ export type InspectorTab = 'tasks' | 'background' | 'changes' | 'checkpoints' | 
 interface AppState {
   /** The server's state has arrived. */
   booted: boolean;
+  /** The computer's user name, from the server. */
+  userName: string;
   workspaces: Workspace[];
   sessions: SessionSummary[];
   currentWorkspaceId: string;
@@ -100,6 +102,7 @@ interface AppState {
 
 export const useApp = create<AppState>((set, get) => ({
   booted: false,
+  userName: '',
   workspaces: [],
   sessions: [],
   currentWorkspaceId: localStorage.getItem('ca.workspace') ?? '',

@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import { cx } from '../lib/util';
 import { useApp } from '../store/app';
 import { useT } from '../lib/i18n';
+import { initialOf } from '@code-agent/shared/initial';
 
 type BtnVariant = 'primary' | 'danger' | 'danger-outline' | 'soft' | 'ghost' | 'default';
 
@@ -310,6 +311,13 @@ export function ConfirmHost() {
       )}
     </Modal>
   );
+}
+
+/** The user's avatar: the first character of the computer's user name, a person icon when it has none. */
+export function UserAvatar({ size = 13 }: { size?: number }) {
+  const name = useApp((s) => s.userName);
+  const initial = initialOf(name);
+  return <span className="avatar" title={name || undefined}>{initial || <Icon name="user" size={size} />}</span>;
 }
 
 export function Toasts() {

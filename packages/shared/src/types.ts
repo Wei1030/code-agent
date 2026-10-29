@@ -972,7 +972,8 @@ export interface NotifyMessage {
 
 /** Server → UI over the WebSocket. */
 export type ServerMessage =
-  | { t: 'hello'; slices: AppSlices; sessions: SessionSummary[]; version: string }
+  /** user: the computer's user name. */
+  | { t: 'hello'; slices: AppSlices; sessions: SessionSummary[]; version: string; user: string }
   | { t: 'app'; patch: Partial<AppSlices> }
   | { t: 'session.upsert'; s: SessionSummary }
   | { t: 'session.remove'; id: string }

@@ -18,4 +18,12 @@ export function setPort(port: number) {
 export const HOME_TAG = encodeURIComponent(HOME);
 export const HOST = '127.0.0.1';
 export const DEV = process.argv.includes('--dev');
+/** The computer's user name; the web app shows its first character as the user's avatar. */
+export const USER_NAME = (() => {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return process.env.USERNAME ?? process.env.USER ?? '';
+  }
+})();
 export const VERSION = '0.1.0';
