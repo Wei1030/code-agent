@@ -70,6 +70,8 @@ export interface SessionSummary {
   createdBy?: SessionRef;
   /** Branch of its own git worktree, when the creating session asked for one. */
   worktree?: string;
+  /** Its worktree was removed: the session can be read but not resumed. */
+  worktreeGone?: boolean;
   /** Working directory when it is not the workspace folder (the worktree's checkout). */
   cwd?: string;
   /** Messages from other sessions that arrived while the user was elsewhere. */
@@ -178,6 +180,8 @@ export interface ToolItem {
   peer?: PeerCall;
   /** Short result lines shown in the card body. */
   rows?: NestedRow[];
+  /** The file a file tool worked on (and the lines it read), for the file preview. */
+  file?: { path: string; from?: number; to?: number };
 }
 
 export interface PlanDoc {
@@ -377,6 +381,7 @@ export interface SessionRuntime {
   readOnly: boolean;
   turn: number;
   tokens: number;
+  info?: SessionInfo;
 }
 
 /** Events the backend pushes to the UI for one session. */
@@ -396,7 +401,7 @@ export type SessionEvent =
   | { t: 'raw'; type: string; summary: string; json: unknown }
   | { t: 'stderr'; line: string }
   | { t: 'status'; status: TransientStatus | null }
-  | { t: 'settings'; patch: Partial<Pick<SessionRuntime, 'model' | 'effort' | 'mode' | 'readOnly' | 'turn' | 'tokens'>> };
+  | { t: 'settings'; patch: Partial<Pick<SessionRuntime, 'model' | 'effort' | 'mode' | 'readOnly' | 'turn' | 'tokens' | 'info'>> };
 
 // ------------------------------------------------------------------ settings
 
@@ -418,6 +423,10 @@ export interface Profile {
   promptText: string;
   responseLanguage: string;
   features: Record<string, boolean>;
+  /** Claude Code output style ('default' = none). */
+  outputStyle?: string;
+  /** Replaces the default workflow of plan mode (SDK planModeInstructions). */
+  planInstructions?: string;
 }
 
 /**
@@ -501,6 +510,74 @@ export interface McpServer {
   prompts: Array<{ name: string; desc: string }>;
   /** Running sessions where the user switched this server off. */
   offIn: string[];
+}
+
+/** Subagent definitions: files in the config dir, a workspace's .claude/agents, plugins, or built in. */
+export interface AgentFile {
+  id: string;
+  name: string;
+  /** When Claude should hand work to it. */
+  description: string;
+  /** Tool names it may use; empty = the session's tools. */
+  tools: string[];
+  /** 'inherit' or a model alias / id. */
+  model: string;
+  source: 'builtin' | 'global' | 'workspace' | 'plugin';
+  workspaceId?: string;
+  plugin?: string;
+  /** Display path. */
+  path: string;
+  /** Its system prompt (the file's body). */
+  prompt: string;
+  enabled: boolean;
+}
+
+/** A file Claude reads at the start of every session (CLAUDE.md, rules) or its auto memory. */
+export interface InstructionFile {
+  id: string;
+  scope: 'global' | 'workspace';
+  kind: 'claude' | 'local' | 'rule' | 'memory';
+  name: string;
+  path: string;
+  exists: boolean;
+  lines: number;
+  /** The first heading or line. */
+  summary: string;
+}
+
+/** A git worktree Code Agent made for a session (create_session with worktree). */
+export interface WorktreeInfo {
+  path: string;
+  workspaceId: string;
+  branch: string;
+  base: string;
+  /** Commits on the branch that the base does not have. */
+  ahead: number;
+  /** Uncommitted changes (git status lines). */
+  changed: string[];
+  sessions: Array<{ id: string; title: string; live: boolean }>;
+}
+
+export interface OutputStyle {
+  name: string;
+  description: string;
+  source: 'builtin' | 'global' | 'workspace';
+}
+
+/** What the session's Claude Code process reports about itself (inspector 信息). */
+export interface SessionInfo {
+  version?: string;
+  pid?: number;
+  cwd?: string;
+  /** The model id the API is called with. */
+  apiModel?: string;
+  outputStyle?: string;
+  tools?: number;
+  agents?: string[];
+  mcp?: Array<{ name: string; status: string }>;
+  /** When the running process started and how many processes the session has had. */
+  startedAt?: number;
+  starts?: number;
 }
 
 export interface SkillInfo {
@@ -852,6 +929,7 @@ export interface AppSlices {
   mcp: McpServer[];
   mcpBehavior: McpBehavior;
   skills: SkillInfo[];
+  agents: AgentFile[];
   commandFiles: CommandFile[];
   plugins: PluginInfo[];
   hookRules: HookRule[];
@@ -876,7 +954,7 @@ export interface AppSlices {
 }
 
 /** Slices only the server changes. */
-export const READONLY_SLICES = ['fileHooks', 'jobRuns', 'reviews', 'reviewed', 'held', 'models', 'usage'] as const;
+export const READONLY_SLICES = ['fileHooks', 'jobRuns', 'reviews', 'reviewed', 'held', 'models', 'usage', 'agents'] as const;
 
 export type SliceKey = keyof AppSlices;
 

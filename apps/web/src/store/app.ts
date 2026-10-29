@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import type {
   BoardItem, BoardSettings, CommandFile, EnvVar, ExtraDir, FileHook, HeldMessage, HookLogEntry, HookRule, JobRun, JobTemplate, McpBehavior, McpServer, ModelInfo,
-  PeerSettings, PermissionRule, PluginInfo, Prefs, Profile, Provider, ReviewProfile, ReviewTicket, RuntimeSettings, SessionSummary, SkillInfo, UsageData, Workspace,
+  PeerSettings, PermissionRule, PluginInfo, Prefs, Profile, Provider, ReviewProfile, ReviewTicket, RuntimeSettings, SessionSummary, SkillInfo, UsageData, Workspace, AgentFile,
 } from '../api/types';
 import { MODELS } from '../lib/catalog';
 import { uid } from '../lib/util';
@@ -26,7 +26,7 @@ export interface ConfirmRequest {
   onConfirm: () => unknown;
 }
 
-export type InspectorTab = 'tasks' | 'background' | 'changes' | 'checkpoints' | 'context' | 'events';
+export type InspectorTab = 'tasks' | 'background' | 'changes' | 'checkpoints' | 'context' | 'events' | 'file' | 'info';
 
 interface AppState {
   /** The server's state has arrived. */
@@ -41,6 +41,7 @@ interface AppState {
   mcp: McpServer[];
   mcpBehavior: McpBehavior;
   skills: SkillInfo[];
+  agents: AgentFile[];
   commandFiles: CommandFile[];
   plugins: PluginInfo[];
   hookRules: HookRule[];
@@ -74,7 +75,9 @@ interface AppState {
   busy: number;
   toasts: Toast[];
   confirm: ConfirmRequest | null;
-  inspector: { open: boolean; width: number; tab: InspectorTab; eventsSub: 'events' | 'stderr' | 'hooks' };
+  inspector: { open: boolean; width: number; tab: InspectorTab; eventsSub: 'events' | 'stderr' | 'hooks' | 'debug' };
+  /** The file shown in the inspector's 文件 tab (and the lines to mark). */
+  preview: { sid: string; path: string; from?: number; to?: number } | null;
   folderPickerOpen: boolean;
   inboxOpen: boolean;
   /** Text pushed into a session's composer (suggestions, fork-and-edit). */
@@ -117,6 +120,7 @@ export const useApp = create<AppState>((set, get) => ({
   mcp: [],
   mcpBehavior: { strict: false, toolSearch: 'auto', firstTurnWait: 30 },
   skills: [],
+  agents: [],
   commandFiles: [],
   plugins: [],
   hookRules: [],
@@ -147,6 +151,7 @@ export const useApp = create<AppState>((set, get) => ({
   toasts: [],
   confirm: null,
   inspector: { open: true, width: 340, tab: 'tasks', eventsSub: 'events' },
+  preview: null,
   folderPickerOpen: false,
   inboxOpen: false,
   fill: null,

@@ -1,6 +1,7 @@
 /** Markdown as Claude writes it: headings, lists, code blocks, tables, quotes, links, and board ids as links. */
 import { Fragment, type ReactNode } from 'react';
 import { linkify } from './BoardLink';
+import { guessLanguage, highlight, languageOf } from '../lib/highlight';
 
 type Block =
   | { t: 'code'; lang: string; text: string }
@@ -111,7 +112,7 @@ function render(blocks: Block[], wsId?: string): ReactNode {
   return blocks.map((b, i) => {
     switch (b.t) {
       case 'code':
-        return <pre key={i} className="md-code" data-lang={b.lang || undefined}><code>{b.text}</code></pre>;
+        return <pre key={i} className="md-code" data-lang={b.lang || undefined}><code dangerouslySetInnerHTML={{ __html: highlight(b.text, languageOf(b.lang) ?? guessLanguage(b.text)) }} /></pre>;
       case 'h': {
         const Tag = `h${Math.min(6, b.level + 2)}` as 'h3';
         return <Tag key={i} className="md-h">{inline(b.text, wsId)}</Tag>;

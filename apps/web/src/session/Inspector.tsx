@@ -1,5 +1,5 @@
-/** Right-hand inspector: tasks, background work, changes, checkpoints, context, raw events. Collapsible. */
-import { useMemo, useState } from 'react';
+/** Right-hand inspector: tasks, background work, changes, checkpoints, context, raw events, a file, session info. */
+import { useEffect, useMemo, useState } from 'react';
 import type { SessionRuntime } from '../api/types';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
@@ -8,6 +8,9 @@ import { useApp, type InspectorTab } from '../store/app';
 import { clock, duration, relTime, tokens as fmtTokens, pct } from '../lib/format';
 import { cx, download } from '../lib/util';
 import { useT } from '../lib/i18n';
+import { highlightLines, languageOf } from '../lib/highlight';
+import { openPreview } from '../lib/preview';
+import { DiffLines } from './Transcript';
 
 const TABS: Array<{ value: InspectorTab; label: string; icon: string }> = [
   { value: 'tasks', label: '任务', icon: 'list' },
@@ -16,6 +19,8 @@ const TABS: Array<{ value: InspectorTab; label: string; icon: string }> = [
   { value: 'checkpoints', label: '检查点', icon: 'rewind' },
   { value: 'context', label: '上下文', icon: 'gauge' },
   { value: 'events', label: '事件', icon: 'braces' },
+  { value: 'file', label: '文件', icon: 'file' },
+  { value: 'info', label: '信息', icon: 'info' },
 ];
 
 const MIN_W = 280;
@@ -68,6 +73,8 @@ export function Inspector({ rt, onRewind }: { rt: SessionRuntime; onRewind: (use
             {ins.tab === 'checkpoints' && <CheckpointsTab rt={rt} onRewind={onRewind} />}
             {ins.tab === 'context' && <ContextTab rt={rt} />}
             {ins.tab === 'events' && <EventsTab rt={rt} />}
+            {ins.tab === 'file' && <FileTab rt={rt} />}
+            {ins.tab === 'info' && <InfoTab rt={rt} />}
           </div>
         </aside>
       )}
@@ -168,12 +175,11 @@ function ChangesTab({ rt }: { rt: SessionRuntime }) {
             <Icon name={open === c.path ? 'chevDown' : 'chevRight'} size={14} className="muted" />
             <span className="p" title={c.path}>{c.path}</span>
             {c.kind === 'created' && <Chip tone="good">{t('新建')}</Chip>}
+            <button className="btn ghost sm" title={t('预览这个文件')} onClick={(e) => { e.stopPropagation(); openPreview(rt.id, { path: c.path }); }}><Icon name="eye" size={13} /></button>
             <span className="add-n">+{c.add}</span><span className="del-n">−{c.del}</span>
           </div>
           {open === c.path && (
-            <div className="diff" style={{ borderRadius: 0, border: 0, borderTop: '1px solid var(--border)' }}>
-              {c.diff.map((l, i) => <div key={i} className={l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}>{l}</div>)}
-            </div>
+            <DiffLines lines={c.diff} lang={languageOf(c.path)} style={{ borderRadius: 0, border: 0, borderTop: '1px solid var(--border)' }} />
           )}
         </div>
       ))}
@@ -275,6 +281,7 @@ function EventsTab({ rt }: { rt: SessionRuntime }) {
   const t = useT();
   const sub = useApp((s) => s.inspector.eventsSub);
   const setInspector = useApp((s) => s.setInspector);
+  const debugOn = useApp((s) => s.runtime.debugLog);
   const [hidden, setHidden] = useState<Set<string>>(new Set(['stream_event']));
   const [q, setQ] = useState('');
   const [paused, setPaused] = useState<number | null>(null);
@@ -299,9 +306,10 @@ function EventsTab({ rt }: { rt: SessionRuntime }) {
           { value: 'events', label: t('SDK 消息'), count: rt.events.length },
           { value: 'stderr', label: 'stderr', count: rt.stderr.length },
           { value: 'hooks', label: t('钩子'), count: hooks.length },
+          ...(debugOn ? [{ value: 'debug' as const, label: t('调试日志') }] : []),
         ]} />
       </div>
-      {sub === 'stderr' ? (
+      {sub === 'debug' && debugOn ? <DebugLog sid={rt.id} /> : sub === 'stderr' ? (
         <pre className="code-block" style={{ maxHeight: 'none', whiteSpace: 'pre-wrap' }}>{rt.stderr.length ? rt.stderr.join('\n') : t('（没有输出）')}</pre>
       ) : (
         <>
@@ -346,6 +354,122 @@ function EventsTab({ rt }: { rt: SessionRuntime }) {
           )}
         </>
       )}
+    </>
+  );
+}
+
+/** The file opened from the conversation or the changes list, with the lines Claude read marked. */
+function FileTab({ rt }: { rt: SessionRuntime }) {
+  const t = useT();
+  const preview = useApp((s) => s.preview);
+  const setInspector = useApp((s) => s.setInspector);
+  const p = preview?.sid === rt.id ? preview : null;
+  const [file, setFile] = useState<{ path: string; content: string; lines: number; truncated: boolean; binary: boolean } | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    setFile(null);
+    setError('');
+    if (!p) return;
+    api.readWorkspaceFile(rt.id, p.path).then(setFile, (e: Error) => setError(e.message));
+  }, [rt.id, p?.path, p]);
+  useEffect(() => {
+    if (!file || !p?.from) return;
+    document.getElementById(`fl-${p.from}`)?.scrollIntoView({ block: 'center' });
+  }, [file, p?.from]);
+  if (!p) return <div className="empty"><b>{t('还没有打开文件')}</b>{t('点对话里工具卡片上的文件路径，或变更列表里的预览按钮，文件内容会显示在这里。')}</div>;
+  const changed = rt.changes.some((c) => c.path === file?.path || c.path === p.path);
+  const lines = file && !file.binary ? highlightLines(file.content.replace(/\n$/, ''), languageOf(file.path)) : [];
+  return (
+    <>
+      <h4 className="row" style={{ gap: 6 }}>
+        <span className="mono truncate" title={file?.path ?? p.path}>{file?.path ?? p.path}</span>
+        <span className="right row" style={{ gap: 6 }}>
+          {file && <span className="hint">{t('{n} 行', { n: file.lines })}</span>}
+          {changed && <Button size="sm" variant="ghost" onClick={() => setInspector({ tab: 'changes' })}>{t('在变更里看')}</Button>}
+          <Button size="sm" variant="ghost" icon="refresh" title={t('重新读取')} onClick={() => api.readWorkspaceFile(rt.id, p.path).then(setFile, (e: Error) => setError(e.message))} />
+        </span>
+      </h4>
+      {error && <div className="banner-warn"><Icon name="warning" size={15} />{error}</div>}
+      {file?.binary && <div className="empty">{t('这是二进制文件，不显示内容。')}</div>}
+      {file?.truncated && <div className="hint">{t('文件太大，只显示前 1 MB。')}</div>}
+      {file && !file.binary && (
+        <div className="file-view mono">
+          {lines.map((html, i) => {
+            const n = i + 1;
+            const mark = p.from !== undefined && n >= p.from && n <= (p.to ?? p.from);
+            return (
+              <div key={n} id={`fl-${n}`} className={cx('fl', mark && 'mark')}>
+                <span className="ln">{n}</span>
+                <span className="lc" dangerouslySetInnerHTML={{ __html: html || ' ' }} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** What the session's Claude Code process reported about itself, and how to continue it in a terminal. */
+function InfoTab({ rt }: { rt: SessionRuntime }) {
+  const t = useT();
+  const app = useApp();
+  const sum = app.sessions.find((s) => s.id === rt.id);
+  const ws = app.workspaces.find((w) => w.id === sum?.workspaceId);
+  const model = app.models.find((m) => m.id === rt.model);
+  const info = rt.info ?? {};
+  const prof = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
+  const sources = [prof.sources.user && t('用户'), prof.sources.project && t('项目'), prof.sources.local && t('本地')].filter(Boolean).join(' · ') || t('不读取');
+  const memory = rt.context.memoryFiles.map((m) => m.path);
+  const cwd = info.cwd || sum?.cwd || ws?.path || '';
+  const resume = `claude --resume ${rt.id}`;
+  const copy = (text: string, what: string) => { void navigator.clipboard?.writeText(text); app.toast(t('已复制{w}', { w: what }), 'good'); };
+  return (
+    <>
+      <dl className="kv">
+        <dt>{t('会话 ID')}</dt><dd className="mono">{rt.id}</dd>
+        <dt>{t('工作目录')}</dt><dd className="mono">{cwd}</dd>
+        {sum?.worktree && <><dt>{t('工作树分支')}</dt><dd className="mono">{sum.worktree}</dd></>}
+        <dt>{t('模型')}</dt><dd>{model ? `${model.label} · ${model.endpoint ? t('{e}（兼容端点）', { e: model.desc }) : t('Claude 订阅')}` : rt.model}{info.apiModel && <div className="hint mono">{info.apiModel}</div>}</dd>
+        <dt>Claude Code</dt><dd>{info.version ? `${info.version}` : '—'} · {app.provider.executable === 'system' ? t('系统中安装的 claude') : t('随 SDK 提供')}{info.pid ? ` · ${t('进程 {p}', { p: info.pid })}` : ''}</dd>
+        <dt>{t('权限模式')}</dt><dd>{rt.mode}</dd>
+        <dt>{t('设置文件')}</dt><dd>{sources}</dd>
+        {memory.length > 0 && <><dt>{t('说明文件')}</dt><dd className="mono">{memory.join('\n')}</dd></>}
+        {info.outputStyle && <><dt>{t('输出风格')}</dt><dd>{info.outputStyle}</dd></>}
+        <dt>MCP</dt><dd>{info.mcp?.length ? info.mcp.map((m) => <div key={m.name}>{m.name} <span className={m.status === 'connected' ? 'muted' : 'del-n'}>{m.status === 'connected' ? t('已连接') : m.status}</span></div>) : '—'}</dd>
+        {info.agents?.length ? <><dt>{t('子代理')}</dt><dd>{info.agents.join('、')}</dd></> : null}
+        <dt>{t('进程')}</dt><dd>{sum?.live ? (info.startedAt ? t('{t} 启动 · 第 {n} 次', { t: relTime(info.startedAt), n: info.starts ?? 1 }) : t('运行中')) : t('没有运行（已保存）')}</dd>
+      </dl>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        <Button size="sm" icon="copy" onClick={() => copy(rt.id, t('会话 ID'))}>{t('复制会话 ID')}</Button>
+        <Button size="sm" icon="terminal" onClick={() => copy(`cd "${cwd}" && ${resume}`, t('命令'))}>{t('复制「在终端里继续」的命令')}</Button>
+      </div>
+      <div className="hint" style={{ marginTop: 8, lineHeight: 1.6 }}>{t('在终端里运行 {c} 可以接着这段对话。先在这里保存会话，避免两边同时写同一段对话。', { c: resume })}</div>
+    </>
+  );
+}
+
+function DebugLog({ sid }: { sid: string }) {
+  const t = useT();
+  const app = useApp();
+  const [log, setLog] = useState<{ path: string; exists: boolean; tail: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.debugLog(sid).then((l) => alive && setLog(l), () => undefined);
+    void load();
+    const timer = setInterval(load, 3000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [sid]);
+  if (!log) return null;
+  return (
+    <>
+      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+        <span className="hint mono truncate grow" title={log.path}>{log.path}</span>
+        <Button size="sm" variant="ghost" icon="copy" onClick={() => { void navigator.clipboard?.writeText(log.path); app.toast(t('已复制路径'), 'good'); }}>{t('复制路径')}</Button>
+      </div>
+      {log.exists
+        ? <pre className="log-tail">{log.tail}</pre>
+        : <div className="empty">{t('这个会话还没有调试日志：打开「保存调试日志」后启动或恢复的会话才会写。')}</div>}
     </>
   );
 }

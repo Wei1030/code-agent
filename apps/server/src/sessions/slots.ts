@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { app } from '../state';
 import { broadcast } from '../hub';
 import { addItem, allSummaries, emit, patchSummary, rt, summary } from './registry';
-import { closeProcess, inTurn, live, liveIds, onProcessEnd, onTurnEnd } from './live';
+import { closeProcess, inTurn, live, liveIds, onProcessEnd, onTurnEnd, startProcess } from './live';
 
 interface Waiter {
   sid: string;
@@ -138,6 +138,15 @@ export function whenIdle(sid: string, fn: () => void) {
       idleTimer = null;
     }
   }, 2000);
+}
+
+/** Restart a running session once it is idle so it picks up new settings, and carry on the conversation. */
+export function restartWhenIdle(sid: string, why: string) {
+  whenIdle(sid, () => void (async () => {
+    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'info', text: `${why}，Claude Code 按新设置重新启动后接着这段对话。` });
+    await closeProcess(sid);
+    await startProcess(sid, { resume: true });
+  })().catch((e) => console.error('[slots] restart failed:', e)));
 }
 
 /** Sessions that may have become idle let waiting ones in. */

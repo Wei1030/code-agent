@@ -65,3 +65,44 @@ test('a taken port moves to the next; the same data dir is not started twice', {
     other?.p.kill();
   }
 });
+
+test('the file preview reads only inside the session\'s directories', { timeout: 60_000 }, async () => {
+  const dir = home();
+  const ws = path.join(dir, 'repo');
+  mkdirSync(path.join(ws, 'src'), { recursive: true });
+  writeFileSync(path.join(ws, 'src', 'a.js'), 'const a = 1;\n');
+  writeFileSync(path.join(dir, 'secret.txt'), 'not for the preview');
+  const port = somePort();
+  const { p, ready } = start(dir, port);
+  const { default: WebSocket } = await import('ws');
+  let sock: InstanceType<typeof WebSocket> | undefined;
+  try {
+    assert.equal((await ready).exited, null);
+    sock = new WebSocket(`ws://127.0.0.1:${port}/ws`, { origin: `http://127.0.0.1:${port}` });
+    const s = sock;
+    await new Promise((resolve, reject) => { s.once('open', resolve); s.once('error', reject); });
+    let id = 0;
+    const call = (method: string, ...args: unknown[]) => new Promise<unknown>((resolve, reject) => {
+      const my = ++id;
+      const on = (raw: Buffer) => {
+        const m = JSON.parse(String(raw)) as { t: string; id?: number; result?: unknown; error?: string };
+        if (m.t !== 'ret' || m.id !== my) return;
+        s.off('message', on);
+        if (m.error) reject(new Error(m.error));
+        else resolve(m.result);
+      };
+      s.on('message', on);
+      s.send(JSON.stringify({ t: 'call', id: my, method, args }));
+    });
+    const w = await call('addWorkspace', ws) as { id: string };
+    await call('createDraft', w.id, 'sid-preview-test');
+    const ok = await call('readWorkspaceFile', 'sid-preview-test', 'src/a.js') as { path: string; content: string };
+    assert.equal(ok.path, 'src/a.js');
+    assert.equal(ok.content, 'const a = 1;\n');
+    await assert.rejects(call('readWorkspaceFile', 'sid-preview-test', '../secret.txt'), /不在会话的工作目录里/);
+    await assert.rejects(call('readWorkspaceFile', 'sid-preview-test', path.join(dir, 'secret.txt')), /不在会话的工作目录里/);
+  } finally {
+    sock?.close();
+    p.kill();
+  }
+});

@@ -1,7 +1,9 @@
 /** P20 — configuration profiles: 默认 for sessions, 评审 for the code-reviewer subagent. Fixed; none can be added. */
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { Effort, PermissionMode, Profile, ReviewProfile } from '../../api/types';
+import type { Effort, OutputStyle, PermissionMode, Profile, ReviewProfile } from '../../api/types';
+import { api } from '../../api';
+import { Icon } from '../../components/Icon';
 import { BUILTIN_TOOLS, MODE_INFO } from '../../lib/catalog';
 import { effortFor, effortOptions, modelOptions, takesEffort } from '../../lib/models';
 import { Button, Check, Field, Seg, Select, Toggle } from '../../components/ui';
@@ -67,6 +69,11 @@ function SaveBar({ onDiscard, onSave }: { onDiscard: () => void; onSave: () => v
 
 function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
   const t = useT();
+  const [styles, setStyles] = useState<OutputStyle[]>([]);
+  const wsId = useApp((s) => s.currentWorkspaceId);
+  useEffect(() => { void api.outputStyles(wsId || undefined).then(setStyles); }, [wsId]);
+  const [justSaved, setJustSaved] = useState(false);
+  const running = useApp((s) => s.sessions.filter((x) => x.live && !x.draft && !x.jobId).length);
   const app = useApp();
   const saved = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
   const [draft, setDraft] = useState<Profile>(saved);
@@ -122,6 +129,7 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
                         <b>{t(tool.label)}</b> <span className="mono muted">{tool.name}</span>
                         {tool.desc && <div className="hint">{t(tool.desc)}</div>}
                         {tool.claudeOnly && <div className="hint">{unavailable ? t('只在 Claude 模型上提供，选的端点模型没有') : t('只在 Claude 模型上提供')}</div>}
+                        {tool.name === 'AskUserQuestion' && !on && <div className="hint" style={{ color: 'var(--warn-ink)' }}>{t('关掉后，Claude 遇到需要你选择的地方会自己决定，不再停下来问。')}</div>}
                       </div>
                     </div>
                   );
@@ -152,6 +160,19 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
               )}
             </Section>
 
+            <Section title={t('输出风格')}>
+              <Select value={draft.outputStyle ?? 'default'} onChange={(v) => set({ outputStyle: v })} className="w-240"
+                options={(styles.some((s) => s.name === (draft.outputStyle ?? 'default')) ? styles : [...styles, { name: draft.outputStyle ?? '', description: t('（找不到这个风格的文件）'), source: 'global' as const }])
+                  .map((s) => ({ value: s.name, label: s.name === 'default' ? t('默认') : s.name, desc: s.source === 'builtin' ? t(s.description) : `${s.description}${s.description ? ' · ' : ''}${s.source === 'global' ? '~/.claude/output-styles' : '.claude/output-styles'}` }))} />
+              <div className="hint" style={{ marginTop: 6 }}>{t('改变 Claude 回答的写法：解释型会边做边讲取舍，学习型会留一些代码让你自己写。自定义风格放在 output-styles 文件夹里。')}</div>
+            </Section>
+
+            <Section title={t('计划模式补充说明')}>
+              <textarea className="textarea" style={{ width: '100%' }} rows={3} value={draft.planInstructions ?? ''} onChange={(e) => set({ planInstructions: e.target.value })}
+                placeholder={t('例如：计划里写清楚要改的文件、测试方案和回滚方式')} />
+              <div className="hint" style={{ marginTop: 4 }}>{t('进入规划模式时代替默认的规划要求交给 Claude；留空用 Claude Code 默认的。')}</div>
+            </Section>
+
             <Section title={t('回复语言')}>
               <Seg value={draft.responseLanguage} onChange={(v) => set({ responseLanguage: v })} items={[
                 { value: 'ui', label: t('跟随界面语言') }, { value: 'conversation', label: t('跟随对话') }, { value: 'zh-CN', label: '简体中文' }, { value: 'en', label: 'English' },
@@ -166,7 +187,14 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
               </div>
             </Section>
       </div>
-      {dirty && <SaveBar onDiscard={() => setDraft(saved)} onSave={() => { app.saveProfile(draft); app.toast(t('已保存「默认」'), 'good'); }} />}
+      {dirty && <SaveBar onDiscard={() => setDraft(saved)} onSave={() => { app.saveProfile(draft); app.toast(t('已保存「默认」'), 'good'); setJustSaved(true); }} />}
+      {!dirty && justSaved && running > 0 && (
+        <div className="modal-foot" style={{ position: 'sticky', bottom: 0, background: 'var(--surface)', borderRadius: '0 0 10px 10px' }}>
+          <div className="left hint"><Icon name="info" size={14} /> {t('改动对新会话生效。{n} 个运行中的会话要重新启动 Claude Code 才会用上（对话会接着进行）。', { n: running })}</div>
+          <Button onClick={() => setJustSaved(false)}>{t('以后再说')}</Button>
+          <Button variant="primary" onClick={() => api.applyProfileToRunning().then((n) => { setJustSaved(false); app.toast(t('{n} 个会话会在空闲时重新启动', { n }), 'good'); })}>{t('应用到运行中的会话')}</Button>
+        </div>
+      )}
     </div>
   );
 }

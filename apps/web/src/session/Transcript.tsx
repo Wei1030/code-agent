@@ -12,6 +12,8 @@ import { useT } from '../lib/i18n';
 import { ReviewCard } from './Review';
 import { BoardLink, linkify } from '../components/BoardLink';
 import { Markdown } from '../components/Markdown';
+import { openPreview } from '../lib/preview';
+import { highlightLines, languageOf } from '../lib/highlight';
 
 const TOOL_ICON: Record<string, string> = {
   Bash: 'terminal', PowerShell: 'terminal', Read: 'file', Write: 'file', Edit: 'pencil', Grep: 'search', Glob: 'search',
@@ -71,7 +73,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
     case 'tool':
       return <ToolCard tool={it} sid={rt.id} />;
     case 'toolgroup':
-      return <ToolGroup label={it.label} tools={it.tools} />;
+      return <ToolGroup label={it.label} tools={it.tools} sid={rt.id} />;
     case 'plan':
       return <PlanCard plan={it.plan} version={it.version} status={it.status} />;
     case 'footer':
@@ -229,10 +231,12 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
       <div className="thead" onClick={() => hasBody && setOpen(!open)}>
         <Icon name={TOOL_ICON[tool.tool] ?? 'plug'} size={15} className="ink2" />
         <span className="name">{tool.tool.startsWith('mcp__') ? tool.tool.split('__').slice(1).join(' · ') : tool.tool}</span>
-        <span className="detail" title={tool.detail}>{tool.detail}</span>
+        {tool.file
+          ? <span className="detail link" title={t('在右侧预览这个文件')} onClick={(e) => { e.stopPropagation(); openPreview(sid, tool.file!); }}>{tool.detail}</span>
+          : <span className="detail" title={tool.detail}>{tool.detail}</span>}
         {tool.background && <Chip tone="accent" icon="layers">{t('后台运行')}</Chip>}
-        {tool.provenance && tool.status !== 'waiting' && <Chip icon="shield" title={t('这次调用为什么被执行 / 拒绝')}>{tool.provenance}</Chip>}
-        {tool.right && <span className="right">{tool.right}</span>}
+        {tool.provenance && tool.status !== 'waiting' && <Chip icon="shield" title={t('这次调用为什么被执行 / 拒绝')}>{t(tool.provenance)}</Chip>}
+        {tool.right && <span className="right">{t(tool.right)}</span>}
         <StatusIcon status={tool.status} />
         {hasBody && <Icon name={open ? 'chevUp' : 'chevDown'} size={14} className="muted" />}
       </div>
@@ -260,11 +264,9 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
             </>
           )}
           {tool.output?.type === 'diff' && (
-            <div className="diff">
-              {tool.output.lines.map((l, i) => <div key={i} className={l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}>{l}</div>)}
-            </div>
+            <DiffLines lines={tool.output.lines} lang={languageOf(tool.file?.path ?? tool.detail)} />
           )}
-          {tool.output?.type === 'code' && <pre className="code-block">{tool.output.lines.join('\n')}</pre>}
+          {tool.output?.type === 'code' && <pre className="code-block" dangerouslySetInnerHTML={{ __html: highlightLines(tool.output.lines.join('\n'), languageOf(tool.file?.path)).join('\n') }} />}
           {tool.output?.type === 'text' && <div className="ink2">{tool.output.text}</div>}
           {!!tool.rows?.length && (
             <div className="nested">
@@ -295,13 +297,27 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
   );
 }
 
-function ToolGroup({ label, tools }: { label: string; tools: ToolItem[] }) {
+/** A diff with each line coloured by the file's language (the +/- marker stays plain). */
+export function DiffLines({ lines, lang, style }: { lines: string[]; lang?: string; style?: React.CSSProperties }) {
+  const marks = lines.map((l) => (l.startsWith('@@') ? '' : l[0] === '+' || l[0] === '-' || l[0] === ' ' ? l[0] : ''));
+  const code = highlightLines(lines.map((l, i) => (l.startsWith('@@') ? '' : marks[i] ? l.slice(1) : l)).join('\n'), lang);
+  return (
+    <div className="diff" style={style}>
+      {lines.map((l, i) => l.startsWith('@@')
+        ? <div key={i} className="hunk">{l}</div>
+        : <div key={i} className={l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}>{marks[i]}<span dangerouslySetInnerHTML={{ __html: code[i] }} /></div>)}
+    </div>
+  );
+}
+
+function ToolGroup({ label, tools, sid }: { label: string; tools: ToolItem[]; sid: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <div className="tgroup">
       <div className="tgroup-head" onClick={() => setOpen(!open)}>
         <Icon name="list" size={15} />
-        <span className="grow">{label || '…'}</span>
+        <span className="grow">{label ? t(label) : '…'}</span>
         <Icon name={open ? 'chevUp' : 'chevRight'} size={14} className="muted" />
       </div>
       {open && (
@@ -310,7 +326,9 @@ function ToolGroup({ label, tools }: { label: string; tools: ToolItem[] }) {
             <div key={x.id} className="tgroup-row">
               <Icon name={TOOL_ICON[x.tool] ?? 'plug'} size={13} className="ink2" />
               <b>{x.tool}</b>
-              <span className="d">{x.detail}</span>
+              {x.file
+                ? <span className="d link" onClick={() => openPreview(sid, x.file!)}>{x.detail}</span>
+                : <span className="d">{x.detail}</span>}
               {x.right && <span className="muted">{x.right}</span>}
               <Icon name="check" size={13} className="st-ok" />
             </div>

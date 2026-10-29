@@ -348,3 +348,28 @@
 .md table { border-collapse: collapse; font-size: 13px; }
 .md th, .md td { border: 1px solid var(--border); padding: 5px 9px; vertical-align: top; }
 .md th { background: var(--surface-3); font-weight: 600; }
+
+/* File paths on tool cards open the file preview. */
+.tcard .detail.link, .tgroup-row .d.link { cursor: pointer; }
+.tcard .detail.link:hover, .tgroup-row .d.link:hover { color: var(--accent); text-decoration: underline; }
+
+/* Syntax colours (highlight.js classes) for code blocks, diffs and the file preview. */
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-literal { color: #8a3ffc; }
+.hljs-string, .hljs-regexp, .hljs-char.escape_ { color: #0b7a3e; }
+.hljs-number, .hljs-symbol, .hljs-bullet { color: #b35900; }
+.hljs-title, .hljs-title.function_, .hljs-section { color: #1f5bd6; }
+.hljs-type, .hljs-title.class_ { color: #0f7b8a; }
+.hljs-attr, .hljs-attribute, .hljs-property, .hljs-variable, .hljs-template-variable, .hljs-params { color: #b8325a; }
+.hljs-comment, .hljs-quote { color: #8a8f98; font-style: italic; }
+.hljs-meta, .hljs-doctag { color: #6b7280; }
+.hljs-tag, .hljs-name, .hljs-selector-class, .hljs-selector-id { color: #1f5bd6; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+/* Inspector 文件: the file with line numbers, the lines Claude read marked. */
+.file-view { font-size: 12px; line-height: 1.6; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); overflow: auto; padding: 6px 0; }
+.file-view .fl { display: flex; min-width: max-content; }
+.file-view .fl.mark { background: rgba(59, 91, 219, .09); }
+.file-view .ln { width: 44px; flex: none; text-align: right; padding-right: 10px; color: var(--muted); user-select: none; }
+.file-view .lc { white-space: pre; padding-right: 12px; }
+.log-tail { margin: 0; font: 11.5px/1.55 var(--mono, ui-monospace, Consolas, monospace); background: #1f2430; color: #e6e8ef; border-radius: 8px; padding: 10px; white-space: pre-wrap; word-break: break-all; max-height: 70vh; overflow: auto; }

@@ -77,7 +77,7 @@ export function SessionPage() {
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
             {sum.waiting && <WaitingBar sid={id} />}
             {rt.readOnly ? (
-              !sum.waiting && <ReadOnlyBar sid={id} model={rt.model} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />
+              !sum.waiting && <ReadOnlyBar sid={id} model={rt.model} worktreeGone={!!sum.worktreeGone} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />
@@ -229,7 +229,7 @@ function StatusLine({ rt }: { rt: SessionRuntime }) {
     if (rt.state === 'requires_action') return <div className="status-line" style={{ color: 'var(--warn-ink)' }}><Icon name="bell" size={14} />{t('等你处理下面的请求')}</div>;
     return null;
   }
-  if (s.kind === 'working') return <div className="status-line"><span className="spinner" />{s.label}</div>;
+  if (s.kind === 'working') return <div className="status-line"><span className="spinner" />{t(s.label)}</div>;
   if (s.kind === 'compacting') return <div className="status-line"><span className="spinner" />{t('正在压缩对话… {p}%', { p: s.progress })}</div>;
   return (
     <div className="status-line" style={{ color: 'var(--warn-ink)' }}>

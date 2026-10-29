@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon';
 import { Radio, Toggle } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { cx } from '../../lib/util';
-import { useT } from '../../lib/i18n';
+import { resolveLocale, useT } from '../../lib/i18n';
 import { Section } from './SettingsLayout';
 
 export function Language() {
@@ -12,9 +12,9 @@ export function Language() {
   const setPrefs = useApp((s) => s.setPrefs);
 
   const ui = [
-    { value: 'auto' as const, label: t('跟随浏览器'), d: t('目前解析为简体中文') },
-    { value: 'zh-CN' as const, label: '简体中文', d: '' },
-    { value: 'en' as const, label: 'English', d: t('交互定稿后补齐翻译'), disabled: true },
+    { value: 'auto' as const, label: t('跟随浏览器'), d: resolveLocale('auto') === 'en' ? t('目前解析为 English') : t('目前解析为简体中文'), disabled: false },
+    { value: 'zh-CN' as const, label: '简体中文', d: '', disabled: false },
+    { value: 'en' as const, label: 'English', d: t('服务端生成的部分提示仍是中文'), disabled: false },
   ];
   const reply = [
     { value: 'ui' as const, label: t('跟随界面语言'), d: t('通过 Claude Code 的 language 设置告诉 Claude') },

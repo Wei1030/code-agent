@@ -178,7 +178,7 @@ function LanguageButton() {
   const opts: Array<{ v: 'auto' | 'zh-CN' | 'en'; label: string; disabled?: boolean; hint?: string }> = [
     { v: 'auto', label: t('跟随浏览器') },
     { v: 'zh-CN', label: '简体中文' },
-    { v: 'en', label: 'English', disabled: true, hint: t('交互定稿后补齐翻译') },
+    { v: 'en', label: 'English' },
   ];
   return (
     <>

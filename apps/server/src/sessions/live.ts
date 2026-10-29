@@ -4,6 +4,7 @@
  * what the UI shows); approvals, questions, plans and MCP elicitations wait for the user.
  */
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type {
@@ -191,6 +192,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   const sum = summary(sid);
   const r = rt(sid);
   if (!sum || !r) throw new Error(`no session ${sid}`);
+  if (sum.cwd && !existsSync(sum.cwd)) throw new Error(sum.worktreeGone ? '这个会话的工作树已经删除，无法再恢复；对话记录仍可查看。' : `会话的工作目录不存在：${sum.cwd}`);
   if (!isClaudeModel(r.model) && !app.models.some((m) => m.id === r.model)) {
     // The model (or its endpoint) was deleted since: carry on with the default model.
     const next = defaultModel();
@@ -219,8 +221,13 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   emit(sid, { t: 'status', status: { kind: 'working', label: '正在启动 Claude Code…' } });
   emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] Claude Code 启动中（${so.resume ? '恢复会话' : '新会话'}，工作目录 ${opts.cwd}）` });
   void pump(l).finally(() => endedResolve());
+  const starts = (r.info?.starts ?? 0) + 1;
+  emit(sid, { t: 'settings', patch: { info: { ...r.info, startedAt: Date.now(), starts } } });
   l.ready = q.initializationResult().then((init) => {
     l.commands = init.commands ?? [];
+    const pid = (init as { pid?: number }).pid;
+    if (pid) emit(sid, { t: 'settings', patch: { info: { ...rt(sid)?.info, pid } } });
+    void q.supportedAgents().then((list) => import('../ext/agents').then((m) => m.noteAgents(list))).catch(() => undefined);
     raw(sid, 'control_response/initialize', `Claude Code ${init.claude_code_version ?? ''} · ${l.commands.length} 个命令`, { claude_code_version: init.claude_code_version, pid: (init as { pid?: number }).pid, models: init.models?.length });
     // Only a process on the Claude subscription knows the login and Claude's models.
     if (isClaudeModel(l.model)) void import('../provider').then((m) => m.noteInit(init));
@@ -668,6 +675,13 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
     item.background = !!input.run_in_background;
   }
   if ((name === 'Bash' || name === 'PowerShell') && input.run_in_background) item.background = true;
+  // File tools link to the file preview, Read with the lines it read.
+  const fp = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : undefined;
+  if (fp && FILE_TOOLS.has(name)) {
+    const from = typeof input.offset === 'number' && input.offset > 0 ? input.offset : undefined;
+    const lim = typeof input.limit === 'number' ? input.limit : undefined;
+    item.file = { path: fp, ...(from || lim ? { from: from ?? 1, to: (from ?? 1) + (lim ?? 2000) - 1 } : {}) };
+  }
   for (const d of decorators) d(sid, name, input, item);
   // Consecutive read-only calls share one group, and so do consecutive task-list updates.
   const key = groupKey(name);
@@ -698,6 +712,7 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
   addItem(sid, item);
 }
 
+const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 type GroupKey = 'read' | 'tasks';
 const TASK_TOOLS = new Set(['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList', 'TodoWrite']);
 const groupKey = (tool: string): GroupKey | null => (READ_ONLY.has(tool) ? 'read' : TASK_TOOLS.has(tool) ? 'tasks' : null);
@@ -894,6 +909,10 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const tools = (m.tools as string[] | undefined)?.length ?? 0;
       const mcp = (m.mcp_servers as Array<{ name: string; status: string }> | undefined) ?? [];
       raw(sid, 'system/init', `${String(m.model)} · ${tools} 个工具 · ${mcp.length} 个 MCP · ${String(m.permissionMode)}`, m);
+      emit(sid, { t: 'settings', patch: { info: {
+        ...rt(sid)?.info, version: String(m.claude_code_version ?? ''), cwd: String(m.cwd ?? ''), apiModel: String(m.model ?? ''),
+        outputStyle: String(m.output_style ?? ''), tools, agents: (m.agents as string[] | undefined) ?? [], mcp: mcp.map((x) => ({ name: x.name, status: x.status })),
+      } } });
       emit(sid, { t: 'context', context: { ...rt(sid)!.context, model: String(m.model ?? '') } });
       return;
     }

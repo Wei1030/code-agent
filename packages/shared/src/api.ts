@@ -1,7 +1,7 @@
 /** The operations the server offers the UI (called over the WebSocket). */
 import type {
-  ApprovalAnswer, Attachment, BoardItem, BoardKind, BoardSource, CommandInfo, Effort, ElicitationAnswer, PermissionMode, PlanAnswer,
-  QuestionAnswer, QueuedMessage, SessionRef, SessionRuntime, AppSlices, Workspace,
+  AgentFile, ApprovalAnswer, Attachment, BoardItem, BoardKind, BoardSource, CommandInfo, Effort, ElicitationAnswer, PermissionMode, PlanAnswer,
+  InstructionFile, OutputStyle, QuestionAnswer, QueuedMessage, SessionRef, SessionRuntime, AppSlices, Workspace, WorktreeInfo,
 } from './types';
 import type { FsNode } from './catalog';
 
@@ -124,7 +124,31 @@ export interface ServerApi {
   setMcpHeader(id: string, key: string, value: string): void;
   refreshExtensions(): void;
   /** Reload skills or plugins in running sessions; resolves with how many. */
-  reloadInSessions(kind: 'skills' | 'plugins', workspaceId?: string): number;
+  reloadInSessions(kind: 'skills' | 'plugins' | 'agents', workspaceId?: string): number;
+
+  /** Subagent files: create or change (by id), delete, switch on or off. */
+  saveAgent(a: Pick<AgentFile, 'name' | 'description' | 'tools' | 'model' | 'prompt'> & { id?: string; workspaceId?: string }): AgentFile;
+  deleteAgent(id: string): void;
+  setAgentEnabled(id: string, on: boolean): void;
+
+  /** CLAUDE.md files, rules and auto memory of a workspace (null: only the ones for all workspaces). */
+  listInstructions(workspaceId: string | null): InstructionFile[];
+  readInstruction(id: string): string;
+  /** Writes the file, creating it (and its folder) when missing. */
+  writeInstruction(id: string, content: string): void;
+
+  /** A file of the session's working directories, for the preview. */
+  readWorkspaceFile(sid: string, path: string): { path: string; content: string; lines: number; truncated: boolean; binary: boolean };
+
+  listWorktrees(): WorktreeInfo[];
+  /** Removes the worktree; its branch too when it is merged. Sessions in it are saved first. */
+  removeWorktree(path: string): { branchDeleted: boolean };
+
+  outputStyles(workspaceId?: string): OutputStyle[];
+  /** The end of a session's debug log (when 保存调试日志 is on). */
+  debugLog(sid: string): { path: string; exists: boolean; tail: string };
+  /** Restart the running sessions (once each is idle) so they pick up the 默认 profile; returns how many. */
+  applyProfileToRunning(): number;
 }
 
 /** What the UI holds: every method returns a promise. */

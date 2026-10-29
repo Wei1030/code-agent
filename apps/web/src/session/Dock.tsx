@@ -9,6 +9,8 @@ import { api } from '../api';
 import { useApp } from '../store/app';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
+import { languageOf } from '../lib/highlight';
+import { DiffLines } from './Transcript';
 
 function useSince(since: number) {
   const [, setN] = useState(0);
@@ -101,11 +103,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
             <Chip tone="warn">{t('工作区外')}</Chip>
           </div>
         )}
-        {req.diff && (
-          <div className="diff">
-            {req.diff.lines.map((l, i) => <div key={i} className={l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : ''}>{l}</div>)}
-          </div>
-        )}
+        {req.diff && <DiffLines lines={req.diff.lines} lang={languageOf(req.diff.path)} />}
         <div className={cx('opt', choice === 'once' && 'on')} onClick={() => setChoice('once')}>
           <div className="opt-row"><Radio on={choice === 'once'} onChange={() => setChoice('once')} /><span className="grow">{t('仅允许这一次')}</span></div>
         </div>
@@ -289,13 +287,21 @@ export function WaitingBar({ sid }: { sid: string }) {
   );
 }
 
-export function ReadOnlyBar({ sid, model, onFork }: { sid: string; model: string; onFork: () => void }) {
+export function ReadOnlyBar({ sid, model, worktreeGone, onFork }: { sid: string; model: string; worktreeGone?: boolean; onFork: () => void }) {
   const t = useT();
   const models = useApp((s) => s.models);
   const fallback = useApp((s) => (s.profiles.find((p) => p.isDefault) ?? s.profiles[0])?.model ?? '');
   const gone = !models.some((m) => m.id === model);
   const [pick, setPick] = useState('');
   const chosen = pick || (models.some((m) => m.id === fallback) ? fallback : models[0]?.id ?? '');
+  if (worktreeGone) {
+    return (
+      <div className="readonly-bar">
+        <Icon name="lock" size={16} className="muted" />
+        <span className="grow">{t('这个会话的工作树已经删除，Claude Code 无法再恢复它；对话记录仍可查看。')}</span>
+      </div>
+    );
+  }
   return (
     <div className="readonly-bar">
       <Icon name="lock" size={16} className="muted" />

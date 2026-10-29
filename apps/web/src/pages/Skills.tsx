@@ -1,6 +1,6 @@
 /** P16 — skills, slash commands and plugins available in a workspace. */
 import { useMemo, useState } from 'react';
-import type { CommandFile, PluginInfo, SkillInfo } from '../api/types';
+import type { AgentFile, CommandFile, PluginInfo, SkillInfo } from '../api/types';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Modal, Seg, Select, Status, Tabs, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
@@ -35,7 +35,7 @@ export function Skills() {
   const t = useT();
   const app = useApp();
   const [wsId, setWsId] = useWorkspaceChoice();
-  const [tab, setTab] = useState<'skills' | 'commands' | 'plugins'>('skills');
+  const [tab, setTab] = useState<'skills' | 'commands' | 'plugins' | 'agents'>('skills');
   const ws = app.workspaces.find((w) => w.id === wsId);
   const skills = app.skills.filter((s) => s.source !== 'workspace' || s.workspaceId === wsId);
   const commandFiles = app.commandFiles.filter((c) => c.source !== 'workspace' || c.workspaceId === wsId);
@@ -62,11 +62,13 @@ export function Skills() {
           { value: 'skills', label: t('技能'), count: skills.length },
           { value: 'commands', label: t('命令'), count: commandCount },
           { value: 'plugins', label: t('插件'), count: app.plugins.length },
+          { value: 'agents', label: t('子代理'), count: app.agents.filter((a) => a.source !== 'workspace' || a.workspaceId === wsId).length },
         ]} />
         <div style={{ marginTop: 16 }}>
           {tab === 'skills' && <SkillsTab skills={skills} wsId={wsId} wsName={ws?.name ?? ''} />}
           {tab === 'commands' && <CommandsTab files={commandFiles} skills={skills} prompts={mcpPrompts} wsId={wsId} wsName={ws?.name ?? ''} />}
           {tab === 'plugins' && <PluginsTab />}
+          {tab === 'agents' && <AgentsTab wsId={wsId} wsName={ws?.name ?? ''} />}
         </div>
       </div>
     </div>
@@ -337,5 +339,114 @@ function PluginsTab() {
         <Button icon="plus" disabled={!path.trim()} onClick={add}>{t('添加插件文件夹')}</Button>
       </div>
     </>
+  );
+}
+
+const AGENT_SOURCE: Record<AgentFile['source'], string> = { workspace: '这个工作区（随仓库）', global: '所有工作区', plugin: '插件', builtin: '内置' };
+const AGENT_TOOLS = ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch', 'NotebookEdit', 'TaskCreate'];
+
+/** Subagents Claude can hand work to: list by location, switch on or off, edit their files. */
+function AgentsTab({ wsId, wsName }: { wsId: string; wsName: string }) {
+  const t = useT();
+  const app = useApp();
+  const agents = app.agents.filter((a) => a.source !== 'workspace' || a.workspaceId === wsId);
+  const [selId, setSelId] = useState(agents.find((a) => a.source !== 'builtin')?.id ?? agents[0]?.id ?? '');
+  const [creating, setCreating] = useState<null | 'workspace' | 'global'>(null);
+  const sel = creating ? null : agents.find((a) => a.id === selId) ?? agents[0];
+  const groups = (['workspace', 'global', 'plugin', 'builtin'] as const).map((src) => ({ src, items: agents.filter((a) => a.source === src) }));
+  const live = app.sessions.filter((s) => s.live && !s.draft).length;
+  return (
+    <div className="ext-layout" style={{ gridTemplateColumns: '380px minmax(0, 1fr)' }}>
+      <div>
+        <div className="ext-list">
+          {groups.filter((g) => g.items.length || g.src === 'global' || (g.src === 'workspace' && wsId)).map((g) => (
+            <div key={g.src}>
+              <h5>{g.src === 'workspace' ? wsName : t(AGENT_SOURCE[g.src])}{g.src === 'workspace' && <span className="mono" style={{ fontWeight: 400 }}> .claude/agents</span>}{g.src === 'global' && <span className="mono" style={{ fontWeight: 400 }}> ~/.claude/agents</span>}</h5>
+              {!g.items.length && <div className="ext-item"><div className="sub">{g.src === 'workspace' ? t('还没有。放在这里的子代理随仓库提交，团队共用。') : t('还没有。')}</div></div>}
+              {g.items.map((a) => (
+                <div key={a.id} className={cx('ext-item', a.id === sel?.id && 'on')} onClick={() => { setCreating(null); setSelId(a.id); }}>
+                  <div className="top">
+                    <b className="mono" style={{ fontSize: 13 }}>{a.name}</b>
+                    {a.plugin && <Chip>{a.plugin}</Chip>}
+                    <span className="grow" />
+                    <span onClick={(e) => e.stopPropagation()}><Toggle on={a.enabled} onChange={(v) => api.setAgentEnabled(a.id, v)} /></span>
+                  </div>
+                  <div className="sub truncate" style={{ display: 'block' }}>{a.description || t('（没有说明）')}</div>
+                  <div className="sub">{a.tools.length ? t('工具 {n} 个', { n: a.tools.length }) : t('工具跟随会话')} · {a.model === 'inherit' ? t('模型跟随会话') : a.model}</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="row" style={{ gap: 8, marginTop: 10 }}>
+          {wsId && <Button icon="plus" className="grow" onClick={() => setCreating('workspace')}>{t('新建（这个工作区）')}</Button>}
+          <Button icon="plus" className="grow" onClick={() => setCreating('global')}>{t('新建（所有工作区）')}</Button>
+        </div>
+        <div className="hint" style={{ marginTop: 8, lineHeight: 1.6 }}>{t('Claude 按「什么时候用」决定把哪些工作交给哪个子代理，你也可以直接点名让它用。关掉后新会话里 Claude 不能再用它。')}</div>
+        {live > 0 && <Button size="sm" icon="refresh" style={{ marginTop: 10 }} onClick={() => api.reloadInSessions('agents').then((n) => app.toast(t('已在 {n} 个运行中的会话里重新加载', { n }), 'good'))}>{t('在运行中的会话里重新加载（{n}）', { n: live })}</Button>}
+      </div>
+      {creating ? <AgentEditor key={`new-${creating}`} wsId={creating === 'workspace' ? wsId : undefined} onSaved={(a) => { setCreating(null); setSelId(a.id); }} />
+        : sel ? <AgentEditor key={sel.id} agent={sel} onSaved={(a) => setSelId(a.id)} /> : <div />}
+    </div>
+  );
+}
+
+function AgentEditor({ agent, wsId, onSaved }: { agent?: AgentFile; wsId?: string; onSaved: (a: AgentFile) => void }) {
+  const t = useT();
+  const app = useApp();
+  const readOnly = agent?.source === 'builtin' || agent?.source === 'plugin';
+  const init = { name: agent?.name ?? '', description: agent?.description ?? '', tools: agent?.tools ?? [], model: agent?.model ?? 'inherit', prompt: agent?.prompt ?? '' };
+  const [d, setD] = useState(init);
+  const dirty = JSON.stringify(d) !== JSON.stringify(init);
+  const set = (p: Partial<typeof d>) => setD({ ...d, ...p });
+  const problems = [
+    !/^[A-Za-z0-9][\w-]*$/.test(d.name) && t('名称只能用字母、数字、- 和 _'),
+    !d.description.trim() && t('写一句什么时候用：Claude 靠它决定交不交给这个子代理'),
+  ].filter(Boolean) as string[];
+  const save = () => api.saveAgent({ ...d, id: agent?.id, workspaceId: wsId }).then((a) => { app.toast(t('已保存子代理 {n}', { n: a.name }), 'good'); onSaved(a); });
+  const remove = () => agent && app.ask({
+    title: t('删除子代理 {n}？', { n: agent.name }), body: t('会删除文件 {p}。', { p: agent.path }), confirmLabel: t('删除'), danger: true,
+    onConfirm: () => api.deleteAgent(agent.id).then(() => app.toast(t('已删除'), 'good')),
+  });
+  const models = [{ value: 'inherit', label: t('跟随会话') }, { value: 'opus', label: 'opus' }, { value: 'sonnet', label: 'sonnet' }, { value: 'haiku', label: 'haiku' }];
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h3 className="mono">{agent?.name ?? t('新子代理')}</h3>
+        <span className="sub">{agent ? agent.path : wsId ? '.claude/agents/' : '~/.claude/agents/'}</span>
+        <span className="grow" />
+        {agent && !readOnly && <Button size="sm" variant="ghost" onClick={remove}>{t('删除')}</Button>}
+      </div>
+      <div className="panel-body col" style={{ gap: 12 }}>
+        {readOnly && <div className="banner-info"><Icon name="info" size={15} />{agent?.source === 'builtin' ? t('Claude Code 自带的子代理，只能开关，不能修改。') : t('插件里的子代理，只能开关；要修改请改插件。')}</div>}
+        <div className="form-grid">
+          <Field label={t('名称')}><input className="input mono" value={d.name} disabled={readOnly || !!agent} onChange={(e) => set({ name: e.target.value })} placeholder="test-writer" /></Field>
+          <Field label={t('模型')}><Select value={d.model} onChange={(v) => set({ model: v })} options={models.some((m) => m.value === d.model) ? models : [...models, { value: d.model, label: d.model }]} /></Field>
+        </div>
+        <Field label={t('什么时候用')} hint={t('Claude 据此判断要不要把工作交给它')}><input className="input" value={d.description} disabled={readOnly} onChange={(e) => set({ description: e.target.value })} placeholder={t('例如：为指定模块补测试；只写 test/ 下的文件')} /></Field>
+        <Field label={t('可以使用的工具')} hint={t('都不勾表示和会话一样')}>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {AGENT_TOOLS.map((tool) => (
+              <span key={tool} style={{ cursor: readOnly ? 'default' : 'pointer' }}
+                onClick={readOnly ? undefined : () => set({ tools: d.tools.includes(tool) ? d.tools.filter((x) => x !== tool) : [...d.tools, tool] })}>
+                <Chip mono tone={d.tools.includes(tool) ? 'accent' : 'outline'}>{tool}</Chip>
+              </span>
+            ))}
+          </div>
+        </Field>
+        {!readOnly && (
+          <Field label={t('说明（子代理的系统提示词）')}>
+            <textarea className="editor" rows={10} value={d.prompt} onChange={(e) => set({ prompt: e.target.value })} placeholder={t('它是谁、怎么做、做完交回什么')} />
+          </Field>
+        )}
+        {!readOnly && problems.length > 0 && dirty && <div className="hint" style={{ color: 'var(--warn-ink)' }}>{problems.join('；')}</div>}
+        {!readOnly && (
+          <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+            {agent && <Button size="sm" disabled={!dirty} onClick={() => setD(init)}>{t('还原')}</Button>}
+            <Button size="sm" variant="primary" disabled={!dirty || problems.length > 0} onClick={save}>{agent ? t('保存') : t('创建')}</Button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

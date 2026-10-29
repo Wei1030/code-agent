@@ -9,6 +9,7 @@ import { app } from '../state';
 import { LOGS_DIR } from '../paths';
 import { systemClaude } from '../claude/files';
 import { envFor, reasoning, resolveModel } from '../models';
+import { deniedAgents } from '../ext/agents';
 import { rt, summary } from './registry';
 
 export interface BuildCtx {
@@ -103,6 +104,12 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
 
   const exe = app.provider.executable === 'system' ? systemClaude() : undefined;
   const mode = r.mode === 'bypassPermissions' && !prof.allowBypass ? 'default' : r.mode;
+  // Session-level settings: the profile's output style, and the subagents switched off.
+  const denied = deniedAgents();
+  const flags = {
+    ...(prof.outputStyle && prof.outputStyle !== 'default' ? { outputStyle: prof.outputStyle } : {}),
+    ...(denied.length ? { permissions: { deny: denied } } : {}),
+  };
 
   const options: Options = {
     cwd,
@@ -119,6 +126,8 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
     disallowedTools: disallowed,
     // Code Agent's own tools; their effects are guarded by Code Agent (holds, caps, read-only checks).
     allowedTools: ['mcp__workspace'],
+    ...(Object.keys(flags).length ? { settings: flags } : {}),
+    ...(prof.planInstructions?.trim() ? { planModeInstructions: prof.planInstructions.trim() } : {}),
     settingSources: sources,
     systemPrompt,
     additionalDirectories: dirs,

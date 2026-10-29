@@ -207,7 +207,7 @@ export function recheckPlugins() {
   if (JSON.stringify(checked) !== JSON.stringify(app.plugins)) set('plugins', checked);
 }
 
-async function reloadInSessions(kind: 'skills' | 'plugins', workspaceId?: string): Promise<number> {
+async function reloadInSessions(kind: 'skills' | 'plugins' | 'agents', workspaceId?: string): Promise<number> {
   let n = 0;
   for (const sid of liveIds()) {
     if (workspaceId && summary(sid)?.workspaceId !== workspaceId) continue;
@@ -215,6 +215,7 @@ async function reloadInSessions(kind: 'skills' | 'plugins', workspaceId?: string
     if (!l) continue;
     try {
       if (kind === 'skills') await l.q.reloadSkills();
+      // Agents come back with a plugin reload (its answer lists them).
       else await l.q.reloadPlugins({ addPlugins: app.plugins.filter((p) => p.enabled && p.status === 'loaded').map((p) => ({ type: 'local' as const, path: p.path })) });
       n += 1;
     } catch (e) {

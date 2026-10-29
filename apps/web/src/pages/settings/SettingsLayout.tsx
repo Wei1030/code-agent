@@ -8,6 +8,7 @@ const NAV = [
   { to: '/settings/general', label: '常规', icon: 'gear' },
   { to: '/settings/profiles', label: '配置方案', icon: 'layers' },
   { to: '/settings/permissions', label: '权限规则', icon: 'shield' },
+  { to: '/settings/instructions', label: '项目说明与记忆', icon: 'file' },
   { to: '/settings/collaboration', label: '会话协作', icon: 'link' },
   { to: '/settings/provider', label: '模型服务与账号', icon: 'key' },
   { to: '/settings/language', label: '语言与地区', icon: 'globe' },
@@ -25,9 +26,6 @@ export function SettingsLayout() {
             <span className="row"><Icon name={n.icon} size={15} />{t(n.label)}</span>
           </NavLink>
         ))}
-        <div className="hint" style={{ margin: '18px 12px 0', lineHeight: 1.6 }}>
-          {t('子代理和自定义工具将在后续版本中提供。')}
-        </div>
       </nav>
       <div className="settings-main"><Outlet /></div>
     </div>

@@ -31,6 +31,7 @@ function defaults(): AppSlices {
     mcp: [],
     mcpBehavior: { strict: false, toolSearch: 'auto', firstTurnWait: 30 },
     skills: [],
+    agents: [],
     commandFiles: [],
     plugins: [],
     hookRules: [],

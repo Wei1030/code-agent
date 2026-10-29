@@ -12,6 +12,7 @@ import { Provider } from './pages/settings/Provider';
 import { Language } from './pages/settings/Language';
 import { Collaboration } from './pages/settings/Collaboration';
 import { General } from './pages/settings/General';
+import { Instructions } from './pages/settings/Instructions';
 import { Board } from './pages/Board';
 import { Mcp } from './pages/Mcp';
 import { Skills } from './pages/Skills';
@@ -39,6 +40,7 @@ export function App() {
           <Route path="collaboration" element={<Collaboration />} />
           <Route path="provider" element={<Provider />} />
           <Route path="language" element={<Language />} />
+          <Route path="instructions" element={<Instructions />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

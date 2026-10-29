@@ -22,6 +22,9 @@ import { reloadRules } from './claude/permissions';
 import { reloadFileHooks } from './ext/hooks';
 import { probeMcp, reloadMcp } from './ext/mcp';
 import { recheckPlugins, reloadSkills } from './ext/skills';
+import { reloadAgents } from './ext/agents';
+import './ext/instructions';
+import './sessions/extras';
 import { startScheduler } from './ext/jobs';
 import './peer';
 import './review';
@@ -39,6 +42,7 @@ onHello(() => ({ t: 'hello', slices: app, sessions: allSummaries(), version: VER
 
 function reloadDisk() {
   reloadRules();
+  reloadAgents();
   reloadFileHooks();
   reloadMcp();
   reloadSkills();
