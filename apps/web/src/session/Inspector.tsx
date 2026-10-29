@@ -447,7 +447,7 @@ function InfoTab({ rt }: { rt: SessionRuntime }) {
         <Button size="sm" icon="copy" onClick={() => copy(rt.id, t('会话 ID'))}>{t('复制会话 ID')}</Button>
         <Button size="sm" icon="terminal" onClick={() => copy(`cd "${cwd}" && ${resume}`, t('命令'))}>{t('复制「在终端里继续」的命令')}</Button>
       </div>
-      <div className="hint" style={{ marginTop: 8, lineHeight: 1.6 }}>{t('在终端里运行 {c} 可以接着这段对话。先在这里保存会话，避免两边同时写同一段对话。', { c: resume })}</div>
+      <div className="hint" style={{ marginTop: 8, lineHeight: 1.6 }}>{t('在终端里运行 {c} 可以接着这段对话，回到这里打开它时会补上终端里新聊的内容。先在这里保存会话，避免两边同时写同一段对话。', { c: resume })}</div>
     </>
   );
 }

@@ -10,12 +10,26 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import type { Workspace } from '@code-agent/shared/types';
 import { app } from '../state';
 
+/** CLAUDE_CONFIG_DIR as Code Agent was started with: what the "environment variable" choice means. */
+export const ENV_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR;
+
 /** Claude Code's config directory as the provider settings choose it. */
 export function configDir(): string {
   const p = app.provider;
   if (p.configDir === 'custom' && p.customDir.trim()) return p.customDir.trim();
-  if (p.configDir === 'env' && process.env.CLAUDE_CONFIG_DIR) return process.env.CLAUDE_CONFIG_DIR;
+  if (p.configDir === 'env' && ENV_CONFIG_DIR) return ENV_CONFIG_DIR;
   return path.join(os.homedir(), '.claude');
+}
+
+/**
+ * The Agent SDK's session functions (list, read, rename, tag, fork, delete) run in this process and
+ * find Claude Code's transcripts through its CLAUDE_CONFIG_DIR, read at each call: keep it on the
+ * directory the provider settings choose.
+ */
+export function applyConfigDir() {
+  const dir = configDirEnv();
+  if (dir) process.env.CLAUDE_CONFIG_DIR = dir;
+  else delete process.env.CLAUDE_CONFIG_DIR;
 }
 
 /** Set CLAUDE_CONFIG_DIR for the Claude Code process only when it is not the default. */

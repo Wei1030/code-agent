@@ -164,7 +164,7 @@ function rejectHeld(id: string) {
   const toTitle = summary(env.to)?.title ?? '';
   patchPeer(env.from, env.toolId, { delivery: 'rejected' });
   addItem(env.from, { kind: 'notice', id: randomUUID(), tone: 'warn', text: `你没有放行发给「${toTitle}」的消息，Claude 会在下一轮知道这件事。` });
-  if (live(env.from)) addContext(env.from, { text: `[Code Agent] The user did not let your message to session "${toTitle}" (${env.to}) through. Do not resend it unless the user asks.`, hidden: true });
+  if (live(env.from)) addContext(env.from, { text: `The user did not let your message to session "${toTitle}" (${env.to}) through. Do not resend it unless the user asks.`, hidden: true });
 }
 
 // ------------------------------------------------------------------ create_session

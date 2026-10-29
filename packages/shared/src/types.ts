@@ -72,6 +72,8 @@ export interface SessionSummary {
   worktree?: string;
   /** Its worktree was removed: the session can be read but not resumed. */
   worktreeGone?: boolean;
+  /** When Claude Code's transcript last matched what Code Agent shows (its modification time). */
+  transcriptAt?: number;
   /** Working directory when it is not the workspace folder (the worktree's checkout). */
   cwd?: string;
   /** Messages from other sessions that arrived while the user was elsewhere. */

@@ -8,7 +8,7 @@ import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import type { ModelInfo, Provider } from '@code-agent/shared/types';
 import { app, onWrite, set } from './state';
-import { endpointKey, envCredentialVar, processEnv, setEndpointKey, systemClaude } from './claude/files';
+import { applyConfigDir, endpointKey, ENV_CONFIG_DIR, envCredentialVar, processEnv, setEndpointKey, systemClaude } from './claude/files';
 import { recordLimits } from './usage';
 import { register } from './hub';
 import { apiErrorText } from '@code-agent/shared/catalog';
@@ -40,7 +40,7 @@ export async function withProbe<T>(cwd: string, fn: (q: Query) => Promise<T>, ti
 /** What the server's own environment says about credentials and the config directory. */
 export function envFacts(ignoreEnvKey?: boolean) {
   const envVar = envCredentialVar();
-  return { envVar, envConflict: !!envVar && !ignoreEnvKey, envConfigDir: process.env.CLAUDE_CONFIG_DIR };
+  return { envVar, envConflict: !!envVar && !ignoreEnvKey, envConfigDir: ENV_CONFIG_DIR };
 }
 
 /** A Claude Code process on the Claude subscription started; it tells us the login and the models. */
@@ -178,10 +178,16 @@ onWrite('provider', (next, prev) => {
   set('provider', merged);
   refreshModels();
   void restartStale((model) => settingsOf(prev, model) !== settingsOf(merged, model));
+  if (merged.configDir !== prev.configDir || merged.customDir !== prev.customDir) {
+    applyConfigDir();
+    // Sessions in the folders' transcripts there.
+    void import('./sessions/history').then((h) => h.scanExternal());
+  }
   if (merged.configDir !== prev.configDir || merged.customDir !== prev.customDir || merged.executable !== prev.executable) void checkLogin();
 });
 
 set('provider', { ...app.provider, ...envFacts(app.provider.ignoreEnvKey), endpoints: (app.provider.endpoints ?? []).map((e) => ({ ...e, keySet: !!endpointKey(e.id) })) });
+applyConfigDir();
 refreshModels();
 
 register({

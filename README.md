@@ -20,7 +20,8 @@ On top of that it adds:
 - **Settings in one place**: permission rules, MCP servers, skills, commands, subagents, hooks,
   CLAUDE.md and memory files. They are Claude Code's own files, so changes show up in the `claude`
   CLI as well, and the other way round.
-- Sessions you started in the `claude` CLI are listed too, and you can carry on with them here.
+- Sessions you started in the `claude` CLI are listed too, and you can carry on with them here; when
+  you go on with a session in the CLI, the new turns show up the next time you open it here.
 
 The UI is in Simplified Chinese and English.
 
@@ -74,8 +75,8 @@ another one.
   from another computer, forward the port over SSH rather than exposing it.
 - Endpoint tokens stay in the local database and are never sent to the browser. A session on an
   endpoint never gets your Claude login.
-- Code Agent does not touch Claude Code's own session files, except that deleting a session in
-  Code Agent deletes its Claude Code transcript as well.
+- Code Agent writes to Claude Code's session files only when you rename, tag or delete a session;
+  deleting a session in Code Agent deletes its Claude Code transcript as well.
 
 ## Development
 

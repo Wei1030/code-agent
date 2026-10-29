@@ -189,6 +189,11 @@ export interface StartOptions {
 /** Start the session's Claude Code process. Resolves once it is initialized (or failed). */
 export async function startProcess(sid: string, so: StartOptions): Promise<void> {
   if (lives.has(sid)) return;
+  // Turns taken in the claude CLI since show before this process adds its own.
+  if (so.resume) {
+    await import('./history').then((h) => h.syncTranscript(sid));
+    if (lives.has(sid)) return;
+  }
   const sum = summary(sid);
   const r = rt(sid);
   if (!sum || !r) throw new Error(`no session ${sid}`);
@@ -376,11 +381,18 @@ export function steer(sid: string, m: Outgoing) {
   return id;
 }
 
+/**
+ * How context Code Agent adds without showing it starts (addContext with hidden): a transcript
+ * read back later knows it is not something the user wrote.
+ */
+export const CONTEXT_MARK = '[Code Agent]';
+
 /** Add a message to the conversation without starting a turn. */
 export function addContext(sid: string, m: Outgoing) {
   const l = lives.get(sid);
   if (!l) throw new Error('会话没有在运行');
   const id = randomUUID();
+  if (m.hidden && !m.text.startsWith(CONTEXT_MARK)) m = { ...m, text: `${CONTEXT_MARK} ${m.text}` };
   showUser(sid, m, id);
   l.input.push({ ...userMessage(m, id), shouldQuery: false });
 }

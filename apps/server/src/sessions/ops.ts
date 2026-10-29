@@ -200,7 +200,12 @@ register({
     upsert({ id, workspaceId, title: '新会话', firstPrompt: '', branch: ws.branch, createdAt: now, lastActive: now, tag: null, live: false, state: 'idle', forkedFrom: null, tokens: 0, draft: true });
     initRuntime(emptyRuntime(id, { model: validModel(prof.model), effort: prof.effort, mode: prof.mode }));
   },
-  openSession: async (sid) => rt(sid) ?? (await import('./history').then((h) => h.importTranscript(sid))) ?? null,
+  openSession: async (sid) => {
+    const h = await import('./history');
+    if (!rt(sid)) return (await h.importTranscript(sid)) ?? null;
+    await h.syncTranscript(sid);
+    return rt(sid) ?? null;
+  },
   send,
   updateQueued: (sid, id, p) => {
     const r = rt(sid);

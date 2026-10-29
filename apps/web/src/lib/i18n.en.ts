@@ -523,7 +523,6 @@ export const EN: Record<string, string> = {
   "在界面中询问我": "Ask me in the UI",
   "在等空位；现在发送的消息会排队，开始后依次处理 · Enter 发送 · Shift+Enter 换行": "Waiting for a free slot; messages sent now are queued and handled in order once it starts · Enter to send · Shift+Enter for a new line",
   "在终端里执行 Bash 命令": "Run Bash commands in the terminal",
-  "在终端里运行 {c} 可以接着这段对话。先在这里保存会话，避免两边同时写同一段对话。": "Run {c} in a terminal to continue this conversation. Save the session here first so both sides don't write to the same conversation at once.",
   "在输入框里输入 / 就能看到这些命令。命令文件放在 .claude/commands/ 或 ~/.claude/commands/，内容就是提示词。": "Type / in the input box to see these commands. Command files go in .claude/commands/ or ~/.claude/commands/; their content is the prompt.",
   "在运行中的会话里重新加载": "Reload in running sessions",
   "在运行中的会话里重新加载插件？": "Reload plugins in running sessions?",
@@ -1701,4 +1700,9 @@ export const EN: Record<string, string> = {
   "本轮有多次工具调用被拒绝": "Several tool calls were denied this turn",
   "请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」。Code Agent 不提供登录，也不读取你的凭据。": "Run claude in your own terminal and enter /login, then click \"Check again\". Code Agent offers no sign-in and does not read your credentials.",
   "请在你自己的终端运行 claude 并输入 /login，完成后点「重新检测」（{d}）。Code Agent 不提供登录，也不读取你的凭据。": "Run claude in your own terminal and enter /login, then click \"Check again\" ({d}). Code Agent offers no sign-in and does not read your credentials.",
+  "以下是在 Claude Code 里继续的内容": "Continued in Claude Code from here",
+  "以下是在 Claude Code 里继续的内容；对话在那里压缩过，压缩前的部分只剩摘要": "Continued in Claude Code from here; the conversation was compacted there, so what came before only lives on in a summary",
+  "在 Claude Code 里回退到「{0}」之后继续": "Went back in Claude Code to after \"{0}\" and continued from there",
+  "在终端里运行 {c} 可以接着这段对话，回到这里打开它时会补上终端里新聊的内容。先在这里保存会话，避免两边同时写同一段对话。": "Run {c} in a terminal to continue this conversation; when you open it here again, what was said in the terminal is added. Save the session here first so both sides don't write to the same conversation at once.",
+  "对话已压缩": "Conversation compacted",
 };
