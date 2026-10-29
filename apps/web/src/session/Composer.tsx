@@ -41,6 +41,31 @@ function flatten(tree: FsNode[], prefix = ''): string[] {
   });
 }
 
+/**
+ * Unsent input per session. It outlives the composer (other pages, a restart that briefly shows the
+ * session as saved); the text is also kept in localStorage, so a reload does not lose it.
+ */
+const drafts = new Map<string, { text: string; atts: Attachment[]; refs: SessionRef[] }>();
+const DRAFTS_KEY = 'code-agent.drafts';
+function storedText(sid: string): string {
+  try {
+    return (JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? '{}') as Record<string, string>)[sid] ?? '';
+  } catch {
+    return '';
+  }
+}
+function storeText(sid: string, text: string) {
+  try {
+    const all = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? '{}') as Record<string, string>;
+    if (text) all[sid] = text;
+    else delete all[sid];
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(all));
+  } catch {
+    // Storage full or blocked: the in-memory draft still holds.
+  }
+}
+
+/** The input of one session (SessionPage keys it by session, so its state is that session's). */
 export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   rt: SessionRuntime; workspaceId: string; disabled?: boolean; onInterrupt: (queued: number) => void;
 }) {
@@ -48,9 +73,9 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const sid = rt.id;
   const app = useApp();
   const profile = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
-  const [text, setText] = useState('');
-  const [atts, setAtts] = useState<Attachment[]>([]);
-  const [refs, setRefs] = useState<SessionRef[]>([]);
+  const [text, setText] = useState(() => drafts.get(sid)?.text ?? storedText(sid));
+  const [atts, setAtts] = useState<Attachment[]>(() => drafts.get(sid)?.atts ?? []);
+  const [refs, setRefs] = useState<SessionRef[]>(() => drafts.get(sid)?.refs ?? []);
   const [focus, setFocus] = useState(false);
   const [drag, setDrag] = useState(false);
   const [palette, setPalette] = useState<Palette>(null);
@@ -62,16 +87,10 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const running = rt.state !== 'idle';
   const waiting = !!app.sessions.find((s) => s.id === sid)?.waiting;
 
-  // Reset per session; drafts are kept per session in memory.
-  const drafts = useRef<Record<string, { text: string; atts: Attachment[] }>>({});
   useEffect(() => {
-    const d = drafts.current[sid];
-    setText(d?.text ?? '');
-    setAtts(d?.atts ?? []);
-    setRefs([]);
-    setPalette(null);
-    return () => { drafts.current[sid] = { text: ta.current?.value ?? '', atts: [] }; };
-  }, [sid]);
+    drafts.set(sid, { text, atts, refs });
+    storeText(sid, text);
+  }, [sid, text, atts, refs]);
 
   // Text pushed from elsewhere (fork-and-edit, "answer in your own words").
   const fill = app.fill;
@@ -237,7 +256,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
     setAtts([]);
     setRefs([]);
     setPalette(null);
-    drafts.current[sid] = { text: '', atts: [] };
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

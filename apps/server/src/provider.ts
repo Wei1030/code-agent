@@ -138,9 +138,8 @@ async function testModel(modelId: string): Promise<{ ok: boolean; message: strin
  * Running endpoint processes whose environment no longer holds (the endpoint is gone or moved, its
  * token or the model's thinking switch changed) restart with the new settings and carry on the
  * conversation; when the model itself is gone, the process ends and the session asks for another.
- * A process in a turn finishes the turn first.
+ * A busy session (a turn, a pending request, queued messages, background work) is left to finish first.
  */
-const stale = new Set<string>();
 const settingsOf = (p: Provider, model: string) => {
   const m = /^ep:([^:]+):([\s\S]+)$/.exec(model);
   const ep = m && p.endpoints.find((e) => e.id === m[1]);
@@ -159,18 +158,15 @@ async function restart(sid: string) {
   if (!gone) await startProcess(sid, { resume: true });
 }
 async function restartStale(changed: (model: string) => boolean) {
-  const { liveIds, inTurn } = await import('./sessions/live');
+  const { liveIds } = await import('./sessions/live');
   const { rt } = await import('./sessions/registry');
+  const { whenIdle } = await import('./sessions/slots');
   for (const sid of liveIds()) {
     const model = rt(sid)?.model;
     if (!model || isClaudeModel(model) || !changed(model)) continue;
-    if (inTurn(sid)) stale.add(sid);
-    else void restart(sid).catch((e) => console.error('[provider] restart failed:', e));
+    whenIdle(sid, () => void restart(sid).catch((e) => console.error('[provider] restart failed:', e)));
   }
 }
-void import('./sessions/live').then(({ onTurnEnd }) => onTurnEnd((sid) => {
-  if (stale.delete(sid)) void restart(sid).catch((e) => console.error('[provider] restart failed:', e));
-}));
 
 onWrite('provider', (next, prev) => {
   // "Ignore this variable" in the UI sets envConflict to false.

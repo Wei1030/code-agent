@@ -241,7 +241,9 @@ register({
     const l = live(sid);
     if (l && !oneProcess(r.model, model)) {
       // Another process environment: restart and pick the conversation up again.
-      if (inTurn(sid) || r.request) throw new Error('这一轮结束后才能换到这个模型');
+      // Restarting would cut short what is still going on.
+      if (inTurn(sid) || r.request || r.queue.length) throw new Error('这一轮结束后才能换到这个模型');
+      if (r.background.some((b) => b.status === 'running')) throw new Error('后台任务还在运行：等它们完成，或在「后台」里停止后，才能换到这个模型');
       emit(sid, { t: 'settings', patch: { model, effort } });
       addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'info', text: `已换到 ${info?.label ?? model}（${info?.desc ?? ''}），Claude Code 重新启动后接着这段对话。` });
       await closeProcess(sid);

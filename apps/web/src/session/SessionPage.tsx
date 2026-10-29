@@ -81,7 +81,7 @@ export function SessionPage() {
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />
-                <Composer rt={rt} workspaceId={sum.workspaceId} onInterrupt={(n) => setReceipt(n)} />
+                <Composer key={id} rt={rt} workspaceId={sum.workspaceId} onInterrupt={(n) => setReceipt(n)} />
               </>
             )}
           </div>

@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { app } from '../state';
 import { broadcast } from '../hub';
 import { addItem, allSummaries, emit, patchSummary, rt, summary } from './registry';
-import { closeProcess, inTurn, liveIds, onProcessEnd, onTurnEnd } from './live';
+import { closeProcess, inTurn, live, liveIds, onProcessEnd, onTurnEnd } from './live';
 
 interface Waiter {
   sid: string;
@@ -110,6 +110,34 @@ export function cancelWaiting(sid: string) {
     emit(sid, { t: 'queue', queue: [] });
     emit(sid, { t: 'settings', patch: { readOnly: true } });
   }
+}
+
+/**
+ * Run fn once the running session is idle (above): a restart for new settings must not cut a
+ * turn, a pending request, queued messages or background work short. A session saved meanwhile
+ * gets the new settings when it is resumed, so fn is dropped.
+ */
+const whenIdleFns = new Map<string, () => void>();
+let idleTimer: ReturnType<typeof setInterval> | null = null;
+export function whenIdle(sid: string, fn: () => void) {
+  if (isIdle(sid)) {
+    fn();
+    return;
+  }
+  whenIdleFns.set(sid, fn);
+  idleTimer ??= setInterval(() => {
+    for (const [id, f] of whenIdleFns) {
+      if (!live(id)) whenIdleFns.delete(id);
+      else if (isIdle(id)) {
+        whenIdleFns.delete(id);
+        f();
+      }
+    }
+    if (!whenIdleFns.size && idleTimer) {
+      clearInterval(idleTimer);
+      idleTimer = null;
+    }
+  }, 2000);
 }
 
 /** Sessions that may have become idle let waiting ones in. */

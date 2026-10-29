@@ -135,4 +135,14 @@ async function main() {
 process.on('unhandledRejection', (e) => console.error('[server] unhandled rejection:', e));
 process.on('uncaughtException', (e) => console.error('[server] uncaught exception:', e));
 
+// The SDK warns at every session start that the allowedTools entry mcp__workspace skips canUseTool.
+// That is on purpose: Code Agent's own workspace tools need no approval, and what they do is guarded
+// inside them (held messages, hop limit). Other warnings still print.
+const emitWarning = process.emitWarning.bind(process) as (...args: unknown[]) => void;
+process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
+  const opts = rest[0] as { code?: string } | undefined;
+  if (opts?.code === 'CLAUDE_SDK_CAN_USE_TOOL_SHADOWED' && /for: mcp__workspace\./.test(String(warning))) return;
+  emitWarning(warning, ...rest);
+}) as typeof process.emitWarning;
+
 void main();
