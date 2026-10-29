@@ -13,7 +13,8 @@ import { linkify } from '../components/BoardLink';
 import { SessionLink } from '../session/Transcript';
 import { useApp } from '../store/app';
 import { NoWorkspace } from '../components/NoWorkspace';
-import { EFFORT_LABEL, MODELS } from '../lib/catalog';
+import { EFFORT_LABEL } from '../lib/catalog';
+import { effortFor, effortOptions, modelOptions, takesEffort } from '../lib/models';
 import { CLOSED, KIND_ICON, KIND_LABEL, STATUSES, STATUS_LABEL, STATUS_TONE } from '../lib/board';
 import { relTime } from '../lib/format';
 import { cx, download, uid } from '../lib/util';
@@ -292,7 +293,8 @@ type Source = 'github' | 'jira' | 'paste' | 'file';
 function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => void; onDone: (firstCreated?: string) => void }) {
   const t = useT();
   const app = useApp();
-  const recorder = `${MODELS.find((m) => m.id === app.boardSettings.recorderModel)?.label ?? ''} · ${t('思考')}${t(EFFORT_LABEL[app.boardSettings.recorderEffort])}`;
+  const rm = app.models.find((m) => m.id === app.boardSettings.recorderModel);
+  const recorder = `${rm?.label ?? app.boardSettings.recorderModel}${takesEffort(rm) ? ` · ${t('思考')}${t(EFFORT_LABEL[app.boardSettings.recorderEffort])}` : ''}`;
   const jiraOk = app.mcp.some((m) => /jira|atlassian/i.test(m.name) && m.status === 'connected' && (m.scope !== 'workspace' || m.workspaceId === wsId));
   const [source, setSource] = useState<Source>('github');
   const [repo, setRepo] = useState('');
@@ -406,6 +408,8 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
 function SettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const s = useApp((x) => x.boardSettings);
+  const models = useApp((x) => x.models);
+  const recorder = models.find((m) => m.id === s.recorderModel);
   const set = (p: Partial<typeof s>) => useApp.getState().set({ boardSettings: { ...s, ...p } });
   return (
     <Modal title={t('看板设置')} width={560} onClose={onClose} footer={<Button variant="primary" onClick={onClose}>{t('完成')}</Button>}>
@@ -417,10 +421,10 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         <Field label={t('后台识别用的模型')} hint={t('自动记录和导入时整理条目都用它。在后台运行，不拖慢会话；选便宜的模型、较低的思考强度就够了。')}>
           <div className="row" style={{ gap: 8 }}>
             <Select value={s.recorderModel} className="w-240" icon="cpu"
-              onChange={(v) => { const m = MODELS.find((x) => x.id === v)!; set({ recorderModel: v, recorderEffort: m.efforts.includes(s.recorderEffort) ? s.recorderEffort : m.efforts[0] }); }}
-              options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
+              onChange={(v) => set({ recorderModel: v, recorderEffort: effortFor(models, v, s.recorderEffort, 'lowest') })}
+              options={modelOptions(models, t)} />
             <Select<Effort> value={s.recorderEffort} className="w-240" icon="bulb" renderValue={(o) => <>{t('思考')} · {o?.label}</>} onChange={(v) => set({ recorderEffort: v })}
-              options={(MODELS.find((m) => m.id === s.recorderModel)?.efforts ?? []).map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
+              disabled={!takesEffort(recorder)} options={effortOptions(recorder, s.recorderEffort, t)} />
           </div>
         </Field>
         <div>

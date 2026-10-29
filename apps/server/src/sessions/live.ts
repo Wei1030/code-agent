@@ -19,6 +19,7 @@ import { buildOptions } from './options';
 import { contextFrom } from './context';
 import { recordUsage, recordLimit } from '../usage';
 import { configDir } from '../claude/files';
+import { isClaudeModel } from '../models';
 
 type Input = Record<string, unknown>;
 
@@ -213,7 +214,8 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   l.ready = q.initializationResult().then((init) => {
     l.commands = init.commands ?? [];
     raw(sid, 'control_response/initialize', `Claude Code ${init.claude_code_version ?? ''} · ${l.commands.length} 个命令`, { claude_code_version: init.claude_code_version, pid: (init as { pid?: number }).pid, models: init.models?.length });
-    void import('../provider').then((m) => m.noteInit(init));
+    // Only a process on the Claude subscription knows the login and Claude's models.
+    if (isClaudeModel(l.model)) void import('../provider').then((m) => m.noteInit(init));
   }).catch((e: unknown) => {
     emit(sid, { t: 'stderr', line: `初始化失败：${e instanceof Error ? e.message : String(e)}` });
   });

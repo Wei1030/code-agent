@@ -135,8 +135,7 @@ export const useApp = create<AppState>((set, get) => ({
   reviewed: {},
   held: [],
   provider: {
-    kind: 'subscription', configDir: 'default', customDir: '', executable: 'bundled', loggedIn: false, plan: '',
-    envConflict: false, compatibleUrl: '', compatibleModel: '',
+    configDir: 'default', customDir: '', executable: 'bundled', loggedIn: false, plan: '', envConflict: false, endpoints: [],
   },
   env: [],
   runtime: { debugLog: false, otel: false, otelEndpoint: '', otelMetrics: false, otelLogs: false, otelTraces: false, otelPrompts: false, otelTools: false },

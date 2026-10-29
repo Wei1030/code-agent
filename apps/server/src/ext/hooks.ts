@@ -98,8 +98,7 @@ export function noteFileHook(_sid: string, m: Record<string, unknown>) {
 
 /** Hooks Code Agent itself installs in every session. */
 const BUILTIN: FileHook[] = [
-  { id: 'builtin-review-bash', event: 'PreToolUse', type: 'builtin', matcher: 'Bash|PowerShell', detail: '代码审核子代理只能运行只读命令', source: 'Code Agent' },
-  { id: 'builtin-review-agent', event: 'PreToolUse', type: 'builtin', matcher: 'Agent', detail: '审核轮次的提示词由 Code Agent 固定', source: 'Code Agent' },
+  { id: 'builtin-review-bash', event: 'PreToolUse', type: 'builtin', matcher: 'Bash|PowerShell', detail: '代码审核者（独立进程）只能运行只读命令', source: 'Code Agent' },
   { id: 'builtin-board', event: 'SessionStart', type: 'builtin', matcher: '', detail: '新会话开始时告诉 Claude 看板上进行中的功能', source: 'Code Agent' },
 ];
 

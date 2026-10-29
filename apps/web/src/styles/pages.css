@@ -217,3 +217,13 @@
 .no-workspace .muted { max-width: 460px; line-height: 1.6; }
 a.link { color: var(--accent); cursor: pointer; }
 .search-hit { margin: -2px 0 6px 40px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.ws-card { position: relative; }
+.ws-card .ws-remove { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); opacity: 0; transition: opacity .12s; }
+.ws-card:hover .ws-remove, .ws-card:focus-visible .ws-remove { opacity: 1; }
+.ws-card .ws-remove:hover { background: var(--crit-soft, #fde8e8); color: var(--crit); }
+
+/* Compatible endpoints */
+.endpoint { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.endpoint-models { display: flex; flex-direction: column; gap: 6px; }
+.endpoint-model { padding: 6px 8px; border-radius: 8px; background: var(--surface-2, #f6f7f9); gap: 12px; }

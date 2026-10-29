@@ -10,10 +10,34 @@ export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'dontAsk' | 'b
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface ModelInfo {
+  /** Claude: an alias (opus, sonnet…). Endpoint models: `ep:<endpoint id>:<model name>`. */
   id: string;
   label: string;
   desc: string;
+  /** Effort levels it takes; empty: effort is not sent (common on other vendors' models). */
   efforts: Effort[];
+  /** The compatible endpoint serving it; absent for the Claude subscription. */
+  endpoint?: string;
+}
+
+/** A gateway that speaks the Anthropic Messages API: another vendor's models, a proxy, a local server. */
+export interface Endpoint {
+  id: string;
+  name: string;
+  /** ANTHROPIC_BASE_URL */
+  url: string;
+  /** The token stays on the server; the UI only learns whether one is set. */
+  keySet?: boolean;
+  models: EndpointModel[];
+}
+
+export interface EndpointModel {
+  /** The model name the endpoint expects (ANTHROPIC_MODEL). */
+  name: string;
+  /** Send thinking and the effort level (only if the endpoint understands them); off turns thinking off. */
+  effort: boolean;
+  /** Last connection test from Settings. */
+  test?: { ok: boolean; at: number; message: string };
 }
 
 export interface Workspace {
@@ -422,8 +446,6 @@ export interface ExtraDir {
   sessionId?: string;
 }
 
-export type ProviderKind = 'subscription' | 'compatible';
-
 export interface EnvVar {
   id: string;
   key: string;
@@ -753,8 +775,12 @@ export interface BoardSettings {
 
 // ------------------------------------------------------------------ app state the server keeps
 
+/**
+ * Where models come from: the user's own Claude Code login (Claude subscription) and any number of
+ * compatible endpoints. Both can be used side by side; each session, review, job and background run
+ * picks a model, and with it the service.
+ */
 export interface Provider {
-  kind: ProviderKind;
   /** Claude Code's config directory: ~/.claude, $CLAUDE_CONFIG_DIR, or a folder chosen here. */
   configDir: 'default' | 'env' | 'custom';
   customDir: string;
@@ -770,10 +796,7 @@ export interface Provider {
   envVar?: string;
   /** $CLAUDE_CONFIG_DIR of the server process, if set. */
   envConfigDir?: string;
-  compatibleUrl: string;
-  compatibleModel: string;
-  /** Kept on the server; the UI only learns whether one is set. */
-  compatibleKeySet?: boolean;
+  endpoints: Endpoint[];
   /** Last check of the login: account e-mail and when it was checked. */
   account?: string;
   checkedAt?: number;

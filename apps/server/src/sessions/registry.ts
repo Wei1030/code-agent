@@ -7,7 +7,7 @@
 import type { Item, SessionEvent, SessionRuntime, SessionSummary } from '@code-agent/shared/types';
 import { emptyRuntime, reduce } from '@code-agent/shared/runtime';
 import { broadcast } from '../hub';
-import { db, later, load, save, tx } from '../store';
+import { db, later, tx } from '../store';
 
 const summaries = new Map<string, SessionSummary>(
   (db.prepare('SELECT summary FROM sessions').all() as Array<{ summary: string }>)
@@ -152,19 +152,6 @@ export function initRuntime(r: SessionRuntime) {
   runtimes.set(r.id, r);
   reshaped.add(r.id);
   persist(r.id);
-}
-
-// Transcripts written before the index existed (or migrated) get indexed once.
-if (!load('fts-built', false)) {
-  tx(() => {
-    db.exec('DELETE FROM item_text');
-    for (const row of db.prepare('SELECT session, data FROM items').iterate() as Iterable<{ session: string; data: string }>) {
-      const it = JSON.parse(row.data) as Item;
-      const text = searchable(it);
-      if (text.trim()) putText.run(row.session, it.id, text);
-    }
-  });
-  save('fts-built', () => true, 0);
 }
 
 /** Sessions whose transcript mentions `query` (full-text, newest first), with where it was found. */

@@ -73,41 +73,57 @@ export function systemClaude(): string | undefined {
 }
 
 const CREDENTIAL_VARS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'];
+/** Sent to an endpoint configured without a token. */
+export const NO_TOKEN = 'no-token';
 
 export function envCredentialVar(): string | undefined {
   return CREDENTIAL_VARS.find((k) => process.env[k]);
 }
 
-/** The compatible endpoint's token stays in the data directory and never goes to the browser. */
+/** Endpoint tokens stay in the database and never go to the browser. */
 import { load, save } from '../store';
-let secrets = load<{ compatibleKey?: string }>('secrets', {});
-export function compatibleKey() {
-  return secrets.compatibleKey ?? '';
+let secrets = load<{ endpointKeys?: Record<string, string> }>('secrets', {});
+export function endpointKey(id: string) {
+  return secrets.endpointKeys?.[id] ?? '';
 }
-export function setCompatibleKey(key: string) {
-  secrets = { ...secrets, compatibleKey: key };
+export function setEndpointKey(id: string, key: string | null) {
+  const keys = { ...(secrets.endpointKeys ?? {}) };
+  if (key) keys[id] = key;
+  else delete keys[id];
+  secrets = { ...secrets, endpointKeys: keys };
   save('secrets', () => secrets, 0);
 }
 
-/** Environment for a Claude Code process: ours plus the provider, user variables and runtime switches. */
-export function processEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
+/** A compatible endpoint a process should talk to, and the model it asks for. */
+export interface EndpointTarget {
+  url: string;
+  key: string;
+  model: string;
+}
+
+/**
+ * Environment for a Claude Code process: ours plus the service (the Claude subscription login, or a
+ * compatible endpoint with its model standing in for every Claude alias), user variables and
+ * runtime switches.
+ */
+export function processEnv(endpoint?: EndpointTarget): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'code-agent/0.1.0' };
   const p = app.provider;
   const dir = configDirEnv();
   if (dir) env.CLAUDE_CONFIG_DIR = dir;
   else delete env.CLAUDE_CONFIG_DIR;
-  if (p.kind === 'subscription') {
+  if (!endpoint) {
     if (p.ignoreEnvKey) for (const k of CREDENTIAL_VARS) delete env[k];
   } else {
     for (const k of CREDENTIAL_VARS) delete env[k];
-    if (p.compatibleUrl) env.ANTHROPIC_BASE_URL = p.compatibleUrl;
-    if (compatibleKey()) env.ANTHROPIC_AUTH_TOKEN = compatibleKey();
-    if (p.compatibleModel) {
-      env.ANTHROPIC_MODEL = p.compatibleModel;
-      env.ANTHROPIC_DEFAULT_OPUS_MODEL = p.compatibleModel;
-      env.ANTHROPIC_DEFAULT_SONNET_MODEL = p.compatibleModel;
-      env.ANTHROPIC_DEFAULT_HAIKU_MODEL = p.compatibleModel;
-    }
+    env.ANTHROPIC_BASE_URL = endpoint.url;
+    // Always a token of the endpoint's own: without one Claude Code falls back to the Claude login
+    // in the config dir and sends that to the endpoint.
+    env.ANTHROPIC_AUTH_TOKEN = endpoint.key || NO_TOKEN;
+    // Built-in agents and helper calls ask for aliases (haiku, sonnet…): send them to the same model.
+    for (const k of ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'ANTHROPIC_DEFAULT_FABLE_MODEL', 'ANTHROPIC_SMALL_FAST_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL']) env[k] = endpoint.model;
+    // claude.ai connectors need the claude.ai login, which an endpoint does not use.
+    env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
   }
   const mb = app.mcpBehavior;
   if (mb.claudeAiConnectors === false) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
@@ -123,6 +139,10 @@ export function processEnv(extra: Record<string, string> = {}): Record<string, s
     if (r.otelPrompts) env.OTEL_LOG_USER_PROMPTS = '1';
     if (r.otelTools) env.OTEL_LOG_TOOL_DETAILS = '1';
   }
-  for (const v of app.env) if (v.key.trim()) env[v.key.trim()] = v.value;
-  return { ...env, ...extra };
+  for (const v of app.env) {
+    const k = v.key.trim();
+    // An endpoint's address and token are its own; the variables cannot point it elsewhere.
+    if (k && !(endpoint && (CREDENTIAL_VARS.includes(k) || k === 'ANTHROPIC_BASE_URL'))) env[k] = v.value;
+  }
+  return env;
 }

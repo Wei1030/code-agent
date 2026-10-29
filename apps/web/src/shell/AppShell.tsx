@@ -88,7 +88,10 @@ function TopBar() {
   const provider = useApp((s) => s.provider);
   const openWorkspace = useOpenWorkspace();
   const goToSessions = useGoToSessions();
-  const authKind = provider.kind === 'subscription' ? t('Claude 订阅') : t('兼容端点');
+  const endpoints = provider.endpoints.filter((e) => e.models.length).length;
+  const [authKind, authState] = provider.loggedIn
+    ? [t('Claude 订阅'), endpoints ? t('{p} + {n} 个端点', { p: provider.plan, n: endpoints }) : provider.plan]
+    : endpoints ? [t('兼容端点'), t('{n} 个端点', { n: endpoints })] : [t('模型服务'), t('未配置')];
   return (
     <header className="topbar">
       <div className="brand" onClick={goToSessions}>
@@ -122,7 +125,7 @@ function TopBar() {
         <span className="avatar">W</span>
         <span className="lines">
           <span className="muted">{authKind}</span>
-          <b>{provider.kind === 'subscription' ? (provider.loggedIn ? provider.plan : t('未登录')) : t('已配置')}</b>
+          <b>{authState}</b>
         </span>
       </div>
     </header>

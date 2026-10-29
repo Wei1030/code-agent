@@ -2,24 +2,27 @@
  * Code review. Nothing starts until the user clicks 提交审核; then Code Agent loops on its own until
  * the reviewer passes the change, the round limit is reached, or the user stops it. Each round:
  * snapshot the working tree into a hidden ref, run the workspace's check commands (Code Agent runs
- * them, not Claude), then have the author session run the read-only code-reviewer subagent. A
- * PreToolUse hook pins the subagent's prompt, model and effort; its verdict comes back through
- * submit_review, the author's answers through respond_findings. Rounds 1–3 look at the whole
- * change, later rounds only at what changed since the previous round.
+ * them, not Claude), then run the read-only reviewer as its own process (any model, structured
+ * verdict) and hand its findings to the author, who answers through respond_findings. Rounds 1–3
+ * look at the whole change, later rounds only at what changed since the previous round.
  */
 import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { tool } from '@anthropic-ai/claude-agent-sdk';
+import { query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { Effort, ReviewCheck, ReviewFinding, ReviewRound, ReviewTicket, ToolItem } from '@code-agent/shared/types';
+import type { AgentRun, Effort, ReviewCheck, ReviewFinding, ReviewRound, ReviewTicket } from '@code-agent/shared/types';
 import { app, set, update } from './state';
 import { broadcast, register } from './hub';
 import { load, save } from './store';
-import { addItem, patchItem, rt, summary } from './sessions/registry';
-import { addHook, decorateTool, inTurn, interruptTurn, live, markDenied, onProcessEnd, onSendTurn, onTurnEnd, sendTurn } from './sessions/live';
-import { addSessionAgents, cwdOf } from './sessions/options';
+import { addItem, emit, patchItem, rt, summary } from './sessions/registry';
+import { decorateTool, inTurn, interruptTurn, live, onProcessEnd, onSendTurn, onTurnEnd, sendTurn } from './sessions/live';
+import { cwdOf } from './sessions/options';
+import { agentRow } from './sessions/describe';
+import { envFor, reasoning, resolveModel } from './models';
+import { systemClaude } from './claude/files';
+import { recordUsage } from './usage';
 import { addBusyCheck } from './sessions/slots';
 import { addQueueBlocker, pumpQueue } from './sessions/ops';
 import { head, isRepo, numstat, snapshot } from './git';
@@ -33,14 +36,12 @@ const ACTIVE: Array<ReviewTicket['status']> = [...RUNNING, 'needs_decision', 'ch
 
 /** What the loop waits for in each ticket's author session. */
 interface Pending {
-  /** check-fix: the author fixes a failed check; review: the round's reviewer + fixes; more: fixes after extra rounds were granted. */
-  step: 'check-fix' | 'review' | 'more';
+  /** check-fix: the author fixes a failed check; fix: the author answers the round's findings; more: fixes after extra rounds were granted. */
+  step: 'check-fix' | 'fix' | 'more';
   round: number;
   /** Index into the session's file changes when the step started. */
   changesAt: number;
   attempt?: number;
-  /** The reviewer was asked once more after it did not submit a verdict. */
-  retried?: boolean;
 }
 
 const pending = new Map<string, Pending>();
@@ -74,8 +75,8 @@ export function activeTicket(sid: string): ReviewTicket | undefined {
 }
 
 addBusyCheck((sid) => !!activeTicket(sid));
-// Queued user messages wait while Code Agent runs the checks between turns.
-addQueueBlocker((sid) => activeTicket(sid)?.status === 'checking');
+// Queued user messages wait while Code Agent runs the checks or the reviewer between turns.
+addQueueBlocker((sid) => activeTicket(sid)?.status === 'checking' || activeTicket(sid)?.status === 'reviewing');
 
 function notify(sid: string, kind: 'request' | 'background', title: string, body: string, tone: 'good' | 'warn') {
   broadcast({ t: 'notify', n: { kind, sid, title, body, tone, action: kind === 'request' ? '去处理' : '查看' } });
@@ -147,7 +148,7 @@ async function beginRound(id: string, n: number) {
   }));
   const skip = t.checks.length === 0;
   addItem(sid, { kind: 'divider', id: randomUUID(), label: `代码审核 · 第 ${n} 轮 · ${scope === 'global' ? '全局审核' : `增量审核（只看第 ${n - 1} 轮之后的修改）`}${skip ? ' · 跳过验证' : ''}` });
-  if (skip) askReviewer(id, n);
+  if (skip) void runReviewer(id, n);
   else {
     addItem(sid, { kind: 'review', id: randomUUID(), ticketId: id, round: n, what: 'check' });
     void runChecks(id, n, 1);
@@ -203,7 +204,7 @@ async function runChecks(id: string, n: number, attempt: number) {
   const ok = failed < 0;
   setRound(id, n, (r) => ({ ...r, checks: r.checks.map((c) => (c.attempt === attempt ? { ...c, ok } : c)) }));
   if (ok) {
-    askReviewer(id, n);
+    void runReviewer(id, n);
     return;
   }
   if (attempt >= MAX_CHECK_ATTEMPTS) {
@@ -224,27 +225,43 @@ async function runChecks(id: string, n: number, attempt: number) {
 
 // ------------------------------------------------------------------ the reviewer
 
-function askReviewer(id: string, n: number, retry = false) {
-  const t = get(id)!;
-  const sid = t.sessionId;
-  const round = t.rounds[n - 1];
-  const last = n >= t.maxRounds;
-  updateTicket(id, (x) => ({ ...x, status: 'reviewing' }));
-  pending.set(id, { step: 'review', round: n, changesAt: rt(sid)?.changes.length ?? 0, retried: retry });
-  sendTurn(sid, {
-    fromApp: `代码审核 · 第 ${n} 轮`,
-    text: [
-      retry ? '审核子代理上一次没有用 submit_review 提交结论。请再调用一次。' : '',
-      `Code Agent 代码审核第 ${n} 轮（最多 ${t.maxRounds} 轮），${round.scope === 'global' ? '全局审核' : '增量审核'}：${round.range}，${round.diff.files} 个文件 +${round.diff.add} −${round.diff.del}。`,
-      '请现在用 Agent 工具调用 code-reviewer 子代理（subagent_type 填 "code-reviewer"，prompt 写「第 N 轮」即可，审核要求由 Code Agent 填入）。',
-      last
-        ? '这是最后一轮：拿到结论后简短说明。如果被打回，先不要修改，等用户决定。'
-        : '拿到结论后：通过就简短说明并结束；打回就逐条处理意见——能改的改掉，不同意的写明理由——然后用 workspace 的 respond_findings 工具逐条答复（fixed 或 disputed），再结束这一轮。',
-    ].filter(Boolean).join('\n'),
-  });
+/**
+ * The reviewer runs as its own Claude Code process next to the author session: read-only tools, the
+ * 评审 profile (or this review's model and effort, from any service), a structured verdict. It is
+ * not a session and takes no slot; its card in the author's transcript shows what it does.
+ */
+const reviewers = new Map<string, AbortController>();
+
+const VERDICT_SCHEMA = {
+  type: 'object', required: ['verdict', 'summary', 'findings', 'rulings'], additionalProperties: false,
+  properties: {
+    verdict: { type: 'string', enum: ['pass', 'changes_requested'] },
+    summary: { type: 'string', description: 'One or two sentences' },
+    findings: {
+      type: 'array', description: 'New findings of this round',
+      items: {
+        type: 'object', required: ['severity', 'file', 'title', 'detail'], additionalProperties: false,
+        properties: { severity: { type: 'string', enum: ['blocker', 'major', 'minor'] }, file: { type: 'string' }, line: { type: 'integer' }, title: { type: 'string' }, detail: { type: 'string' } },
+      },
+    },
+    rulings: {
+      type: 'array', description: 'Your ruling on each earlier finding the author answered',
+      items: {
+        type: 'object', required: ['id', 'status', 'note'], additionalProperties: false,
+        properties: { id: { type: 'string' }, status: { type: 'string', enum: ['verified', 'upheld', 'open'] }, note: { type: 'string' } },
+      },
+    },
+  },
+};
+
+interface Verdict {
+  verdict: 'pass' | 'changes_requested';
+  summary: string;
+  findings: Array<Pick<ReviewFinding, 'severity' | 'file' | 'line' | 'title' | 'detail'>>;
+  rulings: Array<{ id: string; status: 'verified' | 'upheld' | 'open'; note: string }>;
 }
 
-/** What the reviewer subagent is told in round n (pinned by the PreToolUse hook). */
+/** What the reviewer is asked in round n. */
 function roundPrompt(t: ReviewTicket, n: number): string {
   const round = t.rounds[n - 1];
   const list = snaps.get(t.id) ?? [];
@@ -260,54 +277,157 @@ function roundPrompt(t: ReviewTicket, n: number): string {
       : `Incremental round: review only what changed since the previous round, \`git diff ${prev} ${snap}\`, and whether earlier findings are resolved. Raise new findings only for defects these changes introduced.`
     : `The workspace is not a git repository. The files the session changed: ${[...new Set((rt(t.sessionId)?.changes ?? []).map((c) => c.path))].join(', ')}. Read them.`;
   return [
-    `You are the code reviewer for round ${n} of at most ${t.maxRounds} of a change made in session "${sum?.title ?? ''}".`,
+    `Review round ${n} of at most ${t.maxRounds} of a change made in session "${sum?.title ?? ''}".`,
     where,
     'Correctness only: bugs, broken behaviour, data loss, security, missing error handling, tests that do not test what they claim, mismatches with the goal. Skip style, naming and formatting.',
     goals.length ? `What the user asked for:\n${goals.join('\n')}` : '',
     earlier.length ? `Earlier findings (rule on each one the author answered: verified = fixed correctly, upheld = the author's dispute is right, open = still a problem):\n${earlier.map((f) => `- ${f.id} [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} ${f.title} — status ${f.status}${f.response ? `; author: ${f.response}` : ''}`).join('\n')}` : '',
     'Severity: blocker = breaks the build, loses data or is a security hole; major = wrong behaviour users will hit; minor = worth fixing but not blocking. The change passes when no blocker or major finding remains open.',
-    'You are read-only: use Read, Grep, Glob and read-only shell commands (git diff/log/show/status, ls, cat, grep, find; on Windows the shell tool is PowerShell). Do not edit anything.',
-    'When done, call mcp__workspace__submit_review exactly once with your findings and rulings, then reply with a two-line summary.',
+    'Answer through the structured output: verdict, a one- or two-sentence summary, new findings, and rulings on earlier findings. Write titles, details and notes in Simplified Chinese.',
     app.reviewProfile.extraPrompt.trim() ? `Additional review requirements from the user:\n${app.reviewProfile.extraPrompt.trim()}` : '',
   ].filter(Boolean).join('\n\n');
 }
 
-/** The ticket whose reviewer is running in this session, if any. */
-function reviewing(sid: string): { t: ReviewTicket; n: number } | undefined {
-  const t = activeTicket(sid);
-  const p = t && pending.get(t.id);
-  return t && p?.step === 'review' && t.status === 'reviewing' ? { t, n: p.round } : undefined;
-}
+const REVIEWER_ROLE = 'You are a code reviewer. You never change anything: read files with Read, Grep and Glob, and run only read-only shell commands (git diff/log/show/status, ls, cat, grep, find; on Windows the shell tool is PowerShell). Anything else is refused.';
 
-// The author may only start the reviewer when Code Agent asks; its prompt, model and effort are fixed here.
-addHook('PreToolUse', (sid, input) => {
+type HookOut = Promise<{ hookSpecificOutput?: { hookEventName: 'PreToolUse'; permissionDecision: 'allow' | 'deny'; permissionDecisionReason: string } }>;
+
+/** Only read-only commands, enforced by the harness rather than asked of the model. */
+async function guard(input: Record<string, unknown>): HookOut {
   const name = String(input.tool_name ?? '');
   const ti = (input.tool_input ?? {}) as Record<string, unknown>;
-  if ((name === 'Agent' || name === 'Task') && ti.subagent_type === 'code-reviewer') {
-    const r = reviewing(sid);
-    if (!r) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code-reviewer subagent only runs when Code Agent starts a review round.' } };
-    const model = r.t.model;
-    return {
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'Code Agent review round',
-        updatedInput: { ...ti, description: `code-reviewer · 第 ${r.n} 轮`, prompt: roundPrompt(r.t, r.n), run_in_background: false, ...(['opus', 'sonnet', 'haiku', 'fable'].includes(model) ? { model } : {}), effort: r.t.effort },
-      },
-    };
+  if (name === 'Bash' || name === 'PowerShell') {
+    return readOnlyCommand(String(ti.command ?? ''))
+      ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'read-only command of the reviewer' } }
+      : { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer may only run read-only commands (git diff/log/show, ls, cat, grep, find…).' } };
   }
-  if (input.agent_type === 'code-reviewer' && (name === 'Bash' || name === 'PowerShell')) {
-    const cmd = String(ti.command ?? '');
-    if (readOnlyCommand(cmd)) return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'read-only command of the reviewer' } };
-    markDenied(sid, String(input.tool_use_id ?? ''), '审核子代理只能运行只读命令');
-    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer may only run read-only commands (git diff/log/show, ls, cat, grep, find…).' } };
-  }
-  if (input.agent_type === 'code-reviewer' && ['Edit', 'Write', 'NotebookEdit', 'MultiEdit'].includes(name)) {
+  if (['Edit', 'Write', 'NotebookEdit', 'MultiEdit'].includes(name)) {
     return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer is read-only.' } };
   }
-  return undefined;
-});
+  return {};
+}
+
+async function runReviewer(id: string, n: number, attempt = 1) {
+  const t = get(id)!;
+  const sid = t.sessionId;
+  const cwd = cwdOf(sid);
+  const round = t.rounds[n - 1];
+  updateTicket(id, (x) => ({ ...x, status: 'reviewing' }));
+  const label = app.models.find((m) => m.id === t.model)?.label ?? t.model;
+  const task = `第 ${n} 轮${round.scope === 'global' ? '全局' : '增量'}审核`;
+  const cardId = randomUUID();
+  let agent: AgentRun = { agentType: 'code-reviewer', task, model: label, rows: [], tokens: 0, toolCalls: 0, summary: '正在读取改动…' };
+  addItem(sid, { kind: 'tool', id: cardId, tool: 'Agent', detail: `code-reviewer · ${task}`, status: 'running', provenance: '评审方案 · 只读 · 独立进程', right: label, agent });
+  emit(sid, { t: 'status', status: { kind: 'working', label: `审核者正在做${task}…` } });
+  const abort = new AbortController();
+  reviewers.set(id, abort);
+  const t0 = Date.now();
+  const prof = app.reviewProfile;
+  let out: Verdict | undefined;
+  let err = '';
+  let tokens = 0;
+  try {
+    const model = resolveModel(t.model);
+    const extra = prof.tools.filter((x) => x !== 'WebSearch' || !model.endpoint);
+    const exe = app.provider.executable === 'system' ? systemClaude() : undefined;
+    const q = query({
+      prompt: roundPrompt(t, n),
+      options: {
+        cwd, model: model.name, ...reasoning(model, t.effort),
+        tools: ['Read', 'Glob', 'Grep', 'Bash', 'PowerShell', ...extra], allowedTools: ['Read', 'Glob', 'Grep', ...extra],
+        permissionMode: 'dontAsk', persistSession: false,
+        settingSources: prof.claudeMd ? ['user', 'project', 'local'] : [],
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: REVIEWER_ROLE },
+        hooks: { PreToolUse: [{ hooks: [(input) => guard(input as unknown as Record<string, unknown>)] }] },
+        outputFormat: { type: 'json_schema', schema: VERDICT_SCHEMA },
+        env: envFor(t.model), abortController: abort, ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
+      },
+    });
+    for await (const m of q) {
+      if (m.type === 'assistant' && !m.parent_tool_use_id) {
+        for (const b of m.message.content as unknown as Array<{ type: string; name?: string; input?: Record<string, unknown>; text?: string }>) {
+          if (b.type === 'tool_use' && b.name) agent = { ...agent, rows: [...agent.rows, agentRow(b.name, b.input ?? {}, cwd)].slice(-60), toolCalls: agent.toolCalls + 1 };
+          else if (b.type === 'text' && b.text?.trim()) agent = { ...agent, summary: b.text.trim().slice(0, 300) };
+        }
+        patchItem(sid, cardId, { agent });
+      }
+      if (m.type === 'result') {
+        const u = m.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
+        tokens = (u.input_tokens ?? 0) + (u.output_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+        recordUsage(m.modelUsage as Parameters<typeof recordUsage>[0], summary(sid)?.workspaceId);
+        if (m.subtype === 'success' && m.structured_output) out = m.structured_output as Verdict;
+        else err = m.subtype === 'success' ? '没有给出结构化的结论' : ((m as { errors?: string[] }).errors?.join('；') || m.subtype);
+      }
+    }
+  } catch (e) {
+    err = e instanceof Error ? e.message : String(e);
+  }
+  reviewers.delete(id);
+  emit(sid, { t: 'status', status: null });
+  const seconds = Math.round((Date.now() - t0) / 100) / 10;
+  agent = { ...agent, tokens };
+  if (abort.signal.aborted) {
+    patchItem(sid, cardId, { status: 'error', right: '已停止', seconds, agent });
+    return;
+  }
+  if (!out) {
+    patchItem(sid, cardId, { status: 'error', right: '失败', seconds, agent: { ...agent, summary: err.slice(0, 300) } });
+    if (attempt === 1 && get(id)?.status === 'reviewing') {
+      void runReviewer(id, n, 2);
+      return;
+    }
+    updateTicket(id, (x) => ({ ...x, status: 'needs_decision', note: `审核者没有给出结论：${err.slice(0, 120)}` }));
+    notify(sid, 'request', `「${summary(sid)?.title ?? ''}」的代码审核需要你决定`, '审核者两次都没有给出结论', 'warn');
+    pumpQueue(sid);
+    return;
+  }
+  patchItem(sid, cardId, { status: 'ok', seconds, right: `${Math.round(seconds)} 秒 · ${label}`, agent: { ...agent, summary: out.summary } });
+  // Record the verdict. Pass is decided here, not by the reviewer: no blocker or major left open.
+  const cur = get(id)!;
+  const added: ReviewFinding[] = (out.findings ?? []).map((f, i) => ({ ...f, id: `R${cur.findings.length + i + 1}`, round: n, status: 'open' }));
+  updateTicket(id, (x) => ({ ...x, findings: [...x.findings, ...added], tokens: x.tokens + tokens }));
+  const rulings = (out.rulings ?? []).filter((u) => cur.findings.some((f) => f.id === u.id));
+  for (const u of rulings) setFinding(id, u.id, { status: u.status, reviewerNote: u.note, closedIn: u.status === 'open' ? undefined : n });
+  const open = get(id)!.findings.filter((f) => (f.status === 'open' || f.status === 'fixed' || f.status === 'disputed') && f.severity !== 'minor');
+  const verdict = open.length ? 'changes_requested' : 'pass';
+  setRound(id, n, (x) => ({ ...x, verdict, raised: added.map((f) => f.id), rulings, reviewer: { model: label, seconds, tokens, toolCalls: agent.toolCalls, summary: out!.summary } }));
+  addItem(sid, { kind: 'review', id: randomUUID(), ticketId: id, round: n, what: 'verdict' });
+  if (verdict === 'pass') {
+    const minors = get(id)!.findings.filter((f) => f.status === 'open');
+    finish(id, 'passed', minors.length ? `${minors.map((f) => f.id).join('、')} 是次要意见，没有修改` : '');
+    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'good', text: `代码审核通过（第 ${n} 轮）。${minors.length ? `还有 ${minors.length} 条次要意见没改，记在审核记录里。` : ''}`, action: '查看审核记录' });
+    notify(sid, 'background', `「${summary(sid)?.title ?? ''}」代码审核通过`, `第 ${n} 轮通过`, 'good');
+    return;
+  }
+  if (n >= get(id)!.maxRounds) {
+    updateTicket(id, (x) => ({ ...x, status: 'needs_decision' }));
+    notify(sid, 'request', `「${summary(sid)?.title ?? ''}」的代码审核需要你决定`, `${get(id)!.maxRounds} 轮后仍未通过`, 'warn');
+    pumpQueue(sid);
+    return;
+  }
+  askAuthor(id, n);
+}
+
+/** The author fixes what the reviewer found, answering each finding with respond_findings. */
+function askAuthor(id: string, n: number) {
+  const t = get(id)!;
+  const sid = t.sessionId;
+  const open = t.findings.filter((f) => f.status === 'open' || ((f.status === 'fixed' || f.status === 'disputed') && f.round < n && !t.rounds[n - 1].rulings.some((r) => r.id === f.id)));
+  updateTicket(id, (x) => ({ ...x, status: 'fixing' }));
+  pending.set(id, { step: 'fix', round: n, changesAt: rt(sid)?.changes.length ?? 0 });
+  const r = t.rounds[n - 1];
+  sendTurn(sid, {
+    fromApp: `代码审核 · 第 ${n} 轮 · 意见`,
+    text: [
+      `代码审核第 ${n} 轮打回：${r.reviewer?.summary ?? ''}`,
+      '需要处理的意见：',
+      ...open.map((f) => `- ${f.id} [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} ${f.title}\n  ${f.detail}${f.reviewerNote ? `\n  审核者：${f.reviewerNote}` : ''}`),
+      '请逐条处理：能改的改掉，不同意的写明理由；然后用 workspace 的 respond_findings 工具逐条答复（fixed 或 disputed），再结束这一轮。Code Agent 会接着做下一轮审核。',
+    ].join('\n'),
+  });
+}
 
 decorateTool((_sid, name, input, item) => {
-  if ((name === 'Agent' || name === 'Task') && input.subagent_type === 'code-reviewer') item.provenance = '评审方案 · 只读 · 提示词由 Code Agent 固定';
   if (name === 'mcp__workspace__respond_findings') {
     const answers = (input.answers as Array<{ id: string; status: string; text: string }> | undefined) ?? [];
     item.rows = answers.map((a) => ({ icon: a.status === 'fixed' ? 'check' : 'chat', text: `${a.id} ${a.status === 'fixed' ? '已修改' : '有异议'}：${a.text}` }));
@@ -315,48 +435,7 @@ decorateTool((_sid, name, input, item) => {
   }
 });
 
-addSessionAgents(() => {
-  const p = app.reviewProfile;
-  return {
-    'code-reviewer': {
-      description: 'Code Agent\'s read-only code reviewer. Only use it when a Code Agent review-round message asks you to; Code Agent supplies its instructions.',
-      prompt: 'You review code changes for correctness. You never edit files. Follow the round instructions you are given exactly and finish by calling mcp__workspace__submit_review once.',
-      tools: ['Read', 'Glob', 'Grep', 'Bash', 'PowerShell', 'mcp__workspace__submit_review', ...p.tools.filter((x) => x !== 'WebSearch' || app.provider.kind === 'subscription')],
-      model: p.model,
-      effort: p.effort,
-      omitClaudeMd: !p.claudeMd,
-    },
-  };
-});
-
-// ------------------------------------------------------------------ verdicts and answers
-
-const finding = z.object({
-  severity: z.enum(['blocker', 'major', 'minor']), file: z.string(), line: z.number().int().optional(), title: z.string(), detail: z.string(),
-});
-
 addWorkspaceTools((sid) => [
-  tool('submit_review', 'Submit the verdict of a Code Agent review round (only the code-reviewer subagent calls this, once per round).', {
-    verdict: z.enum(['pass', 'changes_requested']),
-    summary: z.string().describe('One or two sentences'),
-    findings: z.array(finding).describe('New findings of this round'),
-    rulings: z.array(z.object({ id: z.string(), status: z.enum(['verified', 'upheld', 'open']), note: z.string() })).optional().describe('Your ruling on earlier findings the author answered'),
-  }, async (a) => {
-    const r = reviewing(sid);
-    if (!r) return { content: [{ type: 'text' as const, text: 'No review round is waiting for a verdict.' }], isError: true };
-    const { t, n } = r;
-    const start = t.findings.length;
-    const added: ReviewFinding[] = a.findings.map((f, i) => ({ ...f, id: `R${start + i + 1}`, round: n, status: 'open' }));
-    updateTicket(t.id, (x) => ({ ...x, findings: [...x.findings, ...added] }));
-    const rulings = (a.rulings ?? []).filter((u) => t.findings.some((f) => f.id === u.id));
-    for (const u of rulings) setFinding(t.id, u.id, { status: u.status, reviewerNote: u.note, closedIn: u.status === 'open' ? undefined : n });
-    // Deterministic: the round passes when no blocker or major finding is open.
-    const open = get(t.id)!.findings.filter((f) => (f.status === 'open' || f.status === 'fixed' || f.status === 'disputed') && f.severity !== 'minor');
-    const verdict = open.length ? 'changes_requested' : 'pass';
-    setRound(t.id, n, (x) => ({ ...x, verdict, raised: added.map((f) => f.id), rulings, reviewer: { model: t.model, seconds: 0, tokens: 0, toolCalls: 0, summary: a.summary } }));
-    addItem(sid, { kind: 'review', id: randomUUID(), ticketId: t.id, round: n, what: 'verdict' });
-    return { content: [{ type: 'text' as const, text: `Recorded: ${verdict === 'pass' ? 'pass' : `changes requested (${open.map((f) => f.id).join(', ')})`}${added.length ? `; new findings ${added.map((f) => f.id).join(', ')}` : ''}. Now reply to the author with a two-line summary.` }] };
-  }),
   tool('respond_findings', 'Answer the findings of the current Code Agent review round: fixed (say what you changed) or disputed (say why).', {
     answers: z.array(z.object({ id: z.string(), status: z.enum(['fixed', 'disputed']), text: z.string() })),
   }, async (a) => {
@@ -366,7 +445,6 @@ addWorkspaceTools((sid) => [
     const known = a.answers.filter((x) => t.findings.some((f) => f.id === x.id));
     for (const x of known) setFinding(t.id, x.id, { status: x.status, response: x.text });
     setRound(t.id, p.round, (r) => ({ ...r, answers: [...r.answers.filter((y) => !known.some((k) => k.id === y.id)), ...known] }));
-    if (t.status === 'reviewing') updateTicket(t.id, (x) => ({ ...x, status: 'fixing' }));
     return { content: [{ type: 'text' as const, text: `Recorded ${known.length} answer(s). End your turn when you are done; Code Agent then starts the next round.` }] };
   }),
 ]);
@@ -378,20 +456,10 @@ function recordFiles(id: string, n: number, sid: string, from: number, phase: 'c
   if (files.length) setRound(id, n, (r) => ({ ...r, authorFiles: [...r.authorFiles, ...files] }));
 }
 
-/** Reviewer stats from its Agent card. */
-function reviewerStats(sid: string, id: string, n: number) {
-  const items = rt(sid)?.items ?? [];
-  const card = [...items].reverse().find((x): x is ToolItem => x.kind === 'tool' && !!x.agent && x.agent.agentType === 'code-reviewer');
-  if (!card?.agent) return;
-  const tokens = card.agent.tokens;
-  setRound(id, n, (r) => (r.reviewer ? { ...r, reviewer: { ...r.reviewer, seconds: card.seconds ?? r.reviewer.seconds, tokens, toolCalls: card.agent!.toolCalls } } : r));
-  updateTicket(id, (x) => ({ ...x, tokens: x.tokens + tokens }));
-  if (card.status === 'running') patchItem(sid, card.id, { status: 'ok' });
-}
-
 function finish(id: string, status: ReviewTicket['status'], note: string) {
   const t = get(id)!;
   pending.delete(id);
+  reviewers.get(id)?.abort();
   updateTicket(id, (x) => ({ ...x, status, endedAt: Date.now(), note: note || x.note }));
   if (status === 'passed' || status === 'accepted') {
     set('reviewed', { ...app.reviewed, [t.sessionId]: rt(t.sessionId)?.changes.length ?? 0 });
@@ -417,48 +485,10 @@ onTurnEnd((sid, info) => {
     stopped(t.id, by);
     return;
   }
-  if (p.step === 'check-fix') {
-    recordFiles(t.id, p.round, sid, p.changesAt, 'check');
-    pending.delete(t.id);
-    void runChecks(t.id, p.round, (p.attempt ?? 1) + 1);
-    return;
-  }
-  if (p.step === 'more') {
-    recordFiles(t.id, p.round, sid, p.changesAt, 'fix');
-    pending.delete(t.id);
-    void beginRound(t.id, p.round + 1);
-    return;
-  }
-  // step === 'review'
-  const round = get(t.id)!.rounds[p.round - 1];
-  reviewerStats(sid, t.id, p.round);
-  if (!round.verdict) {
-    if (!p.retried) {
-      askReviewer(t.id, p.round, true);
-      return;
-    }
-    updateTicket(t.id, (x) => ({ ...x, status: 'needs_decision', note: '审核子代理没有提交结论' }));
-    notify(sid, 'request', `「${summary(sid)?.title ?? ''}」的代码审核需要你决定`, '审核子代理两次都没有提交结论', 'warn');
-    pending.delete(t.id);
-    pumpQueue(sid);
-    return;
-  }
-  if (round.verdict === 'pass') {
-    const minors = get(t.id)!.findings.filter((f) => f.status === 'open');
-    finish(t.id, 'passed', minors.length ? `${minors.map((f) => f.id).join('、')} 是次要意见，没有修改` : '');
-    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'good', text: `代码审核通过（第 ${p.round} 轮）。${minors.length ? `还有 ${minors.length} 条次要意见没改，记在审核记录里。` : ''}`, action: '查看审核记录' });
-    notify(sid, 'background', `「${summary(sid)?.title ?? ''}」代码审核通过`, `第 ${p.round} 轮通过`, 'good');
-    return;
-  }
-  recordFiles(t.id, p.round, sid, p.changesAt, 'fix');
+  recordFiles(t.id, p.round, sid, p.changesAt, p.step === 'check-fix' ? 'check' : 'fix');
   pending.delete(t.id);
-  if (p.round >= get(t.id)!.maxRounds) {
-    updateTicket(t.id, (x) => ({ ...x, status: 'needs_decision' }));
-    notify(sid, 'request', `「${summary(sid)?.title ?? ''}」的代码审核需要你决定`, `${get(t.id)!.maxRounds} 轮后仍未通过`, 'warn');
-    pumpQueue(sid);
-    return;
-  }
-  void beginRound(t.id, p.round + 1);
+  if (p.step === 'check-fix') void runChecks(t.id, p.round, (p.attempt ?? 1) + 1);
+  else void beginRound(t.id, p.round + 1);
 });
 
 onProcessEnd((sid) => {
@@ -477,6 +507,7 @@ async function stopReview(sid: string) {
     return;
   }
   checkProcs.get(t.id)?.kill();
+  reviewers.get(t.id)?.abort();
   stopped(t.id, '你停止了审核');
 }
 
@@ -513,7 +544,7 @@ function reviewMarkdown(id: string): string {
   const lines = [
     `# 代码审核 · ${sum?.title ?? ''}`, '',
     `- 基准：${t.base}`, `- 轮数：${t.rounds.length}/${t.maxRounds}`, `- 结果：${status[t.status]}${t.note ? `（${t.note}）` : ''}`,
-    `- 审核子代理：${t.model} · 思考 ${t.effort}`,
+    `- 审核者：${t.model} · 思考 ${t.effort}`,
     `- 验证命令：${t.checks.length ? t.checks.join('；') : '跳过验证'}`, '',
   ];
   for (const r of t.rounds) {

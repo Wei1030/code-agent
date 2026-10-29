@@ -5,13 +5,13 @@ import { deleteSession, forkSession, getSessionMessages, renameSession, tagSessi
 import type { CommandInfo, QueuedMessage, SessionRef, SessionSummary } from '@code-agent/shared/types';
 import type { DryRun, SendOptions } from '@code-agent/shared/api';
 import { emptyRuntime } from '@code-agent/shared/runtime';
-import { MODELS } from '@code-agent/shared/catalog';
 import { register } from '../hub';
 import { app } from '../state';
 import { addItem, allSummaries, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
 import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onTurnEnd, refreshContext, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
 import { cwdOf } from './options';
+import { oneProcess, resolveModel, validModel } from '../models';
 
 /** Full messages behind the queue entries the UI shows. */
 const queued = new Map<string, Outgoing>();
@@ -196,9 +196,7 @@ register({
     const prof = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
     const now = Date.now();
     upsert({ id, workspaceId, title: '新会话', firstPrompt: '', branch: ws.branch, createdAt: now, lastActive: now, tag: null, live: false, state: 'idle', forkedFrom: null, tokens: 0, draft: true });
-    const models = app.models.length ? app.models : MODELS;
-    const model = models.find((m) => m.id === prof.model) ? prof.model : models[0]?.id ?? prof.model;
-    initRuntime(emptyRuntime(id, { model, effort: prof.effort, mode: prof.mode }));
+    initRuntime(emptyRuntime(id, { model: validModel(prof.model), effort: prof.effort, mode: prof.mode }));
   },
   openSession: async (sid) => rt(sid) ?? (await import('./history').then((h) => h.importTranscript(sid))) ?? null,
   send,
@@ -239,19 +237,30 @@ register({
     const r = rt(sid);
     if (!r) return;
     const info = app.models.find((m) => m.id === model);
-    const effort = info && !info.efforts.includes(r.effort) ? info.efforts[info.efforts.length - 1] : r.effort;
-    emit(sid, { t: 'settings', patch: { model, effort } });
+    const effort = info?.efforts.length && !info.efforts.includes(r.effort) ? info.efforts[info.efforts.length - 1] : r.effort;
     const l = live(sid);
+    if (l && !oneProcess(r.model, model)) {
+      // Another process environment: restart and pick the conversation up again.
+      if (inTurn(sid) || r.request) throw new Error('这一轮结束后才能换到这个模型');
+      emit(sid, { t: 'settings', patch: { model, effort } });
+      addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'info', text: `已换到 ${info?.label ?? model}（${info?.desc ?? ''}），Claude Code 重新启动后接着这段对话。` });
+      await closeProcess(sid);
+      await startProcess(sid, { resume: true });
+      return;
+    }
+    emit(sid, { t: 'settings', patch: { model, effort } });
     if (l) {
-      await l.q.setModel(model);
-      if (effort !== r.effort) await l.q.applyFlagSettings({ effortLevel: effort });
-      emit(sid, { t: 'raw', type: 'control_request', summary: `set_model · ${model}`, json: { subtype: 'set_model', model } });
+      const name = resolveModel(model).name;
+      await l.q.setModel(name);
+      if (effort !== r.effort && resolveModel(model).effort) await l.q.applyFlagSettings({ effortLevel: effort });
+      emit(sid, { t: 'raw', type: 'control_request', summary: `set_model · ${name}`, json: { subtype: 'set_model', model: name } });
     }
   },
   setEffort: async (sid, effort) => {
     emit(sid, { t: 'settings', patch: { effort } });
     const l = live(sid);
-    if (l) {
+    const r = rt(sid);
+    if (l && r && resolveModel(r.model).effort) {
       await l.q.applyFlagSettings({ effortLevel: effort });
       emit(sid, { t: 'raw', type: 'control_request', summary: `apply_flag_settings · effortLevel=${effort}`, json: { effortLevel: effort } });
     }

@@ -2,7 +2,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Attachment, Effort, PermissionMode, SessionRef, SessionRuntime } from '../api/types';
 import { api } from '../api';
-import { COMMANDS, EFFORT_LABEL, MODE_INFO, MODELS, type CommandInfo, type FsNode } from '../lib/catalog';
+import { COMMANDS, MODE_INFO, type CommandInfo, type FsNode } from '../lib/catalog';
+import { effortOptions, modelOptions, takesEffort } from '../lib/models';
 import { Icon } from '../components/Icon';
 import { Button, MenuButton, Popover, Progress, Select } from '../components/ui';
 import { useApp } from '../store/app';
@@ -259,7 +260,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   };
 
   // ------------------------------------------------------------ settings
-  const model = MODELS.find((m) => m.id === rt.model) ?? MODELS[0];
+  const model = app.models.find((m) => m.id === rt.model);
   const ctxUsed = rt.context.categories.filter((c) => c.kind === 'used').reduce((a, c) => a + c.tokens, 0);
   const ctxPct = rt.context.max ? (ctxUsed / rt.context.max) * 100 : 0;
   const pickMode = (m: PermissionMode) => {
@@ -339,11 +340,11 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
       <div className="c-row2">
         <Select size="sm" icon="cpu" value={rt.model} width={280} placement="top-start" title={t('模型')} disabled={disabled}
           onChange={(v) => api.setModel(sid, v)}
-          options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
-        <Select<Effort> size="sm" icon="bulb" value={rt.effort} width={220} placement="top-start" title={t('思考强度')} disabled={disabled}
+          options={modelOptions(app.models, t)} />
+        <Select<Effort> size="sm" icon="bulb" value={rt.effort} width={220} placement="top-start" title={takesEffort(model) ? t('思考强度') : t('这个模型不接收思考强度')} disabled={disabled || !takesEffort(model)}
           onChange={(v) => api.setEffort(sid, v)}
           renderValue={(o) => <>{t('思考')} · {o?.label}</>}
-          options={model.efforts.map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
+          options={effortOptions(model, rt.effort, t)} />
         <Select<PermissionMode> size="sm" icon={MODE_INFO[rt.mode].icon} value={rt.mode} width={320} placement="top-start" title={t('权限模式')} disabled={disabled}
           onChange={pickMode}
           options={(Object.keys(MODE_INFO) as PermissionMode[]).map((m) => ({

@@ -7,7 +7,8 @@ import path from 'node:path';
 import type { AgentDefinition, CanUseTool, HookCallbackMatcher, HookEvent, McpServerConfig, OnElicitation, Options, SettingSource } from '@anthropic-ai/claude-agent-sdk';
 import { app } from '../state';
 import { LOGS_DIR } from '../paths';
-import { processEnv, systemClaude } from '../claude/files';
+import { systemClaude } from '../claude/files';
+import { envFor, reasoning, resolveModel } from '../models';
 import { rt, summary } from './registry';
 
 export interface BuildCtx {
@@ -67,7 +68,9 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
   const r = rt(sid)!;
   const ws = workspaceOf(sid);
   const cwd = cwdOf(sid);
-  const onClaude = app.provider.kind === 'subscription';
+  // The model decides the service: an endpoint model runs with the endpoint's URL and token.
+  const model = resolveModel(r.model);
+  const onClaude = !model.endpoint;
 
   const disallowed: string[] = [];
   for (const name of ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'NotebookEdit', 'Bash', 'PowerShell', 'WebFetch', 'WebSearch', 'Agent', 'TaskCreate', 'AskUserQuestion', 'Skill']) {
@@ -104,9 +107,9 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
   const options: Options = {
     cwd,
     ...(summary(sid)?.worktree && ws ? { projectConfigRoot: ws.path } : {}),
-    model: r.model,
-    effort: r.effort,
-    thinking: { type: 'adaptive', display: 'summarized' },
+    model: model.name,
+    ...reasoning(model, r.effort),
+    ...(onClaude ? { thinking: { type: 'adaptive' as const, display: 'summarized' as const } } : {}),
     permissionMode: mode,
     ...(mode === 'bypassPermissions' || prof.allowBypass ? { allowDangerouslySkipPermissions: true } : {}),
     permissionPrompts: prof.prompts,
@@ -134,7 +137,7 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
     verbatimPrompts: !!prof.features.verbatim,
     includePartialMessages: true,
     perTaskStopAffordance: true,
-    env: processEnv(),
+    env: envFor(r.model),
     stderr: ctx.stderr,
     ...(app.runtime.debugLog ? { debug: true, debugFile: path.join(LOGS_DIR, `${sid}.log`) } : {}),
     ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),

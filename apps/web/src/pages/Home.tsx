@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon';
 import { Button, Chip } from '../components/ui';
 import { SessionRow, useOpenWorkspace } from '../components/SessionRow';
 import { useApp } from '../store/app';
+import { api } from '../api';
 import { relTime } from '../lib/format';
 import { useT } from '../lib/i18n';
 
@@ -17,6 +18,28 @@ export function Home() {
   const openPicker = () => useApp.getState().set({ folderPickerOpen: true });
 
   const openWorkspace = useOpenWorkspace();
+  const askRemove = (id: string) => {
+    const app = useApp.getState();
+    const w = app.workspaces.find((x) => x.id === id);
+    if (!w) return;
+    const own = app.sessions.filter((s) => s.workspaceId === id && !s.draft);
+    const running = own.filter((s) => s.live).length;
+    const board = app.board.filter((x) => x.workspaceId === id).length;
+    const jobs = app.jobs.filter((j) => j.workspaceId === id).length;
+    app.ask({
+      title: t('移除工作区 {n}？', { n: w.name }),
+      body: [
+        t('Code Agent 会删掉它在这里的数据：'),
+        t('· 会话列表里的 {n} 个会话{r}', { n: own.length, r: running ? t('（其中 {k} 个正在运行，会被停止）', { k: running }) : '' }),
+        t('· 看板上的 {n} 个条目', { n: board }),
+        t('· {n} 个作业和它们的运行记录，以及审核记录', { n: jobs }),
+        '',
+        t('不会动文件夹 {p} 里的任何文件，也不会删 Claude Code 自己的会话记录。以后重新添加这个文件夹，那些会话会再次导入。', { p: w.path }),
+      ].join('\n'),
+      confirmLabel: t('移除'), danger: true,
+      onConfirm: () => api.removeWorkspace(id).then(() => app.toast(t('已移除工作区 {n}', { n: w.name }), 'good')),
+    });
+  };
   // The overview is what "All workspaces" in the top bar shows.
   useEffect(() => useApp.getState().set({ currentWorkspaceId: '' }), []);
 
@@ -46,6 +69,7 @@ export function Home() {
               const waiting = live.filter((s) => s.state === 'requires_action').length;
               return (
                 <button key={w.id} className="ws-card" onClick={() => openWorkspace(w.id)} title={t('打开 {name} 最近的会话', { name: w.name })}>
+                  <span className="ws-remove" role="button" title={t('移除这个工作区')} onClick={(e) => { e.stopPropagation(); askRemove(w.id); }}><Icon name="trash" size={14} /></span>
                   <div className="ws-card-head">
                     <span className="ws-icon"><Icon name="folder" size={16} /></span>
                     <span className="grow" style={{ minWidth: 0 }}>

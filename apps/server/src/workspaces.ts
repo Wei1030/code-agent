@@ -143,12 +143,38 @@ async function listFiles(workspaceId: string): Promise<FsNode[]> {
   return toTree(walk(ws.path));
 }
 
+/**
+ * Take a workspace out of Code Agent: its running sessions stop, and Code Agent's own data for it
+ * goes (session list, board, jobs and their runs, review records). The folder and Claude Code's own
+ * session records stay; adding the folder again imports those sessions again.
+ */
+async function removeWorkspace(id: string) {
+  const { allSummaries, dropSession } = await import('./sessions/registry');
+  const { closeProcess } = await import('./sessions/live');
+  const { cancelWaiting } = await import('./sessions/slots');
+  const sessions = allSummaries().filter((s) => s.workspaceId === id);
+  for (const s of sessions) {
+    cancelWaiting(s.id);
+    await closeProcess(s.id);
+  }
+  for (const s of sessions) dropSession(s.id);
+  const gone = new Set(sessions.map((s) => s.id));
+  const jobs = app.jobs.filter((j) => j.workspaceId === id).map((j) => j.id);
+  set('board', app.board.filter((x) => x.workspaceId !== id));
+  set('jobs', app.jobs.filter((j) => j.workspaceId !== id));
+  set('jobRuns', app.jobRuns.filter((r) => !jobs.includes(r.jobId)));
+  set('reviews', app.reviews.filter((t) => !gone.has(t.sessionId)));
+  set('reviewed', Object.fromEntries(Object.entries(app.reviewed).filter(([sid]) => !gone.has(sid))));
+  const { [id]: _checks, ...checks } = app.reviewChecks;
+  void _checks;
+  set('reviewChecks', checks);
+  set('workspaces', app.workspaces.filter((w) => w.id !== id));
+  notifyChanged();
+}
+
 register({
   addWorkspace,
-  removeWorkspace: (id) => {
-    set('workspaces', app.workspaces.filter((w) => w.id !== id));
-    notifyChanged();
-  },
+  removeWorkspace,
   listDir,
   listFiles,
 });

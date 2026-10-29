@@ -5,7 +5,6 @@
  * Writes are debounced and grouped in transactions.
  */
 import path from 'node:path';
-import { existsSync, readdirSync, readFileSync, renameSync, mkdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { HOME } from './paths';
 
@@ -94,51 +93,3 @@ export function flush() {
   }
   pending.clear();
 }
-
-// ------------------------------------------------------------------ the JSON files of earlier versions
-
-/** Move data written by the JSON-file store into the database once, then set the files aside. */
-function migrateJson() {
-  if (load('migrated-json', false)) return;
-  const file = (n: string) => path.join(HOME, n);
-  const read = (f: string) => {
-    try {
-      return JSON.parse(readFileSync(f, 'utf8')) as unknown;
-    } catch {
-      return undefined;
-    }
-  };
-  const moved: string[] = [];
-  tx(() => {
-    const state = read(file('state.json')) as Record<string, unknown> | undefined;
-    if (state) for (const [k, v] of Object.entries(state)) kvPut.run(`slice:${k}`, JSON.stringify(v));
-    const own: Record<string, string> = { 'reviews.json': 'slice:reviews', 'usage.json': 'slice:usage', 'job-runs.json': 'slice:jobRuns', 'hook-log.json': 'slice:hookLog',
-      'secrets.json': 'secrets', 'review-base.json': 'review-base', 'board-undo.json': 'board-undo', 'skills-off.json': 'skills-off', 'jobs-meta.json': 'jobs-meta' };
-    for (const [f, key] of Object.entries(own)) {
-      const v = read(file(f));
-      if (v !== undefined) kvPut.run(key, JSON.stringify(v));
-    }
-    const board = read(file('board.json')) as Array<{ workspaceId: string; id: string }> | undefined;
-    for (const it of board ?? []) db.prepare('INSERT OR REPLACE INTO board_items (workspace, id, data) VALUES (?, ?, ?)').run(it.workspaceId, it.id, JSON.stringify(it));
-    const sessions = read(file('sessions.json')) as Array<{ id: string; lastActive: number }> | undefined;
-    for (const s of sessions ?? []) {
-      db.prepare('INSERT OR REPLACE INTO sessions (id, summary, last_active) VALUES (?, ?, ?)').run(s.id, JSON.stringify(s), s.lastActive ?? 0);
-      const rt = read(path.join(HOME, 'sessions', `${s.id}.json`)) as { items?: Array<{ id: string }> } & Record<string, unknown> | undefined;
-      if (!rt) continue;
-      const { items = [], ...meta } = rt;
-      db.prepare('INSERT OR REPLACE INTO runtimes (id, meta) VALUES (?, ?)').run(s.id, JSON.stringify(meta));
-      items.forEach((it, i) => db.prepare('INSERT OR REPLACE INTO items (session, seq, id, data) VALUES (?, ?, ?, ?)').run(s.id, i, it.id, JSON.stringify(it)));
-    }
-    kvPut.run('migrated-json', 'true');
-  });
-  for (const f of ['state.json', 'reviews.json', 'usage.json', 'job-runs.json', 'hook-log.json', 'secrets.json', 'review-base.json', 'board-undo.json', 'skills-off.json', 'jobs-meta.json', 'board.json', 'sessions.json']) {
-    if (existsSync(file(f))) moved.push(f);
-  }
-  if (moved.length || existsSync(path.join(HOME, 'sessions'))) {
-    const backup = path.join(HOME, 'json-backup');
-    mkdirSync(backup, { recursive: true });
-    for (const f of moved) renameSync(file(f), path.join(backup, f));
-    if (existsSync(path.join(HOME, 'sessions')) && readdirSync(path.join(HOME, 'sessions')).length) renameSync(path.join(HOME, 'sessions'), path.join(backup, 'sessions'));
-  }
-}
-migrateJson();

@@ -8,6 +8,7 @@ import { Button, Chip, Field, Modal, Select, Status } from '../components/ui';
 import { useApp } from '../store/app';
 import { BoardLink } from '../components/BoardLink';
 import { EFFORT_LABEL, MODELS } from '../lib/catalog';
+import { effortFor, effortOptions, modelOptions, takesEffort } from '../lib/models';
 import { relTime, tokens as fmtTokens } from '../lib/format';
 import { cx, download } from '../lib/util';
 import { useT } from '../lib/i18n';
@@ -104,7 +105,8 @@ function ReviewDialog({ sum, rt, onClose }: { sum: SessionSummary; rt: SessionRu
   const [effort, setEffort] = useState<Effort>(profile.effort);
   const un = useUnreviewed(rt);
   const lines = checks.split('\n').map((x) => x.trim()).filter(Boolean);
-  const info = MODELS.find((m) => m.id === model) ?? MODELS[0];
+  const models = useApp((s) => s.models);
+  const info = models.find((m) => m.id === model);
   const start = () => {
     api.startReview(sum.id, lines, { model, effort });
     onClose();
@@ -116,23 +118,23 @@ function ReviewDialog({ sum, rt, onClose }: { sum: SessionSummary; rt: SessionRu
         <textarea className="textarea mono" rows={3} value={checks} onChange={(e) => setChecks(e.target.value)} placeholder={t('留空表示跳过验证')} />
       </Field>
       <div style={{ marginTop: 14 }}>
-        <Field label={t('审核子代理')} hint={<>
+        <Field label={t('审核者')} hint={<>
           {t('默认取自「评审」配置方案，在这里改只影响这一次审核。工具、CLAUDE.md、审核要求只能在')}
           <button className="link-btn" onClick={() => { onClose(); nav('/settings/profiles?p=review'); }}>{t('「评审」方案')}</button>{t('里改。')}
         </>}>
           <div className="row" style={{ gap: 8 }}>
             <Select size="sm" icon="cpu" width={260} value={model} className="w-240"
-              onChange={(v) => { setModel(v); const m = MODELS.find((x) => x.id === v); if (m && !m.efforts.includes(effort)) setEffort(m.efforts[m.efforts.length - 1]); }}
-              options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
+              onChange={(v) => { setModel(v); setEffort(effortFor(models, v, effort)); }}
+              options={modelOptions(models, t)} />
             <Select<Effort> size="sm" icon="bulb" width={200} value={effort} className="w-240" onChange={setEffort} renderValue={(o) => <>{t('思考')} · {o?.label}</>}
-              options={info.efforts.map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
+              disabled={!takesEffort(info)} options={effortOptions(info, effort, t)} />
             {(model !== profile.model || effort !== profile.effort) && <button className="link-btn" onClick={() => { setModel(profile.model); setEffort(profile.effort); }}>{t('恢复方案里的设置')}</button>}
           </div>
         </Field>
       </div>
       <ul className="plain-list" style={{ marginTop: 10 }}>
         <li>{t('最多 5 轮：前 3 轮全局审核，看整个改动和它影响到的地方；之后只看上一轮之后的修改。')}</li>
-        <li>{t('审核子代理只能读，看不到这个会话的对话。只报正确性问题，不管风格；没有阻断和重要问题就算通过。')}</li>
+        <li>{t('审核者只能读，看不到这个会话的对话。只报正确性问题，不管风格；没有阻断和重要问题就算通过。')}</li>
         <li>{t('被打回时，Claude 逐条修改或写明异议，然后自动进入下一轮。审核期间这个会话处于忙碌状态，你发的消息会排队。')}</li>
         <li>{t('每一轮的验证结果、审核意见和作者的修改，都可以在「审核记录」里按轮查看。')}</li>
       </ul>
@@ -342,7 +344,7 @@ export function ReviewRecord({ sid }: { sid: string }) {
         </div>
         {ticket.note && <div className="ink2" style={{ marginTop: 6 }}>{ticket.note}</div>}
         <div className="hint" style={{ marginTop: 6 }}>
-          {t('基准 {b}', { b: ticket.base })} · {ticket.checks.length ? t('验证：{c}', { c: ticket.checks.join(' → ') }) : t('跳过验证')} · {t('审核子代理：{m} · 思考 {e}', { m: model, e: t(EFFORT_LABEL[ticket.effort]) })}
+          {t('基准 {b}', { b: ticket.base })} · {ticket.checks.length ? t('验证：{c}', { c: ticket.checks.join(' → ') }) : t('跳过验证')} · {t('审核者：{m} · 思考 {e}', { m: model, e: t(EFFORT_LABEL[ticket.effort]) })}
         </div>
       </div>
       {ticket.rounds.map((r) => <RoundBlock key={r.n} ticket={ticket} r={r} />)}
@@ -373,7 +375,7 @@ function RoundBlock({ ticket, r }: { ticket: ReviewTicket; r: ReviewRound }) {
         <span className="v">{ticket.checks.length === 0 ? t('跳过') : r.checks.length === 0 ? t('未开始') : <div className="rr-checks"><CheckStatus r={r} /><CheckDetail r={r} /></div>}</span>
         {r.reviewer && (
           <>
-            <span className="k">{t('审核子代理')}</span>
+            <span className="k">{t('审核者')}</span>
             <span className="v">{r.reviewer.summary} <span className="muted">· {Math.round(r.reviewer.seconds)} {t('秒')} · {fmtTokens(r.reviewer.tokens)} tokens · {t('{n} 次工具调用', { n: r.reviewer.toolCalls })}</span></span>
           </>
         )}

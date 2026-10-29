@@ -179,11 +179,11 @@ export function Usage() {
           </div>
 
           <div className="panel">
-            <div className="panel-head"><b>{t('订阅限额')}</b><span className="grow" /><span className="hint">{provider.kind === 'subscription' ? `Claude ${provider.plan}` : ''}</span>
+            <div className="panel-head"><b>{t('订阅限额')}</b><span className="grow" /><span className="hint">{provider.loggedIn ? `Claude ${provider.plan}` : ''}</span>
               <Button size="sm" variant="ghost" icon="refresh" title={t('向 Claude Code 重新读取')} onClick={() => api.refreshUsage()} /></div>
             <div className="panel-body">
-              {provider.kind !== 'subscription' ? (
-                <div className="empty"><b>{t('当前使用兼容端点')}</b>{t('没有 Claude 订阅的 5 小时 / 每周限额。')}</div>
+              {!provider.loggedIn ? (
+                <div className="empty"><b>{t('没有登录 Claude 订阅')}</b>{t('兼容端点没有 5 小时 / 每周限额。')}</div>
               ) : (
                 <>
                   {[{ k: '5 小时窗口', icon: 'clock', w: usage.fiveHour }, { k: '本周', icon: 'gauge', w: usage.weekly }].map(({ k, icon, w }) => (

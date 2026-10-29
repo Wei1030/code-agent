@@ -5,7 +5,8 @@
 import os from 'node:os';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { app } from './state';
-import { processEnv, systemClaude } from './claude/files';
+import { systemClaude } from './claude/files';
+import { envFor, reasoning, resolveModel } from './models';
 import { recordUsage } from './usage';
 
 export interface OneShot {
@@ -22,6 +23,7 @@ export interface OneShot {
 }
 
 export async function oneShot<T>(o: OneShot): Promise<T> {
+  const model = resolveModel(o.model);
   const exe = app.provider.executable === 'system' ? systemClaude() : undefined;
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), o.timeoutMs ?? 180_000);
@@ -30,15 +32,15 @@ export async function oneShot<T>(o: OneShot): Promise<T> {
       prompt: o.prompt,
       options: {
         cwd: o.cwd ?? os.tmpdir(),
-        model: o.model,
-        effort: o.effort,
+        model: model.name,
+        ...reasoning(model, o.effort),
         persistSession: false,
         settingSources: o.withSettings ? ['user', 'project', 'local'] : [],
         systemPrompt: 'You are a careful assistant that turns material into structured records. Answer only through the required structured output.',
         permissionMode: 'dontAsk',
         ...(o.allowedTools ? { allowedTools: o.allowedTools } : { disallowedTools: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Agent', 'Read', 'Glob', 'Grep'] }),
         outputFormat: { type: 'json_schema', schema: o.schema },
-        env: processEnv(),
+        env: envFor(o.model),
         abortController: abort,
         ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
       },

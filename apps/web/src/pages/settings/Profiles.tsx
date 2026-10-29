@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { Effort, PermissionMode, Profile, ReviewProfile } from '../../api/types';
-import { BUILTIN_TOOLS, EFFORT_LABEL, MODE_INFO, MODELS } from '../../lib/catalog';
+import { BUILTIN_TOOLS, MODE_INFO } from '../../lib/catalog';
+import { effortFor, effortOptions, modelOptions, takesEffort } from '../../lib/models';
 import { Button, Check, Field, Seg, Select, Toggle } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { cx } from '../../lib/util';
@@ -20,7 +21,7 @@ const FEATURES: Array<{ key: string; label: string; hint: string }> = [
 
 const ENTRIES = [
   { id: 'default' as const, name: '默认', desc: '新会话和 Claude 新建的会话使用' },
-  { id: 'review' as const, name: '评审', desc: '代码审核时的审核子代理使用' },
+  { id: 'review' as const, name: '评审', desc: '代码审核时的审核者使用' },
 ];
 
 export function Profiles() {
@@ -37,7 +38,7 @@ export function Profiles() {
   return (
     <>
       <h1>{t('配置方案')}</h1>
-      <p className="lead">{t('只有两套：「默认」用于新会话和 Claude 新建的会话，「评审」用于代码审核的审核子代理。会话中途在输入框下方改的模型、思考强度、权限模式只影响当前会话。')}</p>
+      <p className="lead">{t('只有两套：「默认」用于新会话和 Claude 新建的会话，「评审」用于代码审核的审核者。会话中途在输入框下方改的模型、思考强度、权限模式只影响当前会话。')}</p>
       <div style={{ display: 'grid', gridTemplateColumns: '240px minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
         <div className="profile-list">
           {ENTRIES.map((e) => (
@@ -66,7 +67,6 @@ function SaveBar({ onDiscard, onSave }: { onDiscard: () => void; onSave: () => v
 
 function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
   const t = useT();
-  const onClaude = useApp((s) => s.provider.kind === 'subscription');
   const app = useApp();
   const saved = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
   const [draft, setDraft] = useState<Profile>(saved);
@@ -74,7 +74,8 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   useEffect(() => onDirty(dirty), [dirty, onDirty]);
   const set = (p: Partial<Profile>) => setDraft({ ...draft, ...p });
-  const model = MODELS.find((m) => m.id === draft.model) ?? MODELS[0];
+  const model = app.models.find((m) => m.id === draft.model);
+  const onClaude = !model?.endpoint;
 
   return (
     <div className="panel">
@@ -83,11 +84,11 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
             <Section title={t('模型')}>
               <div className="form-grid">
                 <Field label={t('模型')}>
-                  <Select value={draft.model} onChange={(v) => { const efforts = MODELS.find((m) => m.id === v)!.efforts; set({ model: v, effort: efforts.includes(draft.effort) ? draft.effort : efforts[efforts.length - 1] }); }}
-                    options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
+                  <Select value={draft.model} onChange={(v) => set({ model: v, effort: effortFor(app.models, v, draft.effort) })}
+                    options={modelOptions(app.models, t)} />
                 </Field>
-                <Field label={t('思考强度')} hint={t('模型回答前想得多深；使用兼容端点时可能不生效')}>
-                  <Select<Effort> value={draft.effort} onChange={(v) => set({ effort: v })} options={model.efforts.map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
+                <Field label={t('思考强度')} hint={takesEffort(model) ? t('模型回答前想得多深') : t('这个端点模型没有开启「思考与思考强度」')}>
+                  <Select<Effort> value={draft.effort} onChange={(v) => set({ effort: v })} disabled={!takesEffort(model)} options={effortOptions(model, draft.effort, t)} />
                 </Field>
               </div>
             </Section>
@@ -120,7 +121,7 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
                       <div className="grow">
                         <b>{t(tool.label)}</b> <span className="mono muted">{tool.name}</span>
                         {tool.desc && <div className="hint">{t(tool.desc)}</div>}
-                        {tool.claudeOnly && <div className="hint">{unavailable ? t('只在使用 Claude 订阅时提供，兼容端点上没有') : t('只在使用 Claude 订阅时提供')}</div>}
+                        {tool.claudeOnly && <div className="hint">{unavailable ? t('只在 Claude 模型上提供，选的端点模型没有') : t('只在 Claude 模型上提供')}</div>}
                       </div>
                     </div>
                   );
@@ -173,7 +174,7 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
 /** Tools the reviewer may also get; Read, Glob, Grep and read-only commands are always on. */
 const REVIEW_TOOLS = [
   { name: 'WebFetch', label: '抓取网页', desc: '查看库的文档、规范' },
-  { name: 'WebSearch', label: '网页搜索', desc: '只在使用 Claude 订阅时提供', claudeOnly: true },
+  { name: 'WebSearch', label: '网页搜索', desc: '只在 Claude 模型上提供', claudeOnly: true },
   { name: 'Skill', label: '技能', desc: '使用工作区里装的技能，例如团队的审查清单' },
   { name: 'Agent', label: '子代理', desc: '把大范围的搜索交给 Explore 子代理；更费 token' },
 ];
@@ -183,12 +184,12 @@ const BUILT_IN_RULES = [
   '看不到作者会话的对话，只拿到改动范围、改动目标，以及之前各轮的意见和作者的答复。',
   '前 3 轮全局审核：看整个改动，追查调用方、数据流、配置、测试和文档受到的影响；之后的轮次只看上一轮之后的修改，确认意见是否解决。',
   '只报正确性问题，不管风格；每条意见标出严重程度（阻断 / 重要 / 次要）、文件和行号。没有阻断和重要问题就算通过。',
-  '结论通过 submit_review 工具交给 Code Agent，格式固定。',
+  '结论以固定格式的结构化结果交给 Code Agent。',
 ];
 
 function ReviewEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
   const t = useT();
-  const onClaude = useApp((s) => s.provider.kind === 'subscription');
+  const models = useApp((s) => s.models);
   const saved = useApp((s) => s.reviewProfile);
   const [draft, setDraft] = useState<ReviewProfile>(saved);
   const [showRules, setShowRules] = useState(false);
@@ -196,25 +197,26 @@ function ReviewEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   useEffect(() => onDirty(dirty), [dirty, onDirty]);
   const set = (p: Partial<ReviewProfile>) => setDraft({ ...draft, ...p });
-  const model = MODELS.find((m) => m.id === draft.model) ?? MODELS[0];
+  const model = models.find((m) => m.id === draft.model);
+  const onClaude = !model?.endpoint;
 
   return (
     <div className="panel">
-      <div className="panel-head"><h3>{t('评审')}</h3><span className="hint">{t('代码审核时的审核子代理使用')}</span></div>
+      <div className="panel-head"><h3>{t('评审')}</h3><span className="hint">{t('代码审核时的审核者使用')}</span></div>
       <div className="panel-body">
         <Section title={t('模型')}>
           <div className="form-grid">
             <Field label={t('模型')}>
-              <Select value={draft.model} onChange={(v) => { const efforts = MODELS.find((m) => m.id === v)!.efforts; set({ model: v, effort: efforts.includes(draft.effort) ? draft.effort : efforts[efforts.length - 1] }); }}
-                options={MODELS.map((m) => ({ value: m.id, label: m.label, desc: t(m.desc) }))} />
+              <Select value={draft.model} onChange={(v) => set({ model: v, effort: effortFor(models, v, draft.effort) })}
+                options={modelOptions(models, t)} />
             </Field>
-            <Field label={t('思考强度')} hint={t('审核要找出容易漏掉的情况，建议「高」；使用兼容端点时可能不生效')}>
-              <Select<Effort> value={draft.effort} onChange={(v) => set({ effort: v })} options={model.efforts.map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
+            <Field label={t('思考强度')} hint={takesEffort(model) ? t('审核要找出容易漏掉的情况，建议「高」') : t('这个端点模型没有开启「思考与思考强度」')}>
+              <Select<Effort> value={draft.effort} onChange={(v) => set({ effort: v })} disabled={!takesEffort(model)} options={effortOptions(model, draft.effort, t)} />
             </Field>
           </div>
         </Section>
 
-        <Section title={t('审核子代理可以使用的工具')}>
+        <Section title={t('审核者可以使用的工具')}>
           <div className="tool-grid">
             {[{ name: 'Read', label: '读取文件' }, { name: 'Glob', label: '按名称找文件' }, { name: 'Grep', label: '搜索文件内容' }, { name: 'Bash', label: '只读命令' }].map((tool) => (
               <div key={tool.name} className="tool-item on locked">
@@ -229,12 +231,12 @@ function ReviewEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
                 <div key={tool.name} className={cx('tool-item', on && 'on', unavailable && 'disabled')}
                   onClick={() => !unavailable && set({ tools: on ? draft.tools.filter((x) => x !== tool.name) : [...draft.tools, tool.name] })}>
                   <Check on={on} onChange={() => {}} label="" />
-                  <div className="grow"><b>{t(tool.label)}</b> <span className="mono muted">{tool.name}</span><div className="hint">{unavailable ? t('只在使用 Claude 订阅时提供，兼容端点上没有') : t(tool.desc)}</div></div>
+                  <div className="grow"><b>{t(tool.label)}</b> <span className="mono muted">{tool.name}</span><div className="hint">{unavailable ? t('只在 Claude 模型上提供，选的端点模型没有') : t(tool.desc)}</div></div>
                 </div>
               );
             })}
           </div>
-          <div className="hint" style={{ marginTop: 6 }}>{t('修改文件、向你提问、任务清单这些工具不提供：审核子代理只读，也不打断你。')}</div>
+          <div className="hint" style={{ marginTop: 6 }}>{t('修改文件、向你提问、任务清单这些工具不提供：审核者只读，也不打断你。')}</div>
         </Section>
 
         <Section title={t('项目说明')}>
@@ -249,7 +251,7 @@ function ReviewEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
         </Section>
 
         <div className="hint" style={{ lineHeight: 1.7 }}>
-          {t('权限模式、读取的设置文件、系统提示词、回复语言和「功能」里的选项属于整个会话，审核子代理沿用它所在的会话，所以这里没有。回复语言跟随「默认」方案。')}
+          {t('审核者是单独启动的 Claude Code 进程，不沿用会话的权限模式、系统提示词和「功能」选项：它只读、不向你提问，审完就退出，不占运行中会话的名额。')}
         </div>
       </div>
       {dirty && <SaveBar onDiscard={() => setDraft(saved)} onSave={() => { useApp.getState().set({ reviewProfile: draft }); useApp.getState().toast(t('已保存「评审」'), 'good'); }} />}

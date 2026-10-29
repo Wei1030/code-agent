@@ -21,8 +21,9 @@ peer sessions (sessions of a workspace read, message and create each other), a c
 
 ### Running
 
-Node.js 22.13 or later (it brings the built-in SQLite the server stores its data in; nothing else to install). Log in to Claude Code yourself first (`claude`, then `/login`), or configure a
-compatible endpoint in Settings.
+Node.js 22.13 or later (it brings the built-in SQLite the server stores its data in; nothing else to install). Log in to Claude Code yourself first (`claude`, then `/login`), and/or add
+compatible endpoints (with their models) in Settings → 模型服务与账号; every session, review, background run
+and job picks its model from both.
 
 ```
 npm install

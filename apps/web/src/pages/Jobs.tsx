@@ -10,7 +10,8 @@ import { Icon } from '../components/Icon';
 import { Button, Chip, Field, Seg, Select, Status, Toggle } from '../components/ui';
 import { useApp } from '../store/app';
 import { NoWorkspace } from '../components/NoWorkspace';
-import { EFFORT_LABEL, MODE_INFO, MODELS } from '../lib/catalog';
+import { MODE_INFO } from '../lib/catalog';
+import { effortFor, effortOptions, modelOptions, takesEffort } from '../lib/models';
 import { NEW_JOB_SCHEMA } from '../lib/catalog';
 import { describeSchedule, fillVars, nextRun, parseCron, promptVars } from '../lib/schedule';
 import { dateTime, relTime, tokens as fmtTokens } from '../lib/format';
@@ -100,7 +101,7 @@ function JobEditor({ job, onDeleted, onDuplicated }: { job: JobTemplate; onDelet
   const setSched = (p: Partial<JobSchedule>) => setD({ ...d, schedule: { ...d.schedule, ...p } });
   const vars = promptVars(d.prompt);
   const problem = schemaProblem(d.schema);
-  const model = MODELS.find((m) => m.id === d.model) ?? MODELS[0];
+  const model = app.models.find((m) => m.id === d.model);
   const s = d.schedule;
   const cronOk = s.kind !== 'cron' || !!parseCron(s.cron);
   const next = nextRun(s);
@@ -149,11 +150,11 @@ function JobEditor({ job, onDeleted, onDuplicated }: { job: JobTemplate; onDelet
           <h3>{t('运行设置')}</h3>
           <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
             <Field label={t('模型')}>
-              <Select value={d.model} onChange={(v) => { const ef = MODELS.find((m) => m.id === v)!.efforts; set({ model: v, effort: ef.includes(d.effort) ? d.effort : ef[ef.length - 1] }); }}
-                options={MODELS.map((m) => ({ value: m.id, label: m.label }))} />
+              <Select value={d.model} onChange={(v) => set({ model: v, effort: effortFor(app.models, v, d.effort) })}
+                options={modelOptions(app.models, t)} />
             </Field>
             <Field label={t('思考强度')}>
-              <Select<Effort> value={d.effort} onChange={(v) => set({ effort: v })} options={model.efforts.map((e) => ({ value: e, label: t(EFFORT_LABEL[e]) }))} />
+              <Select<Effort> value={d.effort} onChange={(v) => set({ effort: v })} disabled={!takesEffort(model)} options={effortOptions(model, d.effort, t)} />
             </Field>
             <Field label={t('权限模式')}>
               <Select<PermissionMode> value={d.mode} onChange={(v) => set({ mode: v })} width={300}

@@ -110,7 +110,10 @@ export interface ServerApi {
   boardMarkdown(wsId: string): string;
 
   checkLogin(): void;
-  setCompatibleKey(key: string): void;
+  /** Save (or with an empty key, remove) a compatible endpoint's token; it stays on the server. */
+  setEndpointKey(endpointId: string, key: string): void;
+  /** Send one short prompt to a model to see whether its service answers. */
+  testModel(modelId: string): { ok: boolean; message: string };
   refreshUsage(): void;
   refreshMcp(): void;
   testMcp(id: string): void;
