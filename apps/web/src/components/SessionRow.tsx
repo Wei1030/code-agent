@@ -54,8 +54,10 @@ export function useSessionActions() {
       useApp.getState().toast(t('已导出 Markdown'), 'good');
     },
     /** Save = end the Claude Code process. The transcript is already on disk; it can be resumed later. */
-    save: (s: SessionSummary) => {
+    save: async (s: SessionSummary) => {
       const done = () => { api.stop(s.id); useApp.getState().toast(t('已保存「{title}」，可以随时恢复', { title: s.title }), 'good'); };
+      // What it is doing is known once its runtime is here (a session never opened in this page has none yet).
+      await api.openSession(s.id);
       const lines = workLines(s.id, t);
       if (lines.length === 0) { done(); return; }
       useApp.getState().ask({
@@ -66,7 +68,8 @@ export function useSessionActions() {
         onConfirm: done,
       });
     },
-    remove: (s: SessionSummary) => {
+    remove: async (s: SessionSummary) => {
+      if (s.live) await api.openSession(s.id);
       const lines = s.live ? workLines(s.id, t) : [];
       useApp.getState().ask({
         title: s.draft ? t('丢弃这个新会话？') : t('删除会话？'),

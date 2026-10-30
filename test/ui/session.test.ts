@@ -160,6 +160,23 @@ test('while Claude works a message queues; interrupting offers to keep or cancel
   await p.close();
 });
 
+test('saving a working session from the sessions list asks first, though it was never opened in the page (FR-SES-13)', async () => {
+  env.model.script(/列表里保存/, [shell(sleepCmd(30)), [say('完成')]]);
+  const sid = await env.start('列表里保存', { mode: 'bypassPermissions' });
+  await until(() => env.c.sessions.get(sid)?.state === 'running', 'running');
+  const p = await env.page('/sessions');
+  const row = `[...document.querySelectorAll('.srow')].find((r) => r.textContent.includes('列表里保存'))`;
+  await p.waitFor(`!!${row}`, 'the row');
+  await p.eval(`${row}.querySelector('button[title^="保存并结束"]').click()`);
+  await p.waitEl('.modal', '正在进行的这一轮');
+  await p.click('.modal .btn', '取消');
+  await sleep(500);
+  assert.equal(env.c.sessions.get(sid)?.live, true, 'cancelled, still running');
+  noPageErrors(p);
+  await p.close();
+  await env.c.call('stop', sid);
+});
+
 test('unsent text is kept per session across a reload (FR-IN-01)', async () => {
   const sid = await done('草稿保留', [[say('好')]]);
   const p = await env.page(`/s/${sid}`);
