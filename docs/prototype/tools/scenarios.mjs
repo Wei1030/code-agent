@@ -199,6 +199,14 @@ export const SCENARIOS = [
       [say('你发的截图和仓库里的 docs/ui-sessions.webp 是同一个页面：\n\n![仓库里的界面截图](docs/ui-sessions.webp)\n\n列表每行有标题、首条消息、工作区和状态；运行中的会话排在前面。要调整的话，我建议把「状态」挪到标题右边，扫一眼就能看到哪些在运行。')],
     ],
   },
+  // ---------------------------------------------------------------- P45: a session waiting for its wake-up
+  {
+    match: /夜间构建跑完/,
+    steps: [
+      [say('夜间构建大约一小时后跑完，我到时候回来看结果。'), use('ScheduleWakeup', { delaySeconds: 3600, reason: '等夜间构建跑完再看结果', prompt: '看看夜间构建的结果，失败的话定位原因', noop: false })],
+      [say('已经预约好了：一小时后回来看构建结果。')],
+    ],
+  },
   // ---------------------------------------------------------------- P26f: the board check of a turn
   {
     match: /把今天定下来的事过一遍/,

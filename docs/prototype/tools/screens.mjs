@@ -749,6 +749,17 @@ export const SCREENS = [
     ],
   },
   {
+    id: 'P24e', group: '会话页', title: '会话状态 — 预约继续', status: 'done',
+    summary: 'Claude 用 ScheduleWakeup 预约了过一会儿回来（比如等 CI、等构建）：到点自动接着这个对话。被用量限额拒绝的一轮也一样，限额重置后自动继续。',
+    frs: ['自动继续：ScheduleWakeup、用量限额'],
+    prepare: async (c) => { await openSession(c, c.ids.wake); await closeInspector(c); await openSteps(c); await scrollTo(c, 'end'); },
+    marks: [
+      { sel: '.tcard', text: 'ScheduleWakeup', note: ['预约', '展开', 'Claude 写明为什么、什么时候回来；再预约一次会替换上一次。'] },
+      { sel: '.readonly-bar.waiting', note: ['预约继续', '取消预约', '到点时 Claude Code 自己发起；进程不在了（腾位置被保存、重启、Code Agent 重启）就由 Code Agent 恢复会话并发出预约的消息。被限额拒绝时这里写重置时间，可以「现在重试」或「不自动继续」。'] },
+      { sel: '.scol-item.on .m', note: ['会话列表', '—', '会话列表和「全部会话」里也写明几点继续。'] },
+    ],
+  },
+  {
     id: 'P26b', group: '会话页', title: '看板 — 对话里的自动记录', status: 'done',
     summary: '一轮结束后自动记到看板的条目，在对话里留一张卡片，可以撤销；编号悬停看摘要，点击打开。',
     frs: ['自定义功能：看板'],

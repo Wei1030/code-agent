@@ -191,6 +191,11 @@ export async function drive(c: Client, model: FakeModel, world: World & { repos:
   const pid = (await rt(ids.crash)).info?.pid;
   if (pid) execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
   await until(async () => (await rt(ids.crash)).items.some((x) => x.kind === 'banner'), 'crash banner', 30_000);
+
+  // Claude scheduled a wake-up and waits for it.
+  ids.wake = await session(web.id, '夜间构建跑完之后帮我看一下结果');
+  await done(ids.wake);
+  await until(() => c.sessions.get(ids.wake)?.resume?.kind === 'wake', 'wake-up planned');
   log('extra states done');
   return ids;
 }
