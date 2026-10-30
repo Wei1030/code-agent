@@ -262,7 +262,6 @@ async function pump(l: Live) {
   for (const [, resolve] of l.pending) resolve({ behavior: 'deny', message: 'The session was closed.', interrupt: true });
   l.pending.clear();
   const r = rt(sid);
-  if (r?.request) emit(sid, { t: 'request', request: null });
   closeOpenItems(l, crashed ? '进程已退出' : '已中断');
   if (r?.background.some((b) => b.status === 'running')) {
     emit(sid, { t: 'background', background: rt(sid)!.background.map((b) => (b.status === 'running' ? { ...b, status: 'stopped' as const, endedAt: Date.now() } : b)) });
@@ -271,7 +270,7 @@ async function pump(l: Live) {
   emit(sid, { t: 'state', state: 'idle' });
   emit(sid, { t: 'settings', patch: { readOnly: true } });
   emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] 进程已结束${crashed ? `：${crashed}` : ''}` });
-  patchSummary(sid, { live: false, state: 'idle', requests: undefined });
+  patchSummary(sid, { live: false, state: 'idle' });
   // Session-only extra directories end with the process.
   if (app.dirs.some((d) => d.sessionId === sid)) update('dirs', (ds) => ds.filter((d) => d.sessionId !== sid));
   if (crashed) {
@@ -404,7 +403,6 @@ export async function interruptTurn(sid: string) {
   l.turn.interrupted = true;
   for (const [, resolve] of l.pending) resolve({ behavior: 'deny', message: 'The user interrupted.', interrupt: true });
   l.pending.clear();
-  if (rt(sid)?.request) emit(sid, { t: 'request', request: null });
   try {
     await l.q.interrupt();
   } catch (e) {
@@ -428,16 +426,16 @@ function closeOpenItems(l: Live, right: string) {
 
 // ------------------------------------------------------------------ requests
 
-/** The UI shows the oldest request and how many more wait; the session waits on the user while any does. */
+/** The docked panel shows the oldest request, the inbox all of them; the session waits on the user while any does. */
 function showAsks(l: Live) {
   const head = l.asks[0] ?? null;
-  emit(l.sid, { t: 'request', request: head, more: Math.max(0, l.asks.length - 1) });
+  emit(l.sid, { t: 'request', request: head });
   emit(l.sid, { t: 'state', state: head ? 'requires_action' : l.turn ? 'running' : 'idle' });
   patchSummary(l.sid, { requests: l.asks.length ? l.asks.map(brief) : undefined });
 }
 
 function brief(r: PendingRequest): RequestBrief {
-  if (r.kind === 'approval') return { id: r.id, kind: r.kind, title: r.title, detail: `${r.tool} · ${r.command ?? r.diff?.path ?? r.blockedPath ?? ''}`, since: r.since };
+  if (r.kind === 'approval') return { id: r.id, kind: r.kind, title: r.title, detail: [r.tool, r.command ?? r.diff?.path ?? r.blockedPath].filter(Boolean).join(' · '), since: r.since };
   if (r.kind === 'question') return { id: r.id, kind: r.kind, title: 'Claude 有问题要问你', detail: r.questions[0]?.question, since: r.since };
   if (r.kind === 'elicitation') return { id: r.id, kind: r.kind, title: `${r.server} 需要你提供信息`, detail: r.message, since: r.since };
   return { id: r.id, kind: r.kind, title: '计划等你审阅', since: r.since };
@@ -886,7 +884,7 @@ function onResult(l: Live, m: Extract<SDKMessage, { type: 'result' }>) {
   l.group = null;
   l.streams.clear();
   emit(sid, { t: 'status', status: null });
-  if (!rt(sid)?.request) emit(sid, { t: 'state', state: 'idle' });
+  if (!l.asks.length) emit(sid, { t: 'state', state: 'idle' });
   void refreshContext(sid);
   void l.q.mcpServerStatus().then((list) => import('../ext/mcp').then((m) => m.noteSessionMcp(summary(sid)?.workspaceId ?? '', list))).catch(() => undefined);
   const lastText = [...rt(sid)!.items].reverse().find((x): x is Extract<Item, { kind: 'text' }> => x.kind === 'text');

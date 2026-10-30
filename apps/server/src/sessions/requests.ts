@@ -13,7 +13,7 @@ import { parseRule } from '@code-agent/shared/rules';
 import { app, update } from '../state';
 import { addItem, emit, findItem, patchItem, rt } from './registry';
 import { waitForUser, type Live } from './live';
-import { proposedDiff, rel, toolDetail, toolName, mcpParts } from './describe';
+import { proposedDiff, toolDetail, toolName, mcpParts } from './describe';
 import { cwdOf } from './options';
 
 type Input = Record<string, unknown>;
@@ -225,4 +225,3 @@ export async function onElicitation(l: Live, req: ElicitationRequest, o: { signa
   return a.action === 'accept' ? { action: 'accept', content: a.content } : { action: a.action };
 }
 
-export { rel };

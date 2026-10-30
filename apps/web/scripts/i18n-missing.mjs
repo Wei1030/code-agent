@@ -1,4 +1,5 @@
-// Lists the Chinese UI strings that have no English entry in src/lib/i18n.en.ts.
+// Lists the Chinese UI strings that have no English entry in src/lib/i18n.en.ts, and the entries
+// whose string no source uses any more.
 //   npm run i18n:missing -w @code-agent/web
 // Every Chinese string literal in the web app and the shared catalog counts (tables of labels are
 // passed through t() later), so a few that are never shown may be listed too.
@@ -59,5 +60,8 @@ for (const line of readFileSync(path.join(web, 'src', 'lib', 'i18n.en.ts'), 'utf
   if (m) have.add(JSON.parse(m[1]));
 }
 const missing = [...strings].filter((s) => !have.has(s)).sort();
+const unused = [...have].filter((s) => !strings.has(s)).sort();
 console.log(missing.length ? JSON.stringify(missing, null, 1) : 'Every UI string has an English entry.');
-process.exitCode = missing.length ? 1 : 0;
+if (unused.length) console.log(`English entries no source uses:
+${JSON.stringify(unused, null, 1)}`);
+process.exitCode = missing.length || unused.length ? 1 : 0;

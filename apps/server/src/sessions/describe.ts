@@ -85,7 +85,7 @@ export function toolIcon(name: string): string {
 }
 
 export const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'LS']);
-export const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
 /** Tools that may run long and can be sent to the background. */
 export const BACKGROUNDABLE = new Set(['Bash', 'PowerShell', 'Agent', 'Task']);
 

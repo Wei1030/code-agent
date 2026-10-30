@@ -84,7 +84,7 @@ another one.
 npm run dev         # server with the Vite dev middleware, same address
 npm run typecheck   # all three packages
 npm test
-npm run i18n:missing -w @code-agent/web   # UI text without an English entry
+npm run i18n:missing -w @code-agent/web   # UI text without an English entry, and unused entries
 ```
 
 `apps/server` is the Node.js server, `apps/web` the React app, `packages/shared` the protocol

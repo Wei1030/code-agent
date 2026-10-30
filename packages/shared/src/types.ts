@@ -414,8 +414,6 @@ export interface SessionRuntime {
   turn: number;
   tokens: number;
   info?: SessionInfo;
-  /** Requests waiting behind `request` (Claude Code can ask several things at once). */
-  moreRequests?: number;
   /** Sent to the web app: the items before the ones it has (a transcript comes a page at a time). */
   earlier?: EarlierItems;
 }
@@ -434,8 +432,7 @@ export type SessionEvent =
   | { t: 'item.remove'; id: string }
   | { t: 'items.reset'; items: Item[] }
   | { t: 'state'; state: SessionState }
-  /** more: how many other requests wait behind this one. */
-  | { t: 'request'; request: PendingRequest | null; more?: number }
+  | { t: 'request'; request: PendingRequest | null }
   | { t: 'queue'; queue: QueuedMessage[] }
   | { t: 'tasks'; tasks: Task[] }
   | { t: 'background'; background: BgTask[] }

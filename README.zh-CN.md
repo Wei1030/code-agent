@@ -71,7 +71,7 @@ npm start
 npm run dev         # 服务加 Vite 开发中间件，地址相同
 npm run typecheck   # 检查全部三个包
 npm test
-npm run i18n:missing -w @code-agent/web   # 列出还没有英文对照的界面文字
+npm run i18n:missing -w @code-agent/web   # 列出还没有英文对照的界面文字，以及没有地方用的英文对照
 ```
 
 `apps/server` 是 Node.js 服务，`apps/web` 是 React 网页，`packages/shared` 是两者共用的协议类型。

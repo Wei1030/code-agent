@@ -103,7 +103,6 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
   for (const f of agentFactories) Object.assign(agents, f(sid));
 
   const exe = app.provider.executable === 'system' ? systemClaude() : undefined;
-  const mode = r.mode;
   // Session-level settings: the profile's output style, and the subagents switched off.
   const denied = deniedAgents();
   const flags = {
@@ -117,7 +116,7 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
     model: model.name,
     ...reasoning(model, r.effort),
     ...(onClaude ? { thinking: { type: 'adaptive' as const, display: 'summarized' as const } } : {}),
-    permissionMode: mode,
+    permissionMode: r.mode,
     // Any session can switch to bypassing permission checks (the UI confirms it first).
     allowDangerouslySkipPermissions: true,
     permissionPrompts: prof.prompts,

@@ -75,8 +75,8 @@ export function SessionPage() {
           <div className="dock-inner">
             {receipt > 0 && rt.queue.length > 0 && <InterruptReceipt sid={id} count={rt.queue.length} onDone={() => setReceipt(0)} />}
             <ReviewDecisionPanel sid={id} />
-            {(rt.moreRequests ?? 0) > 0 && (
-              <div className="more-requests"><Icon name="bell" size={14} />{t('Claude 同时提出了 {n} 个请求：处理完这一个，下一个会接着出现', { n: (rt.moreRequests ?? 0) + 1 })}</div>
+            {(sum.requests?.length ?? 0) > 1 && (
+              <div className="more-requests"><Icon name="bell" size={14} />{t('Claude 同时提出了 {n} 个请求：处理完这一个，下一个会接着出现', { n: sum.requests!.length })}</div>
             )}
             {rt.request?.kind === 'approval' && <ApprovalPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}

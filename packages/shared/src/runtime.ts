@@ -49,7 +49,7 @@ export function reduce(rt: SessionRuntime, ev: SessionEvent, seq = 0): SessionRu
     case 'state':
       return { ...rt, state: ev.state };
     case 'request':
-      return { ...rt, request: ev.request, moreRequests: ev.request ? ev.more ?? 0 : 0 };
+      return { ...rt, request: ev.request };
     case 'queue':
       return { ...rt, queue: ev.queue };
     case 'tasks':
