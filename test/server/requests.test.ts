@@ -1,5 +1,5 @@
 // Questions, plan review and MCP elicitations: the docked requests other than approvals
-// (FR-ASK-01/02/04/05, FR-PLAN-01/02/03, FR-MCP-06).
+// (FR-ASK-01..05, FR-PLAN-01/02/03, FR-MCP-06, FR-TOOL-08, FR-TOOL-10).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, type Env } from '../harness/env';
@@ -45,6 +45,29 @@ test('a message typed while a question waits answers it in the user\'s own words
   await env.c.call('send', sid, '都不要，先保持内存存储', {});
   await env.turns(sid);
   assert.match(lastToolResult(/再选一次/), /先保持内存存储/);
+});
+
+test('options with previews: HTML by default, Markdown when the profile turns HTML previews off (FR-ASK-03, FR-CFG-09)', async () => {
+  const ask = (preview: string) => ({ questions: [{ header: '布局', question: '列表页用哪种布局？', multiSelect: false, options: [{ label: '表格', description: '密集', preview }, { label: '卡片', description: '宽松', preview }] }] });
+  const tool = (rx: RegExp) => JSON.stringify(env.model.sent(rx)[0].body.tools.find((t: { name: string }) => t.name === 'AskUserQuestion'));
+  env.model.script(/HTML 预览/, [[use('AskUserQuestion', ask('<table><tr><td>订单</td></tr></table>'))], [say('好')]]);
+  let sid = await env.start('HTML 预览');
+  let r = (await env.request(sid, 'question')) as Extract<PendingRequest, { kind: 'question' }>;
+  assert.equal(r.questions[0].options[0].preview, '<table><tr><td>订单</td></tr></table>');
+  assert.match(tool(/HTML 预览/), /HTML/);
+  await env.c.call('respondQuestion', sid, r.id, { answers: { '列表页用哪种布局？': '表格' }, notes: {} });
+  await env.turns(sid);
+
+  const prev = env.c.slices.profiles;
+  await env.c.call('setState', { profiles: prev.map((p) => ({ ...p, questionPreviews: false })) });
+  env.model.script(/Markdown 预览/, [[use('AskUserQuestion', ask('| 订单 |\n|---|'))], [say('好')]]);
+  sid = await env.start('Markdown 预览');
+  r = (await env.request(sid, 'question')) as Extract<PendingRequest, { kind: 'question' }>;
+  assert.equal(r.questions[0].options[1].preview, '| 订单 |\n|---|');
+  assert.notEqual(tool(/Markdown 预览/), tool(/HTML 预览/), 'Claude Code is told the other format');
+  await env.c.call('respondQuestion', sid, r.id, { answers: { '列表页用哪种布局？': '卡片' }, notes: {} });
+  await env.turns(sid);
+  await env.c.call('setState', { profiles: prev });
 });
 
 test('without the question tool in the profile Claude does not get it (FR-ASK-05)', async () => {

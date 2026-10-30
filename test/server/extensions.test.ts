@@ -1,6 +1,6 @@
 // Skills, commands, plugins and subagents: listed from their files, created and edited as files,
 // switched off for new sessions, reloaded in running ones (FR-SKILL-01..04, FR-PLUG-01..03,
-// FR-AGT-01/02).
+// FR-AGT-01/02, FR-TOOL-07).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -32,6 +32,16 @@ test('skills and commands are listed from the workspace and the user folder (FR-
   assert.equal(skill('commit-msg')!.source, 'global');
   await until(() => env.c.slices.commandFiles.find((c) => c.name === 'standup'), 'command listed');
   assert.equal(env.c.slices.commandFiles.find((c) => c.name === 'standup')!.argHint, '<日期>');
+});
+
+test('Claude using a skill: a card names it, and the skill\'s text reaches Claude (FR-TOOL-07)', async () => {
+  env.model.script(/用一下技能/, [[use('Skill', { skill: 'api-docs' })], [say('按技能写好了')]]);
+  const sid = await env.start('用一下技能');
+  await env.turns(sid);
+  const card = (await env.rt(sid)).items.find((i) => i.kind === 'tool' && i.tool === 'Skill') as Extract<Item, { kind: 'tool' }>;
+  assert.equal(card?.status, 'ok');
+  assert.match(card.detail, /api-docs/);
+  assert.match(JSON.stringify(env.model.sent(/用一下技能/).at(-1)!.body.messages), /# api-docs/);
 });
 
 test('a skill switched off is not offered to new sessions (FR-SKILL-02)', async () => {

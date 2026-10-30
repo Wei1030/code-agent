@@ -56,8 +56,8 @@ export const httpError =(status: number, errorType: string, message?: string): F
 export const hang: Fault = { fault: 'hang' };
 export const cut: Fault = { fault: 'cut' };
 
-/** What the user wrote in a message: text blocks other than Claude Code's reminders and notes. */
-const NOT_TYPED = /^\s*(<system-reminder>|\[Request interrupted)/;
+/** What the user wrote in a message: text blocks other than Claude Code's own (reminders, notes, ToolSearch's "Tool loaded.", a skill's text). */
+const NOT_TYPED = /^\s*(<system-reminder>|\[Request interrupted|Tool loaded\.$|Base directory for this skill:)/;
 const textOf = (c: unknown): string => (typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b) => b?.type === 'text' && !NOT_TYPED.test(b.text)).map((b) => b.text).join('\n') : '');
 /** A user message with something the user wrote (also next to tool results: a message put into the turn). */
 const isPrompt = (m: any) => m.role === 'user' && textOf(m.content).trim() !== '';

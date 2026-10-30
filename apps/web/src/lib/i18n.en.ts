@@ -68,6 +68,7 @@ export const EN: Record<string, string> = {
   "Markdown、CSV、JSON 或纯文本": "Markdown, CSV, JSON or plain text",
   "OTLP 端点": "OTLP endpoint",
   "协议": "Protocol",
+  "发送方式": "How to send",
   "端口通常是 4318": "Usually port 4318",
   "端口通常是 4317": "Usually port 4317",
   "SDK 原文": "Original SDK text",

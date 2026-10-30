@@ -1,9 +1,10 @@
 // The side of a session's work: task list, subagents, background tasks, file checkpoints and
 // rewind, context, compaction and clearing, session info and the debug log
-// (FR-TODO-01, FR-AGT-04, FR-BG-01..05, FR-CKPT-01..05, FR-CTX-01..03, FR-SES-17, FR-OBS-02).
+// (FR-TODO-01, FR-AGT-04, FR-BG-01..05, FR-CKPT-01..05, FR-CTX-01..03, FR-SES-17, FR-OBS-02,
+// FR-TOOL-06/09/11, FR-COST-05, FR-FILE-02).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { setup, finished, type Env } from '../harness/env';
 import { say, use, shell, sleepCmd } from '../harness/fake-model';
@@ -40,6 +41,7 @@ test('a subagent\'s card shows its steps and tokens; its own requests go to the 
   assert.ok(card, 'an agent card');
   assert.equal(card.agent?.agentType, 'general-purpose');
   assert.ok((card.agent?.toolCalls ?? 0) >= 1, 'its tool calls are counted');
+  assert.ok((card.agent?.tokens ?? 0) > 0, 'its tokens are counted');
   assert.ok(card.agent?.rows.some((r) => /a\.txt/.test(r.text)), 'its read is listed');
   assert.ok(env.model.sent(/子任务：读 a\.txt/).length >= 1);
 });
@@ -62,6 +64,26 @@ test('stopping a background task (FR-BG-02)', async () => {
   const bg = await until(async () => (await env.rt(sid)).background.find((b) => b.status === 'running'), 'running task');
   await env.c.call('stopTask', sid, bg.id);
   await until(async () => (await env.rt(sid)).background.find((b) => b.id === bg.id)?.status === 'stopped', 'stopped');
+});
+
+test('Claude stopping its own background task with TaskStop (FR-TOOL-11)', async () => {
+  const taskId = (r: { body: unknown }) => /with ID: (\w+)/.exec(JSON.stringify(r.body))?.[1] ?? 'none';
+  env.model.script(/自己停掉/, [(r) => shell(sleepCmd(60), { run_in_background: true })(r), (r) => [use('TaskStop', { task_id: taskId(r) })], [say('停掉了')]]);
+  const sid = await env.start('自己停掉', { mode: 'bypassPermissions' });
+  await env.turns(sid);
+  const rt = await env.rt(sid);
+  assert.equal((rt.items.find((i) => i.kind === 'tool' && i.tool === 'TaskStop') as Tool)?.status, 'ok');
+  await until(async () => (await env.rt(sid)).background.every((b) => b.status !== 'running'), 'no task left running');
+});
+
+test('"all to the background" moves what runs in the foreground and the turn goes on (FR-BG-03)', async () => {
+  env.model.script(/全部转后台/, [shell(sleepCmd(30)), [say('命令在后台了')]]);
+  const sid = await env.start('全部转后台', { mode: 'bypassPermissions' });
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'tool' && i.status === 'running' && i.backgroundable), 'a backgroundable command', 15_000);
+  await env.c.call('backgroundAll', sid);
+  await env.turns(sid);
+  assert.ok((await env.rt(sid)).background.some((b) => b.status === 'running'));
+  await env.c.call('stop', sid);
 });
 
 test('moving a running command to the background lets the turn go on (FR-BG-03)', async () => {
@@ -143,6 +165,22 @@ test('session info: version, process, directory, model (FR-SES-17)', async () =>
   assert.ok(info.pid);
   assert.equal(path.resolve(info.cwd ?? ''), path.resolve(env.repo));
   assert.ok(finished(env.c, sid) === 1);
+});
+
+test('the file preview reads files of the session\'s own folders only; binary and very long files are flagged (FR-FILE-02)', async () => {
+  env.model.script(/文件预览/, [[say('好')]]);
+  const sid = await env.start('文件预览');
+  await env.turns(sid);
+  const a = await env.c.call('readWorkspaceFile', sid, 'a.txt');
+  assert.deepEqual([a.path, a.content, a.binary, a.truncated], ['a.txt', 'alpha\n', false, false]);
+  assert.equal((await env.c.call('readWorkspaceFile', sid, path.join(env.repo, 'b.txt'))).path, 'b.txt', 'an absolute path inside works');
+  writeFileSync(path.join(env.repo, 'logo.bin'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 1]));
+  assert.equal((await env.c.call('readWorkspaceFile', sid, 'logo.bin')).binary, true);
+  writeFileSync(path.join(env.repo, 'big.log'), 'x'.repeat(1024 * 1024 + 10));
+  assert.equal((await env.c.call('readWorkspaceFile', sid, 'big.log')).truncated, true);
+  await assert.rejects(env.c.call('readWorkspaceFile', sid, '../outside.txt'), /不在会话的工作目录里/);
+  await assert.rejects(env.c.call('readWorkspaceFile', sid, env.world.config), /不在会话的工作目录里/);
+  await assert.rejects(env.c.call('readWorkspaceFile', sid, 'missing.txt'), /文件不存在/);
 });
 
 test('the debug log, when switched on, is written and its end can be read (FR-OBS-02)', async () => {

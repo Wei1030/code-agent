@@ -1,3 +1,4 @@
+// Localized formats: relative times, durations, token counts in either number style (FR-I18N-04).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

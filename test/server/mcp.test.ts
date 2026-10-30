@@ -1,6 +1,6 @@
 // MCP servers: status and tools from a probe, adding / editing / removing through Claude Code's own
 // command with secrets masked, tool approval as rules, switching a server off in one session, tool
-// search (FR-MCP-01..05, FR-MCP-09, FR-TOOL-15).
+// search, a missing value filled in (FR-MCP-01..05, FR-MCP-09, FR-TOOL-14/15).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -75,6 +75,11 @@ test('switched off in one session only; the config stays (FR-MCP-03)', async () 
   assert.notEqual(cards.at(-1)!.status, 'ok', 'not available any more in this session');
   assert.ok(claudeJson().mcpServers.tracker, 'config untouched');
   await env.c.call('toggleMcpInSession', sid, 'tracker', true);
+  await env.c.call('reconnectMcpInSession', sid, 'tracker');
+  env.model.script(/^打开之后$/, [[use('mcp__tracker__list_issues', {})], [say('好')]]);
+  await env.c.call('send', sid, '打开之后', {});
+  await env.turns(sid, 3);
+  assert.equal((await env.rt(sid)).items.filter((i): i is Tool => i.kind === 'tool' && i.tool.includes('list_issues')).at(-1)!.status, 'ok', 'back on, reconnected');
 });
 
 test('tool search off gives Claude the MCP tools directly (FR-CTX-04)', async () => {
@@ -87,4 +92,18 @@ test('tool search off gives Claude the MCP tools directly (FR-CTX-04)', async ()
   const on = await env.start('工具搜索 开');
   await env.turns(on);
   assert.ok(!env.model.sent(/工具搜索 开/)[0].tools.includes('mcp__tracker__list_issues'), 'deferred behind tool search');
+  env.model.script(/先搜工具/, [[use('ToolSearch', { query: 'select:mcp__tracker__list_issues', max_results: 1 })], [use('mcp__tracker__list_issues', {})], [say('找到了')]]);
+  const search = await env.start('先搜工具', { mode: 'bypassPermissions' });
+  await env.turns(search);
+  assert.equal((await card(search, 'ToolSearch')).status, 'ok');
+  assert.equal((await card(search, 'list_issues')).status, 'ok', 'found, then used');
+});
+
+test('a server that failed for a missing value connects once it is filled in; testing probes again (FR-MCP-05)', async () => {
+  const b = await until(() => server('broken'), 'listed');
+  await env.c.call('setMcpHeader', b.id, 'FAIL_START', '');
+  assert.equal(claudeJson().mcpServers.broken.env.FAIL_START, '');
+  await until(() => server('broken')?.status === 'connected', 'connected', 90_000);
+  await env.c.call('testMcp', b.id);
+  assert.equal(server('broken')?.status, 'connected');
 });

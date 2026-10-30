@@ -1,5 +1,6 @@
 // What Claude Code itself decides about permissions, run straight through the SDK. Code Agent shows
 // these decisions as they are, so a change here (an SDK upgrade) changes what users see.
+// Run on Windows, where a command is a PowerShell call as often as a Bash one (NFR-05).
 // Pinned on Claude Code 2.1.312.
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';

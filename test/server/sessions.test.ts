@@ -1,4 +1,5 @@
-// Session lifecycle: draft, first message, save, resume, rename, tag, fork, export, search, delete.
+// Workspaces and the session lifecycle: folders picked and added, the branch shown, removal; draft,
+// first message, save, resume, rename, tag, fork, export, search, delete.
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync } from 'node:fs';
@@ -28,6 +29,33 @@ function transcript(sid: string): string | undefined {
   }
   return undefined;
 }
+
+test('workspaces: folders for the picker, a folder added once with its branch, a missing one refused (FR-WS-01, FR-WS-04)', async () => {
+  const parent = path.dirname(env.repo);
+  assert.ok((await env.c.call('listDir', parent)).some((d) => d.name === path.basename(env.repo) && d.dir), 'the repository folder is offered');
+  assert.ok((await env.c.call('listDir', null)).length > 0, 'roots to start from');
+  assert.equal((await env.c.call('addWorkspace', `${env.repo}${path.sep}`)).id, env.ws, 'the same folder is the same workspace');
+  const branch = env.world.git(env.repo, 'rev-parse', '--abbrev-ref', 'HEAD').trim();
+  assert.equal(env.c.slices.workspaces.find((w) => w.id === env.ws)?.branch, branch);
+  await assert.rejects(env.c.call('addWorkspace', path.join(parent, 'no-such-folder')), /文件夹不存在/);
+  const plain = env.world.repo('plain', { 'readme.txt': 'x' }, { git: false });
+  const ws = await env.c.call('addWorkspace', plain);
+  assert.equal(ws.name, 'plain');
+  assert.ok(!ws.branch, 'no branch outside git');
+  assert.deepEqual((await env.c.call('listFiles', ws.id)).map((f) => f.name), ['readme.txt'], 'files without git too');
+});
+
+test('removing a workspace stops and drops its sessions; the folder and Claude Code\'s records stay (FR-WS-01)', async () => {
+  const dir = env.world.repo('gone', { 'a.txt': 'a' });
+  const ws = (await env.c.call('addWorkspace', dir)).id;
+  env.model.script(/要移除的工作区/, [[say('好')]]);
+  const sid = await env.start('要移除的工作区', { ws });
+  await env.turns(sid);
+  await env.c.call('removeWorkspace', ws);
+  await until(() => !env.c.slices.workspaces.some((w) => w.id === ws) && !env.c.sessions.has(sid), 'workspace and session gone');
+  assert.ok(existsSync(path.join(dir, 'a.txt')), 'the folder stays');
+  assert.ok(transcript(sid), 'Claude Code\'s record stays');
+});
 
 test('a new session is a draft without a process until its first message (FR-SES-01)', async () => {
   const sid = crypto.randomUUID();

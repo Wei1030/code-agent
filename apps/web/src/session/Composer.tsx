@@ -376,7 +376,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
               <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => api.interrupt(sid).then((q) => onInterrupt(q.length))}>{t('中断')}</Button>
               <span className="split">
                 <Button size="sm" variant="primary" icon="queue" disabled={!canSend} onClick={() => doSend()}>{t('排队')}</Button>
-                <MenuButton icon="chevDown" variant="primary" size="sm" placement="top-end" width={300} items={[
+                <MenuButton icon="chevDown" variant="primary" size="sm" title={t('发送方式')} placement="top-end" width={300} items={[
                   { value: 'now', icon: 'bolt', label: t('立即插入'), desc: t('Claude 马上读到；正在运行的工作转入后台'), disabled: !canSend, onSelect: () => doSend({ priority: 'now' }) },
                   { value: 'next', icon: 'queue', label: t('工具后'), desc: t('当前这批工具调用结束后读取'), disabled: !canSend, onSelect: () => doSend({ priority: 'next' }) },
                   { value: 'later', icon: 'clock', label: t('下一轮'), desc: t('本轮结束后作为新一轮发送'), disabled: !canSend, onSelect: () => doSend({ priority: 'later' }) },
@@ -386,7 +386,7 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
           ) : (
             <span className="split">
               <Button size="sm" variant="primary" icon="send" disabled={!canSend} onClick={() => doSend()}>{t('发送')}</Button>
-              <MenuButton icon="chevDown" variant="primary" size="sm" placement="top-end" width={300} items={[
+              <MenuButton icon="chevDown" variant="primary" size="sm" title={t('发送方式')} placement="top-end" width={300} items={[
                 { value: 'send', icon: 'send', label: t('发送'), desc: t('开始新一轮'), disabled: !canSend, onSelect: () => doSend() },
                 { value: 'context', icon: 'layers', label: t('仅作为上下文'), desc: t('加入对话，但不开始新一轮'), disabled: !canSend, onSelect: () => doSend({ contextOnly: true }) },
                 { value: 'verbatim', icon: 'slash', label: t('原样发送'), desc: t('以 / 开头也不当作命令'), disabled: !canSend, onSelect: () => doSend({ verbatim: true }) },

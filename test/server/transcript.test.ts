@@ -1,5 +1,6 @@
 // What the transcript shows: streaming text and thinking, tool cards, grouping, the turn footer,
-// banners and the retry status, paging of long transcripts (FR-OUT-01..09, FR-TOOL-01..05/15).
+// banners and the retry status, paging of long transcripts, the changes panel (FR-OUT-01..09,
+// FR-TOOL-01..05/15, FR-FILE-01).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -68,6 +69,10 @@ test('tool cards: read, edit with its diff, new file, search, failing command, M
   assert.equal(cmd.right, '失败');
   const changes = (await env.rt(sid)).changes;
   assert.deepEqual(changes.map((c) => [path.basename(c.path), c.kind]).sort(), [['a.js', 'modified'], ['new.js', 'created']]);
+  const a = changes.find((c) => path.basename(c.path) === 'a.js')!;
+  assert.deepEqual([a.add, a.del], [2, 1], 'lines added and removed');
+  assert.ok(a.diff.some((l) => l.includes('const d = 4;')), 'the diff from the tool input');
+  assert.equal(a.afterUserId, (await env.rt(sid)).items.find((i) => i.kind === 'user')?.id, 'filed under the message that caused it');
 });
 
 test('consecutive reads and searches fold into one group (FR-OUT-04)', async () => {
@@ -92,7 +97,7 @@ test('the turn footer: number, tool calls, tokens, why it stopped (FR-OUT-06)', 
   assert.ok(footers.every((f) => f.tokens > 0));
 });
 
-test('an endpoint refusing the token stops the turn at once with a banner (FR-OUT-07)', async () => {
+test('an endpoint refusing the token stops the turn at once with a banner, its code put in words (FR-OUT-07, FR-I18N-06)', async () => {
   env.model.failModel('model-two', httpError(401, 'authentication_error', 'invalid x-api-key'));
   const t0 = Date.now();
   const sid = await env.start('认证失败', { model: `ep:${EP}:model-two` });
@@ -124,7 +129,10 @@ test('Claude Code ending unexpectedly leaves a banner and a saved session (FR-OU
   await until(() => env.c.sessions.get(sid)?.live === false, 'saved after the crash');
   const banner = await until(async () => (await env.rt(sid)).items.find((i) => i.kind === 'banner'), 'crash banner') as Extract<Item, { kind: 'banner' }>;
   assert.equal(banner.banner, 'crash');
+  // The banner's 恢复会话 button: resume, and the banner is settled.
   assert.equal(await env.c.call('resume', sid), true);
+  await env.c.call('retryBanner', sid, banner.id);
+  assert.equal(((await env.rt(sid)).items.find((i) => i.id === banner.id) as Extract<Item, { kind: 'banner' }>).resolved, true);
 });
 
 test('a long transcript comes a page at a time, earlier pages on request (FR-SES-06)', async () => {

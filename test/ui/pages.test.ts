@@ -1,6 +1,7 @@
 // Every page and the common dialogs open without page errors, in Chinese and in English; in English
-// no Chinese is left on screen (FR-I18N-01..03, issue 10-30#11). The world's own data (workspace,
-// sessions, board items, jobs, hooks) is all ASCII, so any Chinese shown is untranslated UI text.
+// no Chinese is left on screen; every button has a name for screen readers (FR-I18N-01..03, NFR-07,
+// NFR-08, issue 10-30#11). The world's own data (workspace, sessions, board items, jobs, hooks) is
+// all ASCII, so any Chinese shown is untranslated UI text.
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { setupUi, noPageErrors, type UiEnv } from '../harness/ui';
@@ -72,11 +73,20 @@ async function visitAll(p: Page, onEach: (where: string) => Promise<void>) {
   await onEach('confirm dialog');
 }
 
-test('every page in Chinese opens without page errors', async () => {
+/** Visible buttons with neither text nor a title or aria-label: an icon a screen reader cannot name. */
+const unnamed = (p: Page) => p.eval<string[]>(`[...document.querySelectorAll('button, [role=button]')]
+  .filter((b) => b.getClientRects().length && !b.textContent.trim() && !b.getAttribute('title') && !b.getAttribute('aria-label'))
+  .map((b) => b.outerHTML.slice(0, 120))`);
+
+test('every page in Chinese opens without page errors; every button has a name (NFR-07)', async () => {
   const p = await env.page('/');
-  await visitAll(p, async () => undefined);
+  const found: string[] = [];
+  await visitAll(p, async (where) => {
+    for (const b of await unnamed(p)) found.push(`${where}: ${b}`);
+  });
   noPageErrors(p);
   await p.close();
+  assert.deepEqual([...new Set(found)], [], 'buttons without a name');
 });
 
 test('in English no Chinese is left on any page (FR-I18N-01, issue 10-30#11)', async () => {

@@ -1,10 +1,12 @@
 // Sessions working together: the workspace tools, delivery and receipts, holding messages for the
-// user, the hop limit, sessions created by sessions (custom feature 会话协作, FR-OUT-10, issue 10-30#9).
+// user, the hop limit, sessions created by sessions and their worktrees. The workspace tools are
+// Code Agent's own in-process MCP server (custom feature 会话协作, FR-CTOOL-01, FR-OUT-10, issue 10-30#9).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { setup, type Env } from '../harness/env';
-import { say, use } from '../harness/fake-model';
+import { say, use, shell } from '../harness/fake-model';
 import { until } from '../harness/client';
 import type { Item } from '@code-agent/shared/types';
 
@@ -118,6 +120,29 @@ test('a session created by a session: own worktree and branch, at most the creat
   await until(async () => (await env.rt(child.id)).items.some((i) => i.kind === 'text' && /README 很短/.test(i.text)), 'child works');
   const wt = await env.c.call('listWorktrees');
   assert.ok(wt.some((w) => w.branch === child.worktree), 'listed on the worktree tab');
+});
+
+test('a worktree session runs on the workspace\'s own settings; removing the worktree saves its session (FR-WS-03)', async () => {
+  // settings.local.json is not committed, so the worktree's checkout has no copy of this rule.
+  await env.c.call('setState', { rules: [...env.c.slices.rules, ...['Bash', 'PowerShell'].map((t, i) => ({ id: `wt${i}`, behavior: 'allow' as const, rule: `${t}(node -e *)`, scope: 'workspace' as const, workspaceId: env.ws }))] });
+  const local = path.join(env.repo, '.claude', 'settings.local.json');
+  await until(() => existsSync(local) && readFileSync(local, 'utf8').includes('node -e'), 'the rule written');
+  env.model.script(/开工作树会话/, [[use('mcp__workspace__create_session', { title: '工作树会话', message: '在工作树里跑命令', worktree: true, mode: 'acceptEdits', notify: false })], [say('开好了')]]);
+  env.model.script(/^在工作树里跑命令$/, [shell('node -e "console.log(6*7)"'), [say('跑完了')]]);
+  const a = await env.start('开工作树会话', { mode: 'acceptEdits' });
+  await env.turns(a);
+  const child = await until(() => [...env.c.sessions.values()].find((s) => s.title === '工作树会话'), 'child session');
+  await until(async () => (await env.rt(child.id)).items.some((i) => i.kind === 'text' && /跑完了/.test(i.text)), 'the command ran', 60_000);
+  assert.ok(!existsSync(path.join(child.cwd!, '.claude', 'settings.local.json')), 'no copy in the worktree');
+  // In accept-edits mode a command asks first; with the rule it ran on its own.
+  const cmd = (await env.rt(child.id)).items.find((i) => i.kind === 'tool' && (i.tool === 'Bash' || i.tool === 'PowerShell')) as Tool;
+  assert.equal(cmd.status, 'ok', 'the workspace rule allowed it without asking');
+
+  const { branchDeleted } = await env.c.call('removeWorktree', child.cwd!);
+  assert.equal(branchDeleted, true, 'a branch with nothing new goes too');
+  assert.ok(!existsSync(child.cwd!), 'the checkout is gone');
+  await until(() => env.c.sessions.get(child.id)?.live === false && env.c.sessions.get(child.id)?.worktreeGone, 'its session saved and marked');
+  assert.ok(!(await env.c.call('listWorktrees')).some((w) => w.path === path.resolve(child.cwd!)));
 });
 
 test('a held message released after a server restart is still delivered (issue 10-30#9)', async () => {
