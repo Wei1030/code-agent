@@ -121,3 +121,12 @@ test('in plan mode the plan is written to a plan file; ExitPlanMode asks with it
   assert.match(String(asks[0].input.plan), /契约计划/);
   assert.match(String(asks[0].input.planFilePath), /plans[\\/].+\.md$/);
 });
+
+test('a Bash rule does not cover the same command run with PowerShell', async () => {
+  const r = world.repo('shell-rule', { 'README.md': 'x\n' });
+  world.write(path.join(r, '.claude', 'settings.local.json'), { permissions: { allow: ['Bash(node -e *)'] } });
+  const { asks } = await run([shell('node -e "console.log(7)"'), [say('好')]], {}, r);
+  const sh = shellName();
+  if (sh === 'Bash') assert.equal(asks.length, 0, 'Bash: the rule applies');
+  else assert.equal(asks.length, 1, 'PowerShell: a Bash rule does not apply');
+});
