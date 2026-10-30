@@ -132,6 +132,18 @@ test('stopping a review, and a finding put on the board once', async () => {
   assert.ok(env.c.slices.board.some((b) => b.id === item && /要记到看板的问题/.test(b.title)));
 });
 
+test('stopping a review stops its check command, not only the shell around it', async () => {
+  const sid = await changed('停掉验证');
+  const late = path.join(env.repo, 'late.txt');
+  const id = (await env.c.call('startReview', sid, [`node -e "setTimeout(() => require('fs').writeFileSync('late.txt', 'x'), 4000)"`], {}))!;
+  await until(() => ticket(id)?.status === 'checking', 'checking');
+  await sleep(1000);
+  await env.c.call('stopReview', sid);
+  await ended(id, 'stopped');
+  await sleep(5000);
+  assert.equal(existsSync(late), false, 'the check command was still running');
+});
+
 test('a server restart stops a running review', async () => {
   const sid = await changed('重启审核');
   const id = (await env.c.call('startReview', sid, [`node -e "setTimeout(() => {}, 60000)"`], {}))!;

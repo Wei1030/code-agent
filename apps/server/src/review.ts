@@ -9,7 +9,7 @@
 import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { AgentRun, Effort, ReviewCheck, ReviewFinding, ReviewRound, ReviewTicket } from '@code-agent/shared/types';
@@ -157,11 +157,21 @@ async function beginRound(id: string, n: number) {
 
 // ------------------------------------------------------------------ checks
 
+/** End a check and what it started: killing the shell alone leaves the command running. */
+function killTree(p: ChildProcess) {
+  if (!p.pid || p.exitCode !== null) return;
+  if (process.platform === 'win32') execFile('taskkill', ['/pid', String(p.pid), '/T', '/F'], () => undefined);
+  else {
+    try { process.kill(-p.pid, 'SIGKILL'); } catch { p.kill('SIGKILL'); }
+  }
+}
+
 function runCommand(id: string, cwd: string, cmd: string): Promise<{ ok: boolean; output: string[]; seconds: number }> {
   return new Promise((resolve) => {
     const t0 = Date.now();
     const out: string[] = [];
-    const p = spawn(cmd, { cwd, shell: true, windowsHide: true, env: process.env });
+    // Its own process group on POSIX, so the whole group can be ended.
+    const p = spawn(cmd, { cwd, shell: true, windowsHide: true, env: process.env, detached: process.platform !== 'win32' });
     checkProcs.set(id, p);
     const add = (b: Buffer) => {
       out.push(...b.toString('utf8').replace(/\r\n/g, '\n').split('\n'));
@@ -169,7 +179,7 @@ function runCommand(id: string, cwd: string, cmd: string): Promise<{ ok: boolean
     };
     p.stdout.on('data', add);
     p.stderr.on('data', add);
-    const timer = setTimeout(() => p.kill(), 15 * 60_000);
+    const timer = setTimeout(() => killTree(p), 15 * 60_000);
     p.on('close', (code) => {
       clearTimeout(timer);
       checkProcs.delete(id);
@@ -507,7 +517,8 @@ async function stopReview(sid: string) {
     await interruptTurn(sid);
     return;
   }
-  checkProcs.get(t.id)?.kill();
+  const check = checkProcs.get(t.id);
+  if (check) killTree(check);
   reviewers.get(t.id)?.abort();
   stopped(t.id, '你停止了审核');
 }
