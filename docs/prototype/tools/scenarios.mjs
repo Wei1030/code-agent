@@ -1,6 +1,10 @@
 // What the demo model answers. A scenario is picked by the latest user prompt of a request; its
 // step is the number of assistant messages since that prompt. `{cwd}` is the session's working
-// directory (read from Claude Code's system prompt).
+// directory (read from Claude Code's system prompt). A block may be a function of the prompt and
+// the whole request.
+
+/** Where Claude Code wants the plan written in plan mode (named in its system prompt). */
+const planFile = (req) => /create your plan at ([^\s"]+\.md)/.exec(JSON.stringify(req.body).replace(/\\\\/g, '\\'))?.[1] ?? '';
 
 let n = 0;
 const id = () => `toolu_demo_${Date.now().toString(36)}_${++n}`;
@@ -77,7 +81,8 @@ export const SCENARIOS = [
     match: /规划一下：把订单从内存存储迁到 SQLite/,
     steps: [
       [say('先看看存储层是怎么被用到的。'), use('Grep', { pattern: 'db\\.', path: '{cwd}/src', output_mode: 'content' }), read('src/db.js')],
-      [use('ExitPlanMode', { plan: '# 订单迁移到 SQLite\n\n## 目标\n把 `src/db.js` 的内存存储换成 SQLite，接口（`nextId` / `insert` / `get` / `all`）保持不变，调用方不用改。\n\n## 步骤\n1. 引入 Node 内置的 `node:sqlite`，不加新依赖。\n2. 新建 `src/schema.sql`：`orders`、`order_items`、`users` 三张表，金额用整数（分）。\n3. 重写 `src/db.js`：启动时建表；`insert` / `get` / `all` 改为 SQL。\n4. `createOrder` 在一个事务里写订单和明细。\n5. 测试改用内存库 `:memory:`，每个用例前清表。\n6. 更新 `docs/api.md` 的部署说明。\n\n## 风险\n- `nextId` 现在是内存自增，改成数据库自增后 id 格式会变（`ord_1` → 数字），前端如果依赖格式需要同步。\n' })],
+      [(_prompt, req) => use('Write', { file_path: planFile(req), content: '# 订单迁移到 SQLite\n\n## 目标\n把 `src/db.js` 的内存存储换成 SQLite，接口（`nextId` / `insert` / `get` / `all`）保持不变，调用方不用改。\n\n## 步骤\n1. 引入 Node 内置的 `node:sqlite`，不加新依赖。\n2. 新建 `src/schema.sql`：`orders`、`order_items`、`users` 三张表，金额用整数（分）。\n3. 重写 `src/db.js`：启动时建表；`insert` / `get` / `all` 改为 SQL。\n4. `createOrder` 在一个事务里写订单和明细。\n5. 测试改用内存库 `:memory:`，每个用例前清表。\n6. 更新 `docs/api.md` 的部署说明。\n\n## 风险\n- `nextId` 现在是内存自增，改成数据库自增后 id 格式会变（`ord_1` → 数字），前端如果依赖格式需要同步。\n' })],
+      [use('ExitPlanMode', {})],
       [say('开始按计划实施。')],
     ],
   },
@@ -102,7 +107,7 @@ export const SCENARIOS = [
   // ---------------------------------------------------------------- P04 running / P24: a long command
   {
     match: /跑一遍完整的回归测试/,
-    steps: [[say('开始跑回归测试，大约需要 20 分钟。'), use('Bash', { command: 'node scripts/bench.js 600', description: '回归测试（完整）', timeout: 1800000 })], [say('回归测试完成。')]],
+    steps: [[say('开始跑回归测试，大约需要 20 分钟。'), use('Bash', { command: 'node scripts/bench.js 3000', description: '回归测试（完整）', timeout: 7200000 })], [say('回归测试完成。')]],
   },
   // ---------------------------------------------------------------- P28: peer sessions
   {
@@ -135,6 +140,43 @@ export const SCENARIOS = [
       [say('在缺陷系统里新建一条。'), use('mcp__issue-tracker__create_issue', { title: '导出 CSV 时金额单位错误', body: '订单导出的 total 列是「分」，表头写的是「元」。' })],
       [say('已创建缺陷单。')],
     ],
+  },
+  // ---------------------------------------------------------------- P06c: two requests at once (reads outside the workspace)
+  {
+    match: /对照一下设计稿和接口约定/,
+    steps: [[say('两份文档都在工作区外，我同时读一下。'), read('../../notes/order-design.md'), read('../../notes/api-conventions.md')], [say('读完了：设计稿和约定一致。')]],
+  },
+  // ---------------------------------------------------------------- P07b: a question whose options have previews
+  {
+    match: /订单列表页用哪种布局/,
+    steps: [
+      [use('AskUserQuestion', { questions: [{ header: '布局', question: '订单列表页用哪种布局？', multiSelect: false, options: [
+        // The profile asks for HTML previews; Claude Code rejects others.
+        { label: '表格', description: '信息密度高，适合运营', preview: '<table style="border-collapse:collapse;font:13px sans-serif" border="1" cellpadding="6"><tr><th>订单号</th><th>金额</th><th>状态</th></tr><tr><td>ord_1</td><td>¥24.00</td><td>待发货</td></tr><tr><td>ord_2</td><td>¥5.00</td><td>已取消</td></tr></table>' },
+        { label: '卡片', description: '移动端友好', preview: '<div style="font:13px sans-serif;display:grid;gap:8px"><div style="border:1px solid #ddd;border-radius:8px;padding:8px"><b>ord_1</b> · ¥24.00<br>待发货 · 2 件商品</div><div style="border:1px solid #ddd;border-radius:8px;padding:8px"><b>ord_2</b> · ¥5.00<br>已取消 · 1 件商品</div></div>' },
+      ] }] })],
+      [say('好的。')],
+    ],
+  },
+  // ---------------------------------------------------------------- P14b: an MCP server asks to sign in on a web page
+  {
+    match: /把缺陷单同步到 Jira/,
+    steps: [[say('同步到 Jira。'), use('mcp__issue-tracker__sync_jira', {})], [say('同步好了。')]],
+  },
+  // ---------------------------------------------------------------- P27d: the author's answer to failed checks
+  {
+    match: /运行验证没有通过/,
+    steps: [[say('看了验证输出，失败的是环境里的命令本身，不是这次的改动。')]],
+  },
+  // ---------------------------------------------------------------- P30b: a message to another session held for the user
+  {
+    match: /把错误码的结论告诉提问的那个会话/,
+    steps: [[(prompt) => use('mcp__workspace__send_to_session', { session_id: /会话 ID：(\S+)/.exec(prompt)?.[1] ?? '', message: '错误码已经整理在 docs/api.md 的「错误码」一节，选数据库时可以一起考虑。', notify: false })], [say('已发出，等你放行。')]],
+  },
+  // ---------------------------------------------------------------- P27e: a change made for a review that is still checking
+  {
+    match: /给 users\.js 加上邮箱格式校验/,
+    steps: [[use('Edit', { file_path: '{cwd}/src/users.js', old_string: 'function createUser({ name, email }) {', new_string: "function createUser({ name, email }) {\n  if (!/^[^@\\s]+@[^@\\s]+$/.test(email)) throw new Error('invalid email');" })], [say('加好了。')]],
   },
   // ---------------------------------------------------------------- simple conversations for lists
   {

@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Code Agent — 交互稿 v0.3</title>
+  <title>Code Agent — 交互稿 v0.4</title>
   <link rel="stylesheet" href="prototype.css">
 </head>
 <body>
   <aside id="toc">
     <div class="brand">Code Agent</div>
-    <div class="sub">交互稿 v0.3 · 以现有实现为准</div>
+    <div class="sub">交互稿 v0.4 · 以现有实现为准</div>
     <label class="toggle"><input type="checkbox" id="toggle-markers" checked> 显示标注</label>
     <nav id="toc-links">
       <a href="#how-to-read">阅读说明</a>
@@ -34,8 +34,8 @@
       <ul>
         <li>截图来自真实运行的 Code Agent：脚本搭一套演示仓库，用一个按剧本回复的演示模型服务驱动会话，把每个页面带到要展示的状态再截图（1440 × 900）。所以审批、提问、计划、后台任务、审核循环这些状态都是真实流程跑出来的，演示模型叫 <code>demo-pro</code> / <code>demo-lite</code>。</li>
         <li>提议部分是用应用自己的样式类写的界面片段，注入真实页面后截图；每个提议页下面附了片段源码，实现时照着做就能还原。</li>
-        <li>界面改了以后重新生成：<code>node docs/prototype/tools/shoot.mjs</code>（全部）或加页面编号只重拍几页，详见 <code>tools/README.md</code>。</li>
-        <li>页面编号沿用 v0.2：同一编号还是同一个页面；v0.2 之后新增的页面从 P26 开始。需求编号（FR-…）对应 <code>docs/requirements.zh-CN.md</code>（v0.2，暂不修改）。</li>
+        <li>界面改了以后重新生成：<code>node --import tsx docs/prototype/tools/shoot.ts</code>（全部）或加页面编号只重拍几页，详见 <code>tools/README.md</code>。截图和端到端测试用同一套测试台，某页的标注找不到时会直接报错。</li>
+        <li>页面编号沿用 v0.2：同一编号还是同一个页面；v0.2 之后新增的页面从 P26 开始，v0.4 补上了已经实现、但之前没有截图的状态（同一页面的其他状态用 b、c 等后缀，例如 P12b）。需求编号（FR-…）对应 <code>docs/requirements.zh-CN.md</code>（v0.2，暂不修改）。</li>
       </ul>
     </section>
 

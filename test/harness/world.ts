@@ -36,8 +36,10 @@ export interface World {
 
 const json = (c: string | object) => (typeof c === 'string' ? c : JSON.stringify(c, null, 2) + '\n');
 
-export function makeWorld(): World {
-  const root = mkdtempSync(path.join(os.tmpdir(), 'ca-test-'));
+/** A fresh world in a new temp folder, or in `at` (emptied first; the prototype's demo uses a fixed one). */
+export function makeWorld(at?: string): World {
+  if (at) rmSync(at, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+  const root = at ? (mkdirSync(at, { recursive: true }), at) : mkdtempSync(path.join(os.tmpdir(), 'ca-test-'));
   const home = path.join(root, 'home');
   const config = path.join(home, '.claude');
   const data = path.join(root, 'data');

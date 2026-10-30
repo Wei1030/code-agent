@@ -1,4 +1,4 @@
-/* Renders window.SCREENS (written by tools/shoot.mjs) and window.NOTES (notes.js). */
+/* Renders window.SCREENS (written by tools/shoot.ts) and window.NOTES (notes.js). */
 (function () {
   'use strict';
   const W = 1440, H = 900;

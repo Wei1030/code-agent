@@ -11,6 +11,7 @@ const TOOLS = [
   { name: 'list_issues', description: 'List open issues of the shop project', inputSchema: { type: 'object', properties: { status: { type: 'string' } } } },
   { name: 'get_issue', description: 'Read one issue', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'create_issue', description: 'Create an issue; asks the user for priority and assignee', inputSchema: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' } }, required: ['title'] } },
+  { name: 'sync_jira', description: 'Sync issues with Jira; asks the user to sign in through a web page', inputSchema: { type: 'object', properties: {} } },
 ];
 
 const send = (m) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
@@ -24,6 +25,13 @@ async function call(name, args) {
   if (name === 'get_issue') {
     const i = issues.find((x) => x.id === args.id);
     return i ? text(JSON.stringify(i, null, 2)) : { ...text(`no issue ${args.id}`), isError: true };
+  }
+  if (name === 'sync_jira') {
+    const elicitationId = `el-${++seq}`;
+    const r = await ask('elicitation/create', { mode: 'url', elicitationId, url: 'https://jira.example.com/oauth/authorize?client=issue-tracker', message: '登录 Jira 后才能同步缺陷单' });
+    if (r?.action !== 'accept') return text('没有登录，未同步');
+    setTimeout(() => send({ method: 'notifications/elicitation/complete', params: { elicitationId } }), 300);
+    return text('已同步 3 条缺陷单');
   }
   if (name === 'create_issue') {
     const r = await ask('elicitation/create', {

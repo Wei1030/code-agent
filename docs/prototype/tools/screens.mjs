@@ -25,6 +25,23 @@ const scrollTo = async ({ eval: ev, sleep }, text, offset = 70) => {
   await sleep(400);
 };
 const openSession = async (ctx, id) => { await ctx.go(`/s/${id}`); await ctx.sleep(900); };
+/** Start a session in the shop-api workspace with a demo prompt; returns its id. */
+const startSession = async (ctx, text, mode) => {
+  const sid = crypto.randomUUID();
+  await ctx.call('createDraft', ctx.ids.shop, sid);
+  if (mode) await ctx.call('setMode', sid, mode);
+  await ctx.call('send', sid, text, {});
+  return sid;
+};
+/** Wait (in the page's server) until the session runs its long command. */
+const untilRunning = async (ctx, sid) => {
+  for (let i = 0; i < 100; i++) {
+    const rt = await ctx.call('openSession', sid);
+    if (rt?.items.some((x) => x.kind === 'tool' && x.status === 'running')) return;
+    await ctx.sleep(300);
+  }
+  throw new Error('the long command did not start');
+};
 /** Open the collapsed thinking-and-tool-call lines of the transcript (all of them). */
 const openSteps = async ({ eval: ev, sleep }) => {
   await ev(`document.querySelectorAll('.steps:not(.open) > .steps-head').forEach((h) => h.click())`);
@@ -40,8 +57,8 @@ export const SCREENS = [
     prepare: async (c) => { await openSession(c, c.ids.validate); await closeInspector(c); await c.sleep(200); await inspector(c, '任务'); },
     marks: [
       { sel: '.ws-switch', note: ['工作区切换', '下拉选择', '切到某个工作区（进入它最近的会话），或「所有工作区」回到总览；最下面「打开文件夹…」添加工作区。'] },
-      { sel: '.topbar input', note: ['搜索', '输入', '搜索会话标题、对话内容和设置项，结果在下拉里，回车打开第一个。'] },
-      { sel: '.lang-btn', note: ['界面语言', '点击', '切换界面语言（英文在交互定稿后开放）。'] },
+      { sel: '.topbar input', note: ['搜索', '输入', '搜索会话的标题和第一条消息，以及页面和设置项，结果在下拉里，回车打开第一个。对话全文在「全部会话」里搜（P12）。'] },
+      { sel: '.lang-btn', note: ['界面语言', '点击', '跟随浏览器 / 简体中文 / English，切换后立即生效（P25b）。'] },
       { sel: '.top-icon', note: ['等你处理', '点击', '所有工作区里等你处理的审批、提问、计划、征询、待放行的会话消息和要你决定的审核，数字是条数（见 P30）。'] },
       { sel: '.account', note: ['模型服务与账号', '点击', '显示 Claude 订阅是否登录、配了几个兼容端点；点开进入 P22。'] },
       { sel: 'nav button, nav a', text: '会话', note: ['左侧导航', '点击', '会话 / 看板 / MCP / 技能 / 钩子 / 作业 / 用量 / 设置。「会话」进入当前工作区最近的会话；看板上的数字是待确认的自动记录。'] },
@@ -135,7 +152,7 @@ export const SCREENS = [
       { sel: '.steps-body', nth: 0, note: ['展开后', '再点一次收起', '左侧一条竖线标出这一行包含的内容。'] },
       { sel: '.thinking', note: ['思考', '点击展开', '折叠时一行摘要和用时，展开看全文。'] },
       { sel: '.tgroup', note: ['连续的读取', '点击展开', '连续的只读调用（读文件、搜索）合成一组。'] },
-      { sel: '.tcard', text: 'src/orders.js', nth: 0, note: ['工具卡片', '点击展开', '工具名、参数摘要、用时、审批来源（规则 / 你批准 / 无需审批）；展开看输出。改文件的卡片直接显示差异。'] },
+      { sel: '.tcard', text: 'src/orders.js', nth: 0, note: ['工具卡片', '点击展开', '工具名、参数摘要、用时、审批情况（你批准过 / 以后不再询问 / 无需审批，或被拒绝及原因）；展开看输出。改文件的卡片直接显示差异。'] },
     ],
   },
   {
@@ -153,7 +170,7 @@ export const SCREENS = [
   {
     id: 'P05b', group: '会话页', title: '输入框 — 排队的消息', status: 'done',
     summary: 'Claude 正在工作时发的消息先排队，这一轮结束后按顺序发出；可以改、删，或「立即插入」。',
-    frs: ['FR-IN-08', 'FR-IN-09', 'FR-IN-10'],
+    frs: ['FR-IN-06', 'FR-IN-07', 'FR-IN-08'],
     prepare: async (c) => {
       await openSession(c, c.ids.running);
       const rt = await c.call('openSession', c.ids.running);
@@ -269,7 +286,7 @@ export const SCREENS = [
   {
     id: 'P24', group: '会话页', title: '会话状态 — 运行中', status: 'done',
     summary: '长时间运行的命令：状态行、运行中的卡片、中断。',
-    frs: ['FR-OUT-07', 'FR-SES-14'],
+    frs: ['FR-OUT-08', 'FR-IN-07'],
     prepare: async (c) => { await openSession(c, c.ids.running); await closeInspector(c); await scrollTo(c, 'end'); },
     marks: [
       { sel: '.steps-head .now', note: ['正在做的事', '点击展开', '还在进行的那一行显示 Claude 正在运行的命令；展开后运行中的卡片显示已用时间，可以转入后台。'] },
@@ -507,7 +524,7 @@ export const SCREENS = [
     frs: ['FR-I18N-01', 'FR-I18N-03', 'FR-I18N-04', 'FR-I18N-05'],
     prepare: async (c) => { await c.go('/settings/language'); await c.sleep(600); },
     marks: [
-      { sel: 'h3', text: '界面语言', note: ['界面语言', '选择', '跟随浏览器或指定；英文在交互定稿后开放。'] },
+      { sel: 'h3', text: '界面语言', note: ['界面语言', '选择', '跟随浏览器或指定简体中文、English。'] },
       { sel: 'h3', text: 'Claude 的回复语言', note: ['回复语言', '选择', '跟随界面语言、指定语言，或不限制。'] },
       { sel: 'h3', text: '数字格式', note: ['数字格式', '选择', 'token 数等的显示方式。'] },
     ],
@@ -641,6 +658,354 @@ export const SCREENS = [
     marks: [
       { sel: '.ins-body .tabs button', text: '调试日志', note: ['「调试日志」分类', '点击', '只在设置里打开「保存调试日志」时出现。'] },
       { sel: '.log-tail', note: ['日志末尾', '—', '每 3 秒刷新；可以复制文件路径用编辑器打开。'] },
+    ],
+  },
+  // ================================================================ added in v0.4: states the earlier version did not show
+  {
+    id: 'P12b', group: '会话', title: '全部会话 — 打标签', status: 'done',
+    summary: '悬停一行点「标签」：新标签回车确认，或选已有的标签、清除标签。',
+    frs: ['FR-SES-08'],
+    prepare: async (c) => { await c.go('/sessions'); await c.sleep(600); await c.eval(`(() => { const r = document.querySelector('.srow'); r.classList.add('hover'); r.querySelector('button[title="标签"]').click(); })()`); await c.sleep(500); },
+    marks: [
+      { sel: '.popover input', note: ['新标签', '输入后回车', '输入法组字时回车只确认候选词。'] },
+      { sel: '.popover', note: ['已有标签', '点击', '下面列出已有的标签，可以选一个，或清除这个会话的标签。'] },
+    ],
+  },
+  {
+    id: 'P12c', group: '会话', title: '全部会话 — 保存并结束', status: 'done',
+    summary: '保存一个还在工作的会话前，确认框列出会被结束的工作；改过的文件不会撤销。',
+    frs: ['FR-SES-13'],
+    prepare: async (c) => {
+      const sid = await startSession(c, '跑一遍完整的回归测试。', 'acceptEdits');
+      await untilRunning(c, sid);
+      await c.go('/sessions'); await c.sleep(600);
+      await c.eval(`(() => { const r = [...document.querySelectorAll('.srow')].find((x) => x.textContent.includes('跑一遍完整的回归测试') && x.querySelector('button[title^="保存并结束"]')); r.classList.add('hover'); r.querySelector('button[title^="保存并结束"]').click(); })()`);
+      await c.sleep(500);
+    },
+    after: async (c) => { await c.click('.modal .btn', '取消'); },
+    marks: [
+      { sel: '.modal', note: ['确认', '保存并结束 / 取消', '列出正在进行的这一轮、等你处理的请求、后台任务和排队的消息；保存后可以随时恢复。'] },
+    ],
+  },
+  {
+    id: 'P39', group: '会话', title: '在 Claude Code 里开的会话', status: 'done',
+    summary: '工作区文件夹里用 claude 命令行开过的会话自动列进来，标「外部」，只读打开，恢复后接着对话。',
+    frs: ['FR-SES-05', 'FR-SES-07'],
+    prepare: async (c) => { await openSession(c, c.ids.external); },
+    marks: [
+      { sel: '.readonly-bar', note: ['已保存', '恢复 / 分叉', '恢复会话后由 Code Agent 接着对话；Claude Code 的记录照旧。'] },
+      { sel: '.umsg', note: ['原来的对话', '—', '从 Claude Code 的记录里读出来。'] },
+    ],
+  },
+  {
+    id: 'P39b', group: '会话', title: '在命令行里继续过的会话', status: 'done',
+    summary: '在这里保存的会话又在 claude 命令行里继续过：再打开时把那几轮接在后面，写明从哪里开始。',
+    frs: ['FR-SES-07'],
+    prepare: async (c) => { await openSession(c, c.ids.docsStart); await scrollTo(c, 'end'); },
+    marks: [
+      { sel: '.transcript *', text: '以下是在 Claude Code 里继续的内容', note: ['分界', '—', '之后的内容来自命令行；在命令行里回退过或压缩过也会写明。'] },
+    ],
+  },
+  {
+    id: 'P40', group: '会话页', title: '长对话 — 往上翻载入更早的内容', status: 'done',
+    summary: '长对话先载入最后一页，从一条提问开始；滚到顶自动载入上一页，画面不跳。',
+    frs: ['FR-SES-06'],
+    prepare: async (c) => { await openSession(c, c.ids.long); await scrollTo(c, 'top'); await c.sleep(200); },
+    marks: [
+      { sel: '.earlier-line', note: ['更早的对话', '滚到这里', '自动载入上一页（每页约 120 条）。'] },
+    ],
+  },
+  {
+    id: 'P41', group: '会话页', title: '压缩后的分界线', status: 'done',
+    summary: '压缩对话后，对话里留一条分界线：手动还是自动、压缩前后的 token。',
+    frs: ['FR-CTX-03'],
+    prepare: async (c) => { await openSession(c, c.ids.long); await scrollTo(c, 'end'); },
+    marks: [
+      { sel: '.transcript *', text: '对话已压缩', note: ['分界线', '—', '之前的内容 Claude 只记得摘要；清空对话也留一条分界线。'] },
+    ],
+  },
+  {
+    id: 'P24d', group: '会话页', title: '会话状态 — Claude Code 意外退出', status: 'done',
+    summary: 'Claude Code 进程意外结束：横幅说明，会话变成已保存，可以恢复。',
+    frs: ['FR-OUT-07', 'FR-SES-13'],
+    prepare: async (c) => { await openSession(c, c.ids.crash); await closeInspector(c); await scrollTo(c, 'end'); },
+    marks: [
+      { sel: '.banner', note: ['横幅', '恢复会话 / 查看 stderr', '恢复后接着对话；stderr 在检查器「事件」里。'] },
+    ],
+  },
+  {
+    id: 'P26b', group: '会话页', title: '看板 — 对话里的自动记录', status: 'done',
+    summary: '一轮结束后自动记到看板的条目，在对话里留一张卡片，可以撤销；编号悬停看摘要，点击打开。',
+    frs: ['自定义功能：看板'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await closeInspector(c); await scrollTo(c, '已自动记到看板', 200); await c.hover('.transcript .board-link'); await c.sleep(400); },
+    marks: [
+      { sel: '.transcript *', text: '已自动记到看板', note: ['记录卡', '撤销', '后台识别用的模型、记了什么；撤销后看板恢复原样。'] },
+      { sel: '.board-peek', note: ['编号悬停', '点击编号', '条目的类型、状态、标题和正文开头；点击在看板里打开。'] },
+    ],
+  },
+  {
+    id: 'P05c', group: '会话页', title: '输入框 — 命令', status: 'done',
+    summary: '输入 `/` 列出 Claude Code 的命令、技能、命令文件和 MCP 提示，继续输入筛选。',
+    frs: ['FR-IN-05', 'FR-SKILL-04'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.type('.c-input', '/'); await c.sleep(900); },
+    after: async (c) => { await c.type('.c-input', ''); await c.sleep(300); },
+    marks: [
+      { sel: '.palette', note: ['命令', '↑↓ 选择，回车插入', '每条写明来源（内置 / 技能 / 命令 / MCP）。'] },
+    ],
+  },
+  {
+    id: 'P05d', group: '会话页', title: '输入框 — 发送方式', status: 'done',
+    summary: '发送按钮旁的下拉：开始新一轮、只加入对话不开始新一轮，或把 / 开头的文字原样发出。Claude 工作时换成排队方式。',
+    frs: ['FR-IN-06', 'FR-IN-08', 'FR-IN-09'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.type('.c-input', '附上压测日志：p99 120ms'); await c.eval(`[...document.querySelectorAll('.c-right .split button')].at(-1).click()`); await c.sleep(400); },
+    after: async (c) => { await c.type('.c-input', ''); },
+    marks: [
+      { sel: '.menu-item', text: '仅作为上下文', note: ['发送方式', '选择', '发送 / 仅作为上下文 / 原样发送；运行中是 排队 / 立即插入 / 工具后 / 下一轮。'] },
+    ],
+  },
+  {
+    id: 'P05e', group: '会话页', title: '输入框 — 粘贴的长文本', status: 'done',
+    summary: '粘贴超过 12 行的文字变成一个标签，和消息一起发出；图片和文件也以标签显示。',
+    frs: ['FR-IN-02', 'FR-IN-04'],
+    prepare: async (c) => {
+      await openSession(c, c.ids.validate);
+      await c.eval(`(() => { const el = document.querySelector('.c-input'); el.focus(); const dt = new DataTransfer(); dt.setData('text/plain', Array.from({ length: 30 }, (_, i) => 'GET /orders?page=' + i + ' 200 ' + (40 + i) + 'ms').join(String.fromCharCode(10))); el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); })()`);
+      await c.type('.c-input', '这是压测时的请求日志，看看有没有慢请求');
+      await c.sleep(400);
+    },
+    after: async (c) => { await c.eval(`document.querySelectorAll('.c-att .x').forEach((x) => x.click())`); await c.type('.c-input', ''); },
+    marks: [
+      { sel: '.c-att', note: ['附件', '悬停看内容 / × 移除', '粘贴的文本显示行数，悬停看前几行。'] },
+    ],
+  },
+  {
+    id: 'P06c', group: '会话页', title: '工具审批 — 同时有两个请求', status: 'done',
+    summary: 'Claude 同时提出了几个请求：面板一次处理一个，上方提示还有几个。',
+    frs: ['FR-PERM-06'],
+    prepare: async (c) => { await openSession(c, c.ids.twoAsks); },
+    marks: [
+      { sel: '.more-requests', note: ['提示', '—', '处理完这一个，下一个接着出现；铃铛里逐条列出。'] },
+      { sel: '.dpanel.approval', note: ['当前请求', '—', '读取工作区外的文件，Claude Code 建议允许读那个文件夹。'] },
+    ],
+  },
+  {
+    id: 'P06d', group: '会话页', title: '切到「跳过权限检查」', status: 'done',
+    summary: '任何会话都能切到跳过权限检查，切换前确认一次。',
+    frs: ['FR-PERM-01', 'FR-PERM-02'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.click('.c-row2 .select-btn', '自动接受编辑'); await c.sleep(300); await c.click('.menu-item', '跳过权限检查'); await c.sleep(400); },
+    after: async (c) => { await c.click('.modal .btn', '取消'); },
+    marks: [
+      { sel: '.modal', note: ['确认', '切换 / 取消', 'Claude 将不再询问任何操作。'] },
+    ],
+  },
+  {
+    id: 'P07b', group: '会话页', title: '澄清提问 — 带预览的选项', status: 'done',
+    summary: '选项带预览时，悬停或选中一个就在右边显示它的样子。',
+    frs: ['FR-ASK-03'],
+    prepare: async (c) => { await openSession(c, c.ids.preview); await c.hover('.q-opts *', '卡片'); await c.sleep(300); },
+    marks: [
+      { sel: '.q-preview', note: ['预览', '悬停切换', 'Markdown 直接显示，HTML 在沙箱里显示。'] },
+    ],
+  },
+  {
+    id: 'P14b', group: '扩展', title: 'MCP 信息征询 — 打开网页登录', status: 'done',
+    summary: 'MCP 服务器要你在网页上完成登录：打开页面，服务器确认后自动继续。',
+    frs: ['FR-MCP-06'],
+    prepare: async (c) => { await openSession(c, c.ids.signin); },
+    marks: [
+      { sel: '.dpanel .btn', text: '打开页面', note: ['打开页面', '点击', '在新标签页打开，回到这里等服务器确认。'] },
+    ],
+  },
+  {
+    id: 'P27d', group: '会话页', title: '代码审核 — 等你决定', status: 'done',
+    summary: '验证连续 3 次没通过，或 5 轮后仍未通过：审核停下来等你决定。',
+    frs: ['自定义功能：代码审核'],
+    prepare: async (c) => { await openSession(c, c.ids.peer); await closeInspector(c); },
+    marks: [
+      { sel: '.dpanel.review-decision', note: ['等你决定', '选择', '再审 2 轮 / 接受现状 / 我来处理；验证没过时只能我来处理或再试。'] },
+    ],
+  },
+  {
+    id: 'P27e', group: '会话页', title: '代码审核 — 进行中', status: 'done',
+    summary: '审核进行中：标题下方显示第几轮、在验证还是在审核；你发的消息排队到审核结束。',
+    frs: ['自定义功能：代码审核'],
+    prepare: async (c) => { await c.call('startReview', c.ids.reviewRun, ['node -e "setTimeout(() => {}, 600000)"'], {}); await openSession(c, c.ids.reviewRun); await c.sleep(1200); },
+    after: async (c) => { await c.call('stopReview', c.ids.reviewRun); },
+    marks: [
+      { sel: '.btn', text: '停止审核', note: ['停止审核', '点击', '确认后停下验证或审核者，记录保留。'] },
+      { sel: '.btn', text: '审核记录', note: ['审核记录', '点击', '随时打开（P27c）。'] },
+    ],
+  },
+  {
+    id: 'P30b', group: '会话', title: '等你处理 — 会话消息和审核', status: 'done',
+    summary: '铃铛里还有：等你放行的会话之间的消息、要你决定的代码审核。标签页标题前也显示条数，如「(5) Code Agent」。',
+    frs: ['FR-PERM-06', '自定义功能：会话协作'],
+    prepare: async (c) => { await c.go('/'); await c.click('.top-icon'); await c.sleep(600); },
+    marks: [
+      { sel: '.inbox-item.held', note: ['待放行的消息', '放行 / 不放行 / 看发送方', '写明为什么先放着（权限模式不同、转发太多次、设置为先等我放行）。'] },
+      { sel: '.inbox-item', text: '验证连续 3 次没有通过', note: ['审核等你决定', '点击', '跳到那个会话做决定。'] },
+    ],
+  },
+  {
+    id: 'P42', group: '会话页', title: '变更', status: 'done',
+    summary: '检查器「变更」页：这个会话改过的文件和每个文件的差异，可以预览文件。',
+    frs: ['FR-FILE-01'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await inspector(c, '变更'); },
+    marks: [
+      { sel: '.ins-body', note: ['改过的文件', '点击展开差异', '增删行数；新建的文件标「新建」；预览按钮在「文件」页打开。'] },
+    ],
+  },
+  {
+    id: 'P23c', group: '会话页', title: '事件检查器 — stderr', status: 'done',
+    summary: '「事件」页的 stderr 分类：Claude Code 进程的输出，启动、退出和出错时看这里。',
+    frs: ['FR-OBS-02'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await inspector(c, '事件'); await c.click('.ins-body .tabs button', 'stderr'); await c.sleep(400); },
+    marks: [
+      { sel: '.ins-body .tabs button', text: 'stderr', note: ['stderr', '点击', '和 SDK 消息、钩子、调试日志并列。'] },
+    ],
+  },
+  {
+    id: 'P26d', group: '扩展', title: '看板 — 导入', status: 'done',
+    summary: '从 GitHub、Jira、粘贴的文字或文件导入：模型先整理成条目，你确认每一条新建、合并还是跳过。',
+    frs: ['自定义功能：看板'],
+    prepare: async (c) => {
+      await c.go(`/board?ws=${c.ids.shop}`); await c.click('.btn', '导入'); await c.sleep(400); await c.click('.modal button', '粘贴文本');
+      await c.type('.modal textarea', ['- 订单导出 CSV 金额单位错', '- 退款审核页要支持批量通过', '- 订单导出 CSV 金额单位错误'].join(String.fromCharCode(10)));
+      await c.click('.modal .btn.primary', '读取并整理');
+      await c.eval(`new Promise((r) => { const t = setInterval(() => { if (document.querySelector('.modal table')) { clearInterval(t); r(true); } }, 200); setTimeout(() => { clearInterval(t); r(false); }, 60000); })`);
+    },
+    marks: [
+      { sel: '.modal table', note: ['预览', '改类型、标题、处理方式', '新建 / 合并到已有条目 / 跳过，并写明原因；确认后才导入。'] },
+    ],
+  },
+  {
+    id: 'P26e', group: '扩展', title: '看板 — 设置', status: 'done',
+    summary: '自动记录开关、后台识别用的模型和思考强度、新会话是否带上进行中的功能。',
+    frs: ['自定义功能：看板'],
+    prepare: async (c) => { await c.go(`/board?ws=${c.ids.shop}`); await c.click('.btn', '设置'); await c.sleep(400); },
+    marks: [
+      { sel: '.modal', note: ['看板设置', '开关 / 下拉', '新会话会在系统提示词里读到进行中的功能和确认过的问题。'] },
+    ],
+  },
+  {
+    id: 'P13b', group: '扩展', title: 'MCP — 添加服务器', status: 'done',
+    summary: '本地命令、HTTP 或 SSE，选适用范围；保存时用 Claude Code 自己的 `claude mcp` 写入。',
+    frs: ['FR-MCP-01', 'FR-MCP-09'],
+    prepare: async (c) => { await c.go('/mcp'); await c.click('.btn', '添加服务器'); await c.sleep(400); },
+    marks: [
+      { sel: '.modal', note: ['服务器', '填写后添加', '名称、类型、命令和参数或 URL、环境变量或请求头、工具超时、适用范围；令牌只显示掩码。'] },
+    ],
+  },
+  {
+    id: 'P13c', group: '扩展', title: 'MCP — 会话行为', status: 'done',
+    summary: '对所有服务器生效：只用这里登记的服务器、是否加载 claude.ai 账号里的连接器、工具搜索、首轮等待时间。',
+    frs: ['FR-MCP-04', 'FR-CTX-04'],
+    prepare: async (c) => { await c.go('/mcp'); await c.eval(`(() => { const h = [...document.querySelectorAll('h3, h5')].find((x) => x.textContent.includes('会话行为')); h && h.scrollIntoView({ block: 'start' }); })()`); await c.sleep(300); },
+    marks: [
+      { sel: 'h3, h5', text: '会话行为', note: ['会话行为', '开关 / 选择', '改动从新启动的 Claude Code 进程起生效。'] },
+    ],
+  },
+  {
+    id: 'P16b', group: '扩展', title: '技能页 — 命令', status: 'done',
+    summary: '「命令」分页：内置命令、命令文件、可以用 / 调用的技能和 MCP 提示；命令文件可以编辑。',
+    frs: ['FR-SKILL-01', 'FR-IN-05'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.go('/skills'); await c.click('.tabs button', '命令'); await c.sleep(500); },
+    marks: [
+      { sel: '.tabs button', text: '命令', note: ['「命令」分页', '点击', '和技能、插件、子代理并列。'] },
+      { sel: 'td, .ext-item', text: '/changelog', note: ['命令文件', '编辑', '`.claude/commands/*.md`，`$ARGUMENTS` 换成 / 命令后面的文字。'] },
+    ],
+  },
+  {
+    id: 'P17b', group: '扩展', title: '钩子 — 执行记录', status: 'done',
+    summary: '运行中会话里触发过的钩子：时机、规则、对象、结果和耗时，可以只看拦截的或出错的。',
+    frs: ['FR-HOOK-04'],
+    prepare: async (c) => { await c.go('/hooks'); await c.eval(`(() => { const h = [...document.querySelectorAll('h3')].find((x) => x.textContent.includes('执行记录')); h && h.scrollIntoView({ block: 'start' }); })()`); await c.sleep(300); },
+    marks: [
+      { sel: 'h3', text: '执行记录', note: ['执行记录', '全部 / 已拦截 / 出错', '设置文件里的钩子执行结果也记在这里；点一行看详情。'] },
+    ],
+  },
+  {
+    id: 'P18b', group: '扩展', title: '作业 — 错过的运行', status: 'done',
+    summary: 'Code Agent 没运行时错过的定时运行：设为「跳过」的作业提示错过了几次，可以补跑一次。',
+    frs: ['FR-JOB-03'],
+    prepare: async (c) => { await c.go('/jobs'); await c.click('.ext-item, .row', '每周变更摘要').catch(() => undefined); await c.sleep(500); },
+    marks: [
+      { sel: '.banner, .banner-warn', text: '错过', note: ['错过的运行', '补跑一次 / 忽略', '设为「服务恢复后补跑一次」的作业不会出现这条提示，直接补跑。'] },
+    ],
+  },
+  {
+    id: 'P20d', group: '设置', title: '设置 — 配置方案「评审」', status: 'done',
+    summary: '代码审核用的「评审」方案：模型、思考强度、可以多给的工具、是否读 CLAUDE.md、追加的审核要求。',
+    frs: ['自定义功能：代码审核'],
+    prepare: async (c) => { await c.go('/settings/profiles?p=review'); await c.sleep(600); },
+    marks: [
+      { sel: 'label, .toggle', text: '读取项目的 CLAUDE.md', note: ['项目说明', '开关', '只读 CLAUDE.md，不读任何设置文件，仓库里的权限规则不能让审核者改文件。'] },
+      { sel: 'h3', text: '审核要求', note: ['审核要求', '输入', '追加在内置规则后面；内置规则可以展开查看。'] },
+    ],
+  },
+  {
+    id: 'P21b', group: '设置', title: '设置 — 一个工作区的权限规则', status: 'done',
+    summary: '「单个工作区」：只对这个工作区生效的规则和额外目录（本机），下方列出仓库里提交的规则（只读）。',
+    frs: ['FR-PERM-08', 'FR-WS-02'],
+    prepare: async (c) => { await c.go('/settings/permissions'); await c.click('button', '单个工作区'); await c.sleep(500); },
+    marks: [
+      { sel: 'h3', text: '来自仓库', note: ['仓库里的规则', '—', '`.claude/settings.json` 里提交的规则，只在 Claude Code 信任过这个文件夹时生效。'] },
+    ],
+  },
+  {
+    id: 'P22c', group: '设置', title: '设置 — 环境变量、运行与遥测', status: 'done',
+    summary: '所有会话共用的环境变量，常用变量可以直接选；调试日志和 OpenTelemetry 导出默认关闭。',
+    frs: ['FR-CFG-04', 'FR-OBS-02', 'FR-OBS-03'],
+    prepare: async (c) => {
+      await c.call('setState', { runtime: { ...c.slices().runtime, otel: true, otelEndpoint: 'http://localhost:4318', otelMetrics: true, otelLogs: true } });
+      await c.go('/settings/provider'); await c.eval(`(() => { const h = [...document.querySelectorAll('h3')].find((x) => x.textContent === '环境变量'); h && h.scrollIntoView({ block: 'start' }); })()`); await c.sleep(300);
+    },
+    after: async (c) => { await c.call('setState', { runtime: { ...c.slices().runtime, otel: false, otelEndpoint: '', otelMetrics: false, otelLogs: false } }); },
+    marks: [
+      { sel: 'h3', text: '环境变量', note: ['环境变量', '添加 / 编辑 / 删除', '对之后启动的 Claude Code 进程生效；令牌类的变量不要放这里。'] },
+      { sel: 'h3', text: '运行与遥测', note: ['运行与遥测', '开关', '保存调试日志（事件页多一个分类）；导出 OpenTelemetry 时填收集器地址和协议（HTTP 或 gRPC），选择导出哪些数据；包含提示词或工具参数时提醒会带上代码和对话内容。'] },
+    ],
+  },
+  {
+    id: 'P05f', group: '会话页', title: '中断后的排队消息', status: 'done',
+    summary: '中断时还有排队的消息：留着等你决定，接着发出或全部取消。',
+    frs: ['FR-IN-07'],
+    prepare: async (c) => {
+      const sid = await startSession(c, '跑一遍完整的回归测试。', 'acceptEdits');
+      await untilRunning(c, sid);
+      await c.call('send', sid, '跑完把失败的用例整理成一张表', { priority: 'later' });
+      await openSession(c, sid);
+      await c.click('.c-right .btn', '中断');
+      await c.sleep(1500);
+    },
+    marks: [
+      { sel: '.receipt', note: ['回执', '保留并执行 / 取消排队消息', '排队的消息不会自动发出。'] },
+    ],
+  },
+  {
+    id: 'P43', group: '总览', title: '与服务的连接断开', status: 'done',
+    summary: '浏览器和 Code Agent 服务断开时：顶部说明在重连，会话在服务端照常运行；连上后补齐期间的内容，待处理的请求重新出现。',
+    frs: ['FR-SES-14'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await c.offline(true); await c.sleep(1500); },
+    after: async (c) => { await c.offline(false); await c.sleep(1500); },
+    marks: [
+      { sel: '.conn-bar', note: ['断线', '—', '自动重连，间隔逐渐加长；重连后提示「已重连」。'] },
+    ],
+  },
+  {
+    id: 'P44', group: '总览', title: '提示框', status: 'done',
+    summary: '在别的页面时，有事等你处理、一轮完成、后台任务完成会弹出提示框，点按钮跳过去。',
+    frs: ['FR-NTF-01'],
+    prepare: async (c) => {
+      await c.go('/usage');
+      await c.eval(`window.__toasts = true; document.getElementById('shoot-css')?.remove()`);
+      await c.sleep(3000);
+      await startSession(c, '接入 express：先安装依赖，再把 server.js 改成 express 路由。');
+      await c.eval(`new Promise((r) => { const t = setInterval(() => { if (document.querySelector('.toast')) { clearInterval(t); r(true); } }, 200); setTimeout(() => { clearInterval(t); r(false); }, 20000); })`);
+    },
+    after: async (c) => { await c.eval('window.__toasts = false'); },
+    marks: [
+      { sel: '.toast', note: ['提示框', '打开 / 关闭', '有按钮的停留 8 秒，其余 3.5 秒；在那个会话页时不弹。标签页在后台时同时发系统通知。'] },
     ],
   },
 ];
