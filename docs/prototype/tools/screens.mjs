@@ -391,7 +391,7 @@ export const SCREENS = [
       { sel: 'button', text: '待确认', note: ['筛选', '点击', '未完成 / 全部 / 待确认（自动记录、你还没确认的）。'] },
       { sel: 'input[placeholder="搜索编号、标题、内容"]', note: ['搜索', '输入', '按编号（F-3、I-2）、标题、内容搜索。'] },
       { sel: '.btn', text: '导入', note: ['导入 / 导出', '点击', '从 GitHub、Jira、粘贴的文字或文件导入，模型先识别成条目让你确认；导出 Markdown。'] },
-      { sel: '.btn', text: '设置', note: ['看板设置', '点击', '是否自动记录、识别用的模型和思考强度、新会话是否带上进行中的功能。'] },
+      { sel: '.btn', text: '设置', note: ['看板设置', '点击', '是否自动记录，识别用的模型和思考强度。'] },
       { sel: '.board-detail', note: ['条目详情', '编辑', '状态、优先级、任务、决定、关联的会话和变更记录；会话里提到 F-3 这样的编号会变成链接。'] },
     ],
   },
@@ -589,7 +589,7 @@ export const SCREENS = [
       await c.eval(`document.querySelector('.session-prompt')?.scrollIntoView({ block: 'start' })`); await c.sleep(300);
     },
     marks: [
-      { sel: '.session-prompt h4', note: ['附加的系统提示词', '—', 'Code Agent 在会话开始时加在 Claude Code 系统提示词后面的内容（回复语言等）。Claude Code 一直沿用会话开始时的系统提示词，之后改配置方案不会变；分叉出的会话沿用原会话的。'] },
+      { sel: '.session-prompt h4', note: ['附加的系统提示词', '—', 'Code Agent 在会话开始时加在 Claude Code 系统提示词后面的内容，现在只有回复语言这一行；会话协作和看板工具的用法写在各自工具的说明里。Claude Code 一直沿用会话开始时的系统提示词，之后改配置方案不会变；分叉出的会话沿用原会话的。'] },
     ],
   },
   {
@@ -915,11 +915,11 @@ export const SCREENS = [
   },
   {
     id: 'P26e', group: '扩展', title: '看板 — 设置', status: 'done',
-    summary: '自动记录开关、后台识别用的模型和思考强度、新会话是否带上进行中的功能。',
+    summary: '自动记录开关，后台识别用的模型和思考强度。',
     frs: ['自定义功能：看板'],
     prepare: async (c) => { await c.go(`/board?ws=${c.ids.shop}`); await c.click('.btn', '设置'); await c.sleep(400); },
     marks: [
-      { sel: '.modal', note: ['看板设置', '开关 / 下拉', '新会话会在系统提示词里读到进行中的功能和确认过的问题。'] },
+      { sel: '.modal', note: ['看板设置', '开关 / 下拉', '每轮结束后由一个便宜的模型识别决定、确认的问题和完成的工作，记到看板上（标为待确认）。Claude 需要看板内容时自己用看板工具查；提到条目时写编号，对话里的编号可以点。'] },
     ],
   },
   {
