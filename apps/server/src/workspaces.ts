@@ -151,10 +151,10 @@ async function listFiles(workspaceId: string): Promise<FsNode[]> {
 async function removeWorkspace(id: string) {
   const { allSummaries, dropSession } = await import('./sessions/registry');
   const { closeProcess } = await import('./sessions/live');
-  const { cancelWaiting } = await import('./sessions/slots');
+  const { dropQueue } = await import('./sessions/ops');
   const sessions = allSummaries().filter((s) => s.workspaceId === id);
   for (const s of sessions) {
-    cancelWaiting(s.id);
+    dropQueue(s.id);
     await closeProcess(s.id);
   }
   for (const s of sessions) dropSession(s.id);

@@ -87,7 +87,11 @@ export function SessionPage() {
             {sum.resume && rt.state === 'idle' && <ResumeBar sid={id} resume={sum.resume} live={sum.live} />}
             {sum.waiting && <WaitingBar sid={id} />}
             {rt.readOnly ? (
-              !sum.waiting && <ReadOnlyBar sid={id} model={rt.model} worktreeGone={!!sum.worktreeGone} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />
+              <>
+                {/* Messages that waited for a running slot go out once the session runs again. */}
+                <QueueList sid={id} queue={rt.queue} saved={!sum.waiting} />
+                {!sum.waiting && <ReadOnlyBar sid={id} model={rt.model} worktreeGone={!!sum.worktreeGone} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />}
+              </>
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />

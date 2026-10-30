@@ -1,13 +1,13 @@
 // What the extension and settings pages do when used: the board's new item and status, a job run
 // by hand, a hook rule made and tried, a permission rule added, an MCP server added; in a session
-// the rewind and code-review dialogs, cancelling a wake-up; held messages and a review decision in
-// the inbox.
+// the rewind and code-review dialogs, cancelling a wake-up, the queue of a session waiting for a
+// running slot; held messages and a review decision in the inbox.
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { setupUi, noPageErrors, type UiEnv } from '../harness/ui';
-import { say, use } from '../harness/fake-model';
+import { say, use, shell, sleepCmd } from '../harness/fake-model';
 import { until, sleep } from '../harness/client';
 
 let env: UiEnv;
@@ -135,4 +135,22 @@ test('cancelling a wake-up the process holds asks first, then ends the process (
   await until(() => !env.c.sessions.get(sid)?.resume && env.c.sessions.get(sid)?.live === false, 'cancelled, the process ended');
   noPageErrors(p);
   await p.close();
+});
+
+test('a session waiting for a running slot shows the messages it will send (issue 10-31#7)', async () => {
+  const max = env.c.slices.maxRunning;
+  await env.c.call('setState', { maxRunning: 1 });
+  env.model.script(/^占着唯一的名额$/, [shell(sleepCmd(60)), [say('完')]]);
+  const busy = await env.start('占着唯一的名额', { mode: 'bypassPermissions' });
+  await until(async () => (await env.rt(busy)).items.some((i) => i.kind === 'tool' && i.status === 'running'), 'busy');
+  const sid = await env.start('等名额时的第一条');
+  await until(() => env.c.sessions.get(sid)?.waiting === true, 'waiting');
+  const p = await env.page(`/s/${sid}`);
+  await p.waitEl('.queue', '等名额时的第一条');
+  await p.waitEl('.readonly-bar.waiting', '排队等待空位');
+  noPageErrors(p);
+  await p.close();
+  await env.c.call('cancelWaiting', sid);
+  await env.c.call('stop', busy);
+  await env.c.call('setState', { maxRunning: max });
 });

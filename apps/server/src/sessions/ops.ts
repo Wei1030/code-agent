@@ -7,6 +7,7 @@ import type { DryRun, SendOptions } from '@code-agent/shared/api';
 import { emptyRuntime } from '@code-agent/shared/runtime';
 import { register } from '../hub';
 import { app } from '../state';
+import { load, save } from '../store';
 import { addItem, allSummaries, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
 import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onTurnEnd, refreshContext, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
@@ -14,8 +15,28 @@ import { cwdOf } from './options';
 import { lastPage, pageBefore } from './page';
 import { oneProcess, resolveModel, validModel } from '../models';
 
-/** Full messages behind the queue entries the UI shows. */
-const queued = new Map<string, Outgoing>();
+/**
+ * Full messages behind the queue entries the UI shows (attachments, the @-session block, where a
+ * message came from), kept on disk so that a restart does not reduce them to their text.
+ */
+const queued = new Map<string, Outgoing>(Object.entries(load<Record<string, Outgoing>>('queued-messages', {})));
+const keepQueued = () => save('queued-messages', () => Object.fromEntries(queued));
+const forget = (ids: string[]) => {
+  for (const id of ids) queued.delete(id);
+  keepQueued();
+};
+
+/** Stop waiting for a running slot: the session stays saved and the messages it queued go. */
+function stopWaiting(sid: string) {
+  if (isWaiting(sid)) forget(rt(sid)?.queue.map((q) => q.id) ?? []);
+  cancelWaiting(sid);
+}
+
+/** A session going away: it stops waiting, and what it queued goes with it. */
+export function dropQueue(sid: string) {
+  stopWaiting(sid);
+  forget(rt(sid)?.queue.map((q) => q.id) ?? []);
+}
 
 function titleFrom(text: string) {
   const t = text.replace(/\s+/g, ' ').trim();
@@ -25,6 +46,7 @@ function titleFrom(text: string) {
 export function enqueue(sid: string, m: Outgoing, priority: QueuedMessage['priority'] = 'next', id = randomUUID()) {
   const r = rt(sid)!;
   queued.set(id, m);
+  keepQueued();
   const entry: QueuedMessage = { id, text: m.shown ?? m.text, priority, ...(m.from ? { from: m.from } : {}) };
   // "next" goes before every "later".
   const queue = priority === 'next' ? [...r.queue.filter((q) => q.priority !== 'later'), entry, ...r.queue.filter((q) => q.priority === 'later')] : [...r.queue, entry];
@@ -46,7 +68,7 @@ export function pumpQueue(sid: string): boolean {
   const [first, ...rest] = r.queue;
   emit(sid, { t: 'queue', queue: rest });
   const m = queued.get(first.id) ?? { text: first.text };
-  queued.delete(first.id);
+  forget([first.id]);
   sendTurn(sid, m);
   return true;
 }
@@ -228,20 +250,21 @@ register({
     if (p.priority === 'now' && inTurn(sid)) {
       emit(sid, { t: 'queue', queue: r.queue.filter((x) => x.id !== id) });
       const m = queued.get(id) ?? { text: q.text };
-      queued.delete(id);
+      forget([id]);
       steer(sid, p.text !== undefined ? { ...m, text: p.text, shown: undefined } : m);
       return;
     }
     if (p.text !== undefined) {
       const m = queued.get(id);
       if (m) queued.set(id, { ...m, text: p.text, shown: undefined });
+      keepQueued();
     }
     emit(sid, { t: 'queue', queue: r.queue.map((x) => (x.id === id ? { ...x, ...p } : x)) });
   },
   removeQueued: (sid, id) => {
     const r = rt(sid);
     if (!r) return;
-    for (const q of r.queue) if (!id || q.id === id) queued.delete(q.id);
+    forget(r.queue.filter((q) => !id || q.id === id).map((q) => q.id));
     emit(sid, { t: 'queue', queue: id ? r.queue.filter((x) => x.id !== id) : [] });
   },
   interrupt: async (sid) => {
@@ -297,7 +320,7 @@ register({
     }
   },
   stop: async (sid) => {
-    cancelWaiting(sid);
+    stopWaiting(sid);
     await closeProcess(sid);
   },
   resume: async (sid, model) => {
@@ -370,7 +393,7 @@ register({
     await tagSession(sid, value, { dir: cwdOf(sid) }).catch(() => undefined);
   },
   remove: async (sid) => {
-    cancelWaiting(sid);
+    dropQueue(sid);
     const dir = cwdOf(sid);
     const wasDraft = summary(sid)?.draft;
     await closeProcess(sid);
@@ -387,7 +410,7 @@ register({
   },
   retryBanner: (sid, itemId) => patchItem(sid, itemId, { resolved: true }),
   listCommands: (sid) => commandsFor(sid),
-  cancelWaiting: (sid) => cancelWaiting(sid),
+  cancelWaiting: (sid) => stopWaiting(sid),
   pumpSlots: () => pump(),
 });
 

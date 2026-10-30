@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
+import { getSessionInfo, query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type {
   AgentRun, Attachment, BgTask, FileChange, Item, PeerOrigin, PendingRequest, RequestBrief, SessionRef, Task, ToolItem,
 } from '@code-agent/shared/types';
@@ -17,7 +17,7 @@ import { broadcast } from '../hub';
 import { addItem, emit, findItem, patchItem, patchSummary, raw, rt, summary } from './registry';
 import { InputQueue } from './input';
 import { agentRow, READ_ONLY, toolDetail, toolName, toolResult } from './describe';
-import { buildOptions } from './options';
+import { buildOptions, cwdOf } from './options';
 import { contextFrom } from './context';
 import { recordUsage, recordLimit } from '../usage';
 import { configDir } from '../claude/files';
@@ -224,10 +224,17 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
     addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'warn', text: `模型 ${r.model.replace(/^ep:[^:]+:/, '')} 已经删除，改用 ${app.models.find((m) => m.id === next)?.label ?? next} 继续。` });
     emit(sid, { t: 'settings', patch: { model: next } });
   }
+  // A session Claude Code never ran (its first message still waited for a running slot when the
+  // server restarted) has no conversation to resume: it starts as a new one under its own id.
+  let resume = so.resume;
+  if (resume && !(await getSessionInfo(sid, { dir: cwdOf(sid) }).catch(() => undefined))) {
+    resume = false;
+    if (r.items.some((it) => it.kind === 'text')) addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'warn', text: 'Claude Code 里找不到这个会话的对话记录，作为新对话开始：之前的内容 Claude 看不到。' });
+  }
   const input = new InputQueue();
   let l!: Live;
   const opts = buildOptions(sid, {
-    resume: so.resume,
+    resume,
     canUseTool: (name, inp, o) => import('./requests').then((m) => m.canUseTool(l, name, inp, o)),
     onElicitation: (req, o) => import('./requests').then((m) => m.onElicitation(l, req, o)),
     hooks: hooksFor(sid),
@@ -244,7 +251,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   patchSummary(sid, { live: true, draft: false, waiting: false, lastActive: Date.now() });
   emit(sid, { t: 'settings', patch: { readOnly: false } });
   emit(sid, { t: 'status', status: { kind: 'working', label: '正在启动 Claude Code…' } });
-  emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] Claude Code 启动中（${so.resume ? '恢复会话' : '新会话'}，工作目录 ${opts.cwd}）` });
+  emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] Claude Code 启动中（${resume ? '恢复会话' : '新会话'}，工作目录 ${opts.cwd}）` });
   void pump(l).finally(() => endedResolve());
   const starts = (r.info?.starts ?? 0) + 1;
   // Claude Code keeps the system prompt of a session's first start; a resumed one shows that one.

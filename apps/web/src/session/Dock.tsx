@@ -381,14 +381,14 @@ const PRIORITIES = [
   { value: 'later', label: '下一轮', desc: '本轮结束后作为新一轮发送' },
 ] as const;
 
-export function QueueList({ sid, queue }: { sid: string; queue: QueuedMessage[] }) {
+export function QueueList({ sid, queue, saved }: { sid: string; queue: QueuedMessage[]; saved?: boolean }) {
   const t = useT();
   const [editing, setEditing] = useState<string | null>(null);
   const [text, setText] = useState('');
   if (queue.length === 0) return null;
   return (
     <div className="queue">
-      <div className="queue-head">{t('排队中 · {n}', { n: queue.length })}</div>
+      <div className="queue-head">{saved ? t('排队中 · {n} · 恢复会话后按顺序发出', { n: queue.length }) : t('排队中 · {n}', { n: queue.length })}</div>
       {queue.map((q) => (
         <div key={q.id} className="qitem">
           <Icon name="queue" size={15} className="muted" />
