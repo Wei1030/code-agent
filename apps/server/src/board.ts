@@ -27,7 +27,7 @@ const run = promisify(execFile);
 const all = () => app.board;
 const wsOf = (sid: string) => summary(sid)?.workspaceId ?? '';
 
-/** How Claude and the recorder write an item; the log keeps the history. */
+/** How Claude writes an item; the log keeps the history. */
 const STATE_RULE = 'An item says where things stand now, not how they got there: when that changes, rewrite the body (the new one replaces it) and drop what no longer holds; do not append dated progress or a history of what was done. The item log keeps every change.';
 
 function findBoardItem(wsId: string, id: string): BoardItem | undefined {
@@ -114,6 +114,14 @@ function undoBoardRecord(sid: string, cardId: string) {
 
 // ------------------------------------------------------------------ Claude's board tools
 
+/**
+ * The version (updatedAt) of each item a session has read in full or written, per session. A body
+ * replaces the old one, so Claude may write one only over the version it has seen.
+ */
+const seen = new Map<string, Map<string, number>>();
+const saw = (sid: string, x: BoardItem) => seen.set(sid, (seen.get(sid) ?? new Map<string, number>()).set(`${x.workspaceId}:${x.id}`, x.updatedAt));
+const seenAt = (sid: string, x: BoardItem) => seen.get(sid)?.get(`${x.workspaceId}:${x.id}`);
+
 const brief = (x: BoardItem) => `${x.id} [${x.kind} · ${STATUS_LABEL[x.status]}${x.priority !== 'normal' ? ` · ${x.priority}` : ''}] ${x.title}`;
 
 function full(x: BoardItem): string {
@@ -143,6 +151,7 @@ addWorkspaceTools((sid) => [
   }, { annotations: { readOnlyHint: true } }),
   tool('board_get', 'Read one board item in full (the user may name it by id, e.g. F-3).', { id: z.string() }, async (a) => {
     const x = findBoardItem(wsOf(sid), a.id.toUpperCase());
+    if (x) saw(sid, x);
     return { content: [{ type: 'text' as const, text: x ? full(x) : `No item ${a.id}.` }], ...(x ? {} : { isError: true }) };
   }, { annotations: { readOnlyHint: true } }),
   tool('board_create', `Create a board item: a feature to build, an issue, a note on a decision. Search first to avoid duplicates. ${STATE_RULE}`, {
@@ -152,10 +161,11 @@ addWorkspaceTools((sid) => [
     const ws = wsOf(sid);
     const tr = tracker();
     const it = tr.create(ws, { kind: a.kind, title: a.title, body: a.body ?? '', priority: a.priority ?? 'normal', tasks: (a.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false })) }, { kind: 'agent', sessionId: sid }, 'Claude 新建');
+    saw(sid, it);
     card(sid, 'agent', tr, [{ itemId: it.id, action: 'created', text: a.kind === 'feature' ? '新功能' : a.kind === 'issue' ? '新问题' : '新笔记' }]);
     return { content: [{ type: 'text' as const, text: `Created ${it.id}. Cite it by id from now on.` }] };
   }),
-  tool('board_update', `Update a board item: status, title, body, priority, tasks, decisions. ${STATE_RULE} Say what changed in note.`, {
+  tool('board_update', `Update a board item: status, title, body, priority, tasks, decisions. ${STATE_RULE} A body replaces the whole old one: read the item with board_get first (a body is refused over a version you have not read). Say what changed in note.`, {
     id: z.string(), status: z.enum(STATUS_ENUM).optional(), title: z.string().optional(), body: z.string().optional().describe('The whole new body; it replaces the old one'), priority: z.enum(['high', 'normal', 'low']).optional(),
     add_tasks: z.array(z.string()).optional(), complete_tasks: z.array(z.string()).optional().describe('Task texts (or their start) to mark done'),
     add_decisions: z.array(z.object({ text: z.string(), outcome: z.string().optional() })).optional(), note: z.string().optional().describe('What changed, for the item log'),
@@ -164,12 +174,18 @@ addWorkspaceTools((sid) => [
     const cur = findBoardItem(ws, a.id.toUpperCase());
     if (!cur) return { content: [{ type: 'text' as const, text: `No item ${a.id}.` }], isError: true };
     if (a.status && !STATUSES[cur.kind].includes(a.status)) return { content: [{ type: 'text' as const, text: `Status ${a.status} does not apply to a ${cur.kind}; use one of ${STATUSES[cur.kind].join(', ')}.` }], isError: true };
+    const knew = seenAt(sid, cur) === cur.updatedAt;
+    if (a.body !== undefined && !knew) {
+      const why = seenAt(sid, cur) ? 'it has changed since you read it' : 'you have not read it';
+      return { content: [{ type: 'text' as const, text: `Nothing changed: the body replaces the whole old one and ${why}. Read ${cur.id} with board_get, then write the body again.` }], isError: true };
+    }
     const tasks = [...cur.tasks.map((t) => (a.complete_tasks?.some((c) => t.text.startsWith(c) || c.startsWith(t.text)) ? { ...t, done: true } : t)), ...(a.add_tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false }))];
     const decisions = [...cur.decisions, ...(a.add_decisions ?? []).map((d) => ({ id: randomUUID().slice(0, 8), ...d }))];
     const p: Partial<BoardItem> = { tasks, decisions, ...(a.status ? { status: a.status } : {}), ...(a.title ? { title: a.title } : {}), ...(a.body !== undefined ? { body: a.body } : {}), ...(a.priority ? { priority: a.priority } : {}) };
     const text = a.note ?? (a.status ? `状态 → ${STATUS_LABEL[a.status]}` : '已更新');
     const tr = tracker();
     tr.update(ws, cur.id, p, `Claude：${text}`, { sessionId: sid });
+    if (knew) saw(sid, findBoardItem(ws, cur.id)!);
     card(sid, 'agent', tr, [{ itemId: cur.id, action: 'updated', text }]);
     return { content: [{ type: 'text' as const, text: `Updated ${cur.id}.` }] };
   }),
@@ -234,7 +250,7 @@ const RECORDER_SCHEMA = {
         type: 'object', required: ['op', 'note'], additionalProperties: false,
         properties: {
           op: { type: 'string', enum: ['create', 'update'] }, id: { type: 'string', description: 'For update: the existing item id' },
-          kind: { type: 'string', enum: ['feature', 'issue', 'note'] }, title: { type: 'string' }, body: { type: 'string' },
+          kind: { type: 'string', enum: ['feature', 'issue', 'note'] }, title: { type: 'string' }, body: { type: 'string', description: 'For create only: an update cannot change the body' },
           status: { type: 'string', enum: [...STATUS_ENUM] }, priority: { type: 'string', enum: ['high', 'normal', 'low'] },
           tasks: { type: 'array', items: { type: 'string' } }, complete_tasks: { type: 'array', items: { type: 'string' } },
           decisions: { type: 'array', items: { type: 'object', required: ['text'], properties: { text: { type: 'string' }, outcome: { type: 'string' } } } },
@@ -271,7 +287,7 @@ async function recordTurn(sid: string, userId: string) {
     '- a defect that was confirmed (issue) or fixed (update the issue to fixed),',
     '- a feature that was agreed on (feature, with tasks if a plan was given) or finished (update to done).',
     'Do not record questions, guesses, routine reads or anything not settled. Prefer updating an existing item over creating a duplicate. Most turns need no operation at all: then return an empty list.',
-    `${STATE_RULE} An update's body replaces the old one, which you do not see: give one only when the turn settles all the item must say. Say what changed in note.`,
+    'A new item\'s body says where things stand now, not how they got there (no dated progress, no history). An update cannot change the body, which you do not see: it changes the status, tasks and decisions; say what changed in note.',
     'Write titles, bodies and notes in Simplified Chinese.',
     `Existing items:\n${known.length ? known.map(brief).join('\n') : '(none)'}`,
     `Turn:\n${turn}`,
@@ -316,7 +332,7 @@ async function recordTurn(sid: string, userId: string) {
       const status = o.status && STATUSES[cur.kind].includes(o.status) ? o.status : undefined;
       const tasks = [...cur.tasks.map((t) => (o.complete_tasks?.some((c) => t.text.startsWith(c) || c.startsWith(t.text)) ? { ...t, done: true } : t)), ...(o.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false }))];
       const decisions = [...cur.decisions, ...(o.decisions ?? []).map((d) => ({ id: randomUUID().slice(0, 8), ...d }))];
-      if (tr.update(ws, cur.id, { tasks, decisions, ...(status ? { status } : {}), ...(o.body ? { body: o.body } : {}) }, `自动记录：${o.note}`, { sessionId: sid, auto: true })) {
+      if (tr.update(ws, cur.id, { tasks, decisions, ...(status ? { status } : {}) }, `自动记录：${o.note}`, { sessionId: sid, auto: true })) {
         changes.push({ itemId: cur.id, action: 'updated', text: o.note });
       }
     }

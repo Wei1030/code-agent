@@ -71,6 +71,19 @@ test('the recorder records after a turn, unconfirmed; undo restores; confirm acc
   await until(() => board().find((b) => b.id === note.id)?.unconfirmed === false, 'confirmed');
 });
 
+test('the recorder updates status, tasks and decisions, never the body it does not see (issue 10-30#19)', async () => {
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true } });
+  const item = await env.c.call('createItem', env.ws, { kind: 'feature', title: '正文不该被改', body: '原来的目标说明', tasks: [{ id: 't1', text: '写接口', done: false }] }, { kind: 'manual' });
+  recorderOps = [{ op: 'update', id: item.id, status: 'done', body: '已完成', complete_tasks: ['写接口'], note: '做完了' }];
+  env.model.script(/^功能做完了$/, [[say('接口写完了，测试也过了：这个功能已经完成，可以合并。')]]);
+  const sid = await env.start('功能做完了');
+  await env.turns(sid);
+  const done = await until(() => board().find((b) => b.id === item.id && b.status === 'done'), 'recorded');
+  assert.equal(done.body, '原来的目标说明');
+  assert.equal(done.tasks[0].done, true);
+  assert.ok(env.model.requests.some((r) => r.tools.includes('StructuredOutput') && /An update cannot change the body/.test(r.prompt)), 'the recorder is told');
+});
+
 test('a check in progress shows in its session; stopping ends it with nothing recorded; stopping for good turns the recorder off (custom feature 看板)', async () => {
   recorderOps = [{ op: 'create', kind: 'note', title: '停掉就不该记', body: 'x', note: 'x' }];
   await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: M2 } });
@@ -153,6 +166,31 @@ test('Claude\'s board tools: search, create, a wrong status refused (custom feat
   const results = JSON.stringify(env.model.sent(/用看板工具/).at(-1)!.body.messages);
   assert.match(results, /I-1/, 'search found the issue');
   assert.equal(board().find((b) => b.id === 'I-1')?.status, 'open', 'an issue cannot be "doing"');
+});
+
+test('Claude writes a body only over the version it has read: not unread, not changed since (issue 10-30#19)', async () => {
+  const item = await env.c.call('createItem', env.ws, { kind: 'note', title: '正文保护', body: '用户写的原文' }, { kind: 'manual' });
+  const body = () => board().find((b) => b.id === item.id)!.body;
+  env.model.script(/^改正文一$/, [
+    [use('mcp__workspace__board_update', { id: item.id, body: '没读就改' })],
+    [use('mcp__workspace__board_get', { id: item.id })],
+    [use('mcp__workspace__board_update', { id: item.id, body: '读过再改', note: '改了正文' })],
+    [use('mcp__workspace__board_update', { id: item.id, body: '自己刚写的可以接着改' })],
+    [say('好')],
+  ]);
+  const sid = await env.start('改正文一');
+  await env.turns(sid);
+  const first = JSON.stringify(env.model.sent(/^改正文一$/).at(-1)!.body.messages);
+  assert.match(first, /Nothing changed: the body replaces the whole old one and you have not read it/);
+  assert.equal(body(), '自己刚写的可以接着改');
+  assert.ok(board().find((b) => b.id === item.id)!.log.some((l) => /改了正文/.test(l.text)));
+
+  await env.c.call('updateItem', env.ws, item.id, { body: '用户后来又改了' }, '改了内容');
+  env.model.script(/^改正文二$/, [[use('mcp__workspace__board_update', { id: item.id, body: '覆盖用户的修改' })], [say('好')]]);
+  await env.c.call('send', sid, '改正文二', {});
+  await env.turns(sid, 2);
+  assert.match(JSON.stringify(env.model.sent(/^改正文二$/).at(-1)!.body.messages), /it has changed since you read it/);
+  assert.equal(body(), '用户后来又改了');
 });
 
 test('the board needs nothing in the system prompt: its tools ask Claude to cite items by id (custom feature 看板)', async () => {
