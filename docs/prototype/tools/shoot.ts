@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, watch, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { FakeModel, type Block, type Req, type Step } from '../../../test/harness/fake-model';
+import { FakeModel, hang, type Block, type Req, type Step } from '../../../test/harness/fake-model';
 import { Server } from '../../../test/harness/server';
 import { Client } from '../../../test/harness/client';
 import { Browser, type Page } from '../../../test/harness/browser';
@@ -40,6 +40,8 @@ interface Ctx {
   hover(sel: string, text?: string): Promise<void>;
   /** Cut the page's connection to the server and keep it cut (true), or let it reconnect. */
   offline(on: boolean): Promise<unknown>;
+  /** Make the demo model with this name answer nothing (true) or as scripted again. */
+  stall(model: string, on: boolean): void;
 }
 
 /** The scenarios' steps for the scripted endpoint: blocks may be functions of the prompt; Bash becomes PowerShell where Claude Code offers that. */
@@ -63,7 +65,7 @@ window.__click = (sel, text, nth) => { const e = window.__find(sel, text, nth); 
 if (!window.__toasts && !document.getElementById('shoot-css')) { const s = document.createElement('style'); s.id = 'shoot-css'; s.textContent = '.toasts { display: none !important; }'; document.head.appendChild(s); }
 `;
 
-function context(page: Page, c: Client, ids: Ids): Ctx {
+function context(page: Page, c: Client, ids: Ids, model: FakeModel): Ctx {
   return {
     ids, sleep, call: c.call.bind(c), summary: (id) => c.sessions.get(id), slices: () => c.slices,
     async go(p) { await page.goto(p); await sleep(700); await page.eval(PAGE_LIB); },
@@ -73,6 +75,7 @@ function context(page: Page, c: Client, ids: Ids): Ctx {
     key: (k) => page.press(k),
     hover: (sel, text) => page.hover(sel, text),
     offline: (on) => (on ? page.cutConnection(true) : page.online()),
+    stall: (name, on) => model.failModel(name, on ? hang : null),
     inject: (sel, text, where, html) => page.eval(`(() => {
       const e = __find(${JSON.stringify(sel)}, ${JSON.stringify(text ?? null)});
       if (!e) throw new Error('inject target missing: ${String(sel).replace(/'/g, '')}');
@@ -84,11 +87,11 @@ function context(page: Page, c: Client, ids: Ids): Ctx {
   };
 }
 
-async function capture(page: Page, c: Client, ids: Ids, screens: Screen[]) {
+async function capture(page: Page, c: Client, ids: Ids, model: FakeModel, screens: Screen[]) {
   mkdirSync(path.join(OUT, 'shots'), { recursive: true });
   const results: Array<{ id: string; marks: unknown[]; error?: string }> = [];
   const problems: string[] = [];
-  const ctx = context(page, c, ids);
+  const ctx = context(page, c, ids, model);
   for (const sc of screens) {
     try {
       await page.eval(PAGE_LIB);
@@ -164,7 +167,7 @@ async function main() {
     const shoot = async (n: number) => {
       const all = await loadScreens(n);
       const screens = all.filter((s) => !only.length || only.includes(s.id));
-      const { results, problems } = await capture(page, c, ids, screens);
+      const { results, problems } = await capture(page, c, ids, model, screens);
       if (page.errors.length) problems.push(...page.errors.splice(0).map((e) => `page error: ${e.split('\n')[0]}`));
       writeScreens(all, results, only.length > 0);
       if (problems.length) console.error(`\n${problems.length} problem(s):\n${problems.join('\n')}`);

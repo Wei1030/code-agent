@@ -2,6 +2,7 @@
 // of the world's home (settings, user skills, a subagent, two MCP servers — one is
 // issue-tracker-mcp.mjs, which asks for input through an elicitation). Nothing outside it is touched.
 import path from 'node:path';
+import { copyFileSync } from 'node:fs';
 import { makeWorld, type World } from '../../../test/harness/world';
 
 const here = import.meta.dirname;
@@ -37,6 +38,10 @@ export function demoWorld(root: string): World & { repos: Record<string, string>
     }],
     ['Add users and docs', { 'docs/errors.md': '# 错误码\n\n| 码 | 含义 |\n| --- | --- |\n| ORDER_NOT_FOUND | 订单不存在 |\n' }],
   ]);
+  // A picture in the repository, for the chat's pictures (P05g).
+  copyFileSync(path.join(here, '..', 'shots', 'P12.webp'), path.join(repos['shop-api'], 'docs', 'ui-sessions.webp'));
+  w.git(repos['shop-api'], 'add', '-A');
+  w.git(repos['shop-api'], 'commit', '-q', '-m', 'Add a UI screenshot');
   repo('web-console', [['Admin console skeleton', {
     'package.json': { name: 'web-console', version: '0.2.0', private: true, scripts: { dev: 'vite', build: 'vite build', test: 'vitest run' } },
     'README.md': '# web-console\n\n运营后台：订单查询、退款审核。\n',

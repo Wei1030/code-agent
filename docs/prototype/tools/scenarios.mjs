@@ -191,6 +191,19 @@ export const SCENARIOS = [
     match: /快速开始/,
     steps: [[read('guide/getting-started.md')], [say('快速开始缺少「创建订单」的请求示例，我可以补一段 curl 示例。')]],
   },
+  // ---------------------------------------------------------------- P05g: pictures in the chat
+  {
+    match: /对照截图看看会话列表/,
+    steps: [
+      [read('docs/ui-sessions.webp')],
+      [say('你发的截图和仓库里的 docs/ui-sessions.webp 是同一个页面：\n\n![仓库里的界面截图](docs/ui-sessions.webp)\n\n列表每行有标题、首条消息、工作区和状态；运行中的会话排在前面。要调整的话，我建议把「状态」挪到标题右边，扫一眼就能看到哪些在运行。')],
+    ],
+  },
+  // ---------------------------------------------------------------- P26f: the board check of a turn
+  {
+    match: /把今天定下来的事过一遍/,
+    steps: [[say('今天定下来的：订单金额统一用「分」为单位的整数；空商品列表在创建订单时直接拒绝；错误码表放在 docs/errors.md，接口文档同步更新。')]],
+  },
 ];
 
 /** Structured answers of the reviewer, the board recorder, imports and jobs. */

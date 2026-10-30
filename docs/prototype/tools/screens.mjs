@@ -3,6 +3,9 @@
 // Proposed parts are injected with the app's own classes and outlined (.proto-new); their marks
 // have isNew and their snippet is shown under the screen for whoever implements it.
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 /** Open an inspector tab (click its rail button unless it is open already). */
 const inspector = async ({ eval: ev, sleep }, label) => {
   await ev(`(() => { const b = [...document.querySelectorAll('.ins-rail-btn')].find((x) => x.querySelector('span')?.textContent === ${JSON.stringify(label)}); if (b && !b.classList.contains('on')) b.click(); })()`);
@@ -892,11 +895,31 @@ export const SCREENS = [
   },
   {
     id: 'P26e', group: '扩展', title: '看板 — 设置', status: 'done',
-    summary: '自动记录开关，后台识别用的模型和思考强度。',
+    summary: '自动记录开关（默认关闭），后台识别用的模型和思考强度。',
     frs: ['自定义功能：看板'],
     prepare: async (c) => { await c.go(`/board?ws=${c.ids.shop}`); await c.click('.btn', '设置'); await c.sleep(400); },
     marks: [
-      { sel: '.modal', note: ['看板设置', '开关 / 下拉', '每轮结束后由一个便宜的模型识别决定、确认的问题和完成的工作，记到看板上（标为待确认）。Claude 需要看板内容时自己用看板工具查；提到条目时写编号，对话里的编号可以点。'] },
+      { sel: '.modal', note: ['看板设置', '开关 / 下拉', '打开后，每轮结束时由一个便宜的模型识别决定、确认的问题和完成的工作，记到看板上（标为待确认），分析时聊天区右上角有提示（P26f）。选的模型不可用时（例如没登录 Claude 订阅时选了 Claude 模型）显示实际改用的模型；一个可用的模型都没有时开关打不开。Claude 需要看板内容时自己用看板工具查；提到条目时写编号，对话里的编号可以点。'] },
+    ],
+  },
+  {
+    id: 'P26f', group: '扩展', title: '看板 — 本轮分析中', status: 'done',
+    summary: '自动记录打开时，一轮结束后在后台分析这一轮要不要更新看板：聊天区右上角浮着一个小框，分析完自动消失。',
+    frs: ['自定义功能：看板'],
+    prepare: async (c) => {
+      c.stall('demo-lite', true);
+      const sid = await startSession(c, '把今天定下来的事过一遍');
+      for (let i = 0; i < 60 && !(await c.call('openSession', sid))?.boardCheck; i++) await c.sleep(500);
+      c.ids.boardCheck = sid;
+      await openSession(c, sid);
+    },
+    after: async (c) => { await c.call('stopBoardCheck', c.ids.boardCheck, false); c.stall('demo-lite', false); },
+    marks: [
+      { sel: '.board-check-body', note: ['分析中', '—', '哪个模型在分析这一轮。不拖慢会话，可以照常继续发消息；分析完自动消失，失败时说明原因，过一会儿消失。'] },
+      { sel: '.board-check .btn[title="看板设置"]', at: 'tr', note: ['看板设置', '点击', '打开看板设置（P26e）。'] },
+      { sel: '.board-check .btn[title="缩小"]', at: 'tr', note: ['缩小', '点击', '缩成右上角的一个小标签「看板分析中」，点它再展开。'] },
+      { sel: '.board-check-foot .btn', text: '停止并不再自动分析', note: ['停止并不再自动分析', '点击', '停下这次分析，同时关掉「每轮对话结束后自动记录」。'] },
+      { sel: '.board-check-foot .btn', text: '停止分析', note: ['停止分析', '点击', '只停下这次分析，什么也不记。'] },
     ],
   },
   {
@@ -992,6 +1015,28 @@ export const SCREENS = [
     },
     marks: [
       { sel: '.receipt', note: ['回执', '保留并执行 / 取消排队消息', '排队的消息不会自动发出。'] },
+    ],
+  },
+  {
+    id: 'P05g', group: '会话页', title: '聊天里的图片', status: 'done',
+    summary: '你发的图片、工具读到的图片（读图片文件、MCP 工具的截图）、回答里用 Markdown 引用的图片，都直接显示缩略图，点击看大图。',
+    frs: ['FR-OUT-01', 'FR-IN-04'],
+    prepare: async (c) => {
+      const ws = c.slices().workspaces.find((w) => w.id === c.ids.shop);
+      const data = readFileSync(path.join(ws.path, 'docs', 'ui-sessions.webp')).toString('base64');
+      const sid = crypto.randomUUID();
+      await c.call('createDraft', c.ids.shop, sid);
+      await c.call('send', sid, '对照截图看看会话列表的布局', { attachments: [{ id: 'shot', kind: 'image', name: 'sessions.webp', meta: `${Math.round(data.length * 0.75 / 1024)} KB`, content: `data:image/webp;base64,${data}` }] });
+      for (let i = 0; i < 60 && !(await c.call('openSession', sid))?.items.some((x) => x.kind === 'text'); i++) await c.sleep(500);
+      await c.sleep(1500);
+      await openSession(c, sid);
+      await openSteps(c);
+      await c.sleep(600);
+    },
+    marks: [
+      { sel: '.umsg .atts .thumb', note: ['你发的图片', '点击看大图', '「+」里选的图片或粘贴的截图，发出后在消息里显示缩略图。'] },
+      { sel: '.tcard .thumbs .thumb', note: ['工具读到的图片', '点击看大图', 'Claude 读的图片文件、MCP 工具返回的截图；带图片的卡片默认展开。'] },
+      { sel: '.atext .thumb', note: ['回答里的图片', '点击看大图', 'Claude 用 Markdown 引用的图片：网址照常显示；本机路径只显示这个会话自己目录里的图片。'] },
     ],
   },
   {

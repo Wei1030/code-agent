@@ -34,7 +34,7 @@ export async function drive(c: Client, model: FakeModel, world: World & { repos:
   await c.call('setState', {
     profiles: s().profiles.map((p) => ({ ...p, model: PRO, effort: 'high' as Effort })),
     reviewProfile: { ...s().reviewProfile, model: PRO, effort: 'high', extraPrompt: '金额计算和参数校验要特别注意边界值。' },
-    boardSettings: { ...s().boardSettings, recorderModel: LITE, recorderEffort: 'low' },
+    boardSettings: { ...s().boardSettings, recorder: true, recorderModel: LITE, recorderEffort: 'low' },
     maxRunning: 40,
     runtime: { ...s().runtime, debugLog: true },
     env: [{ id: 'env-1', key: 'NODE_OPTIONS', value: '--max-old-space-size=4096', note: '大仓库跑测试时内存不够' }],
