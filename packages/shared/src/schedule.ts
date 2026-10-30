@@ -118,13 +118,5 @@ export function afterLimit(now: number, resetsAt: number | null | undefined): nu
   return Math.min(Math.max(at, now + 60_000), now + 6 * 3600_000);
 }
 
-/**
- * Whether a turn Claude Code started by itself is the wake-up it was asked for: the wake-up's time
- * has come, and no background task finished just before (its report starts a turn of its own).
- */
-export function isWakeTurn(at: number, tasksEndedAt: Array<number | undefined>, now: number): boolean {
-  return now >= at - 5000 && !tasksEndedAt.some((t) => t !== undefined && now - t < 10_000);
-}
-
 /** A wake-up more than a minute overdue (Code Agent was not running at its time) is dropped. */
 export const wakeTooLate = (at: number, now: number) => now - at > 60_000;

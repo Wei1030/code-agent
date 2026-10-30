@@ -1,19 +1,20 @@
 /**
  * Sessions that carry on by themselves at a set time: a wake-up Claude scheduled (ScheduleWakeup),
  * and a turn the usage limit refused, continued a minute after the limit resets. The plan is kept
- * with the session (summary.resume), so it outlives the process and the server. While the process
- * that scheduled a wake-up runs, Claude Code fires it itself; once that process is gone (saved to
- * make room, restarted for new settings, ended, the server restarted) Code Agent resumes the session
- * at that time and sends the wake-up's message. A limit's continuation is always Code Agent's.
+ * with the session (summary.resume), so it outlives the process and the server. At a wake-up's time
+ * the plan is dropped: while the process that scheduled it runs, Claude Code fires it itself; once
+ * that process is gone (saved to make room, restarted for new settings, ended, the server restarted)
+ * Code Agent resumes the session and sends the wake-up's message. A limit's continuation is always
+ * Code Agent's.
  */
 import { randomUUID } from 'node:crypto';
 import type { Resume } from '@code-agent/shared/types';
-import { afterLimit, isWakeTurn, wakeTooLate } from '@code-agent/shared/schedule';
+import { afterLimit, wakeTooLate } from '@code-agent/shared/schedule';
 import { app } from './state';
 import { register } from './hub';
 import { resolveModel } from './models';
 import { addItem, allSummaries, patchSummary, rt, summary } from './sessions/registry';
-import { closeProcess, decorateTool, inTurn, live, onLimitRefusal, onProcessEnd, onSelfTurn, onSendTurn, onToolResult, onTurnEnd, sendTurn, startProcess, type Outgoing } from './sessions/live';
+import { closeProcess, decorateTool, inTurn, live, onLimitRefusal, onProcessEnd, onSendTurn, onToolResult, onTurnEnd, sendTurn, startProcess, type Outgoing } from './sessions/live';
 import { enqueue, pumpQueue } from './sessions/ops';
 import { acquire } from './sessions/slots';
 
@@ -45,9 +46,7 @@ function arm(sid: string, soonest = 0) {
   timers.delete(sid);
   const r = summary(sid)?.resume;
   if (!r) return;
-  // Claude Code fires its own wake-up; one it has not fired long after its time is dropped.
-  const at = r.by === 'cli' ? r.at + 10 * 60_000 : r.at;
-  timers.set(sid, setTimeout(() => fire(sid), Math.min(Math.max(at - Date.now(), soonest), 2 ** 31 - 1)));
+  timers.set(sid, setTimeout(() => fire(sid), Math.min(Math.max(r.at - Date.now(), soonest), 2 ** 31 - 1)));
 }
 
 function fire(sid: string) {
@@ -56,6 +55,7 @@ function fire(sid: string) {
   const r = sum?.resume;
   if (!sum || !r) return;
   plan(sid, undefined);
+  // The process that holds the wake-up fires it (a few seconds after its time).
   if (r.by === 'cli' && live(sid)) return;
   if (sum.worktreeGone) return;
   if (r.kind === 'wake' && wakeTooLate(r.at, Date.now())) {
@@ -104,13 +104,6 @@ onToolResult((sid, name, input, text, isError) => {
   const at = Math.round((Date.now() + secs * 1000) / 60_000) * 60_000;
   plan(sid, { kind: 'wake', at, reason: str(input.reason), prompt: str(input.prompt), by: 'cli' });
   return { right: '已预约' };
-});
-
-onSelfTurn((sid) => {
-  const r = summary(sid)?.resume;
-  if (r?.kind !== 'wake' || r.by !== 'cli' || !isWakeTurn(r.at, (rt(sid)?.background ?? []).map((b) => b.endedAt), Date.now())) return;
-  plan(sid, undefined);
-  return { text: wakeText(r.prompt), fromApp: WAKE_LABEL };
 });
 
 onProcessEnd((sid) => {

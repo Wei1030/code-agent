@@ -50,15 +50,19 @@ test('a wake-up: Claude Code fires it while its process runs; once the process i
   await env.c.call('stop', b);
   await until(() => sum(b).live === false && sum(b).resume?.by === 'server', 'Code Agent holds the wake-up of the ended process');
 
+  // At its time the plan goes; the process that holds the wake-up fires it.
+  await until(() => !sum(a).resume, 'dropped at its time', 200_000);
+  assert.equal(sum(a).live, true);
   await until(() => prompted('进程里唤醒醒来') && prompted('进程结束后唤醒醒来'), 'both woke up', 200_000);
-  for (const [sid, tag] of [[a, '进程里唤醒'], [b, '进程结束后唤醒']] as const) {
-    const w = await until(async () => {
-      const x = await woke(sid, `${tag}醒来`);
-      return x?.next.some((i) => i.kind === 'text' && i.text === `${tag}醒了`) ? x : undefined;
-    }, `${tag}: the wake-up's message, then the reply`);
-    assert.ok(w.said);
-    await until(() => !sum(sid).resume, `${tag}: nothing planned any more`);
-  }
+  await until(async () => (await env.rt(a)).items.some((i) => i.kind === 'text' && i.text === '进程里唤醒醒了'), 'Claude Code fired it: the reply');
+  assert.equal(await woke(a, '进程里唤醒醒来'), undefined, 'Code Agent did not send it as well');
+  // Code Agent sent the one whose process had ended, and says so.
+  const w = await until(async () => {
+    const x = await woke(b, '进程结束后唤醒醒来');
+    return x?.next.some((i) => i.kind === 'text' && i.text === '进程结束后唤醒醒了') ? x : undefined;
+  }, 'the wake-up\'s message, then the reply');
+  assert.ok(w.said);
+  assert.equal(sum(b).resume, undefined);
   assert.equal(sum(b).live, true, 'the ended session was resumed for it');
 });
 

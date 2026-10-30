@@ -158,16 +158,6 @@ export function onToolResult(fn: ResultFn) {
   resultFns.push(fn);
 }
 
-type SelfTurnFn = (sid: string) => { text: string; fromApp: string } | void;
-const selfTurnFns: SelfTurnFn[] = [];
-/**
- * Runs when Claude Code starts a turn by itself (a wake-up, a background task reporting back). A
- * message returned is shown as what started the turn: Claude Code does not echo it.
- */
-export function onSelfTurn(fn: SelfTurnFn) {
-  selfTurnFns.push(fn);
-}
-
 const limitFns: Array<(sid: string, rejection: Live['rejection']) => void> = [];
 /** Runs when the usage limit refused a turn, with the limit's type and reset when Claude Code named them. */
 export function onLimitRefusal(fn: (sid: string, rejection: Live['rejection']) => void) {
@@ -543,13 +533,6 @@ function ensureTurn(l: Live) {
   if (l.turn) return;
   // Claude Code started a turn by itself (a background task finished, a wake-up…).
   l.turn = { userId: lastUserId(l.sid), startedAt: Date.now(), toolCalls: 0, interrupted: false };
-  for (const fn of selfTurnFns) {
-    const said = fn(l.sid);
-    if (!said) continue;
-    const id = randomUUID();
-    addItem(l.sid, { kind: 'user', id, text: said.text, attachments: [], ts: Date.now(), fromApp: said.fromApp });
-    l.turn.userId = id;
-  }
   // A request still waiting (a background subagent's) keeps the session waiting on the user.
   emit(l.sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
 }
