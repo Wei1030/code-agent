@@ -1689,7 +1689,7 @@ export const EN: Record<string, string> = {
   "默认模式": "Default",
   "只读：能读文件、搜索、运行只读命令（git diff / log / show / status、rg、ls 等）。审核者在「不询问」模式下运行，哪些命令算只读由 Claude Code 判断，其他的直接拒绝，不会问你。": "Read-only: reads files, searches and runs read-only commands (git diff / log / show / status, rg, ls…). The reviewer runs in Don't ask mode: Claude Code decides which commands are read-only and refuses the rest without asking you.",
   "读取项目的 CLAUDE.md": "Read the project's CLAUDE.md",
-  "项目的约定和命令通常写在这里，审核时有用。只读 CLAUDE.md，不读任何设置文件，所以仓库里的权限规则也不能让审核者改文件。": "Project conventions and commands usually live here and help the review. Only CLAUDE.md is read, no settings file, so no permission rule in the repository lets the reviewer change files.",
+  "项目的约定和命令通常写在这里，审核时有用。只读 CLAUDE.md，不读任何设置文件，所以工作区的权限规则也不能让审核者改文件。": "Project conventions and commands usually live here and help the review. Only CLAUDE.md is read, no settings file, so no permission rule of the workspace lets the reviewer change files.",
   "MCP 服务器 {server} 中以 {0} 开头的工具": "Tools of MCP server {server} starting with {0}",
   "MCP 服务器 {server} 的 {name} 工具": "The {name} tool of MCP server {server}",
   "MCP 服务器 {server} 的全部工具": "All tools of MCP server {server}",

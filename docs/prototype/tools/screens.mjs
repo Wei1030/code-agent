@@ -951,7 +951,7 @@ export const SCREENS = [
     frs: ['自定义功能：代码审核'],
     prepare: async (c) => { await c.go('/settings/profiles?p=review'); await c.sleep(600); },
     marks: [
-      { sel: 'label, .toggle', text: '读取项目的 CLAUDE.md', note: ['项目说明', '开关', '只读 CLAUDE.md，不读任何设置文件，仓库里的权限规则不能让审核者改文件。'] },
+      { sel: 'label, .toggle', text: '读取项目的 CLAUDE.md', note: ['项目说明', '开关', '只读 CLAUDE.md，不读任何设置文件，工作区的权限规则也不能让审核者改文件。'] },
       { sel: 'h3', text: '审核要求', note: ['审核要求', '输入', '追加在内置规则后面；内置规则可以展开查看。'] },
     ],
   },

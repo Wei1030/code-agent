@@ -31,10 +31,9 @@ export function demoWorld(root: string): World & { repos: Record<string, string>
       'test/orders.test.js': "const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst { createOrder, cancelOrder } = require('../src/orders');\n\ntest('creates an order with its total', () => {\n  const o = createOrder({ userId: 'u1', items: [{ sku: 'a', price: 1200, quantity: 2 }] });\n  assert.equal(o.total, 2400);\n  assert.equal(o.status, 'pending');\n});\n\ntest('cancels a pending order', () => {\n  const o = createOrder({ userId: 'u1', items: [{ sku: 'a', price: 500, quantity: 1 }] });\n  assert.equal(cancelOrder(o.id).status, 'cancelled');\n});\n",
       'scripts/bench.js': "// Load test of createOrder: prints progress every 2 seconds.\nconst { createOrder } = require('../src/orders');\nconst rounds = Number(process.argv[2] ?? 300);\nlet i = 0;\nconst t = setInterval(() => {\n  const t0 = performance.now();\n  for (let k = 0; k < 20000; k++) createOrder({ userId: 'u', items: [{ sku: 'a', price: 100, quantity: 1 }] });\n  console.log(`round ${++i}/${rounds}: ${(20000 / ((performance.now() - t0) / 1000)).toFixed(0)} orders/s`);\n  if (i >= rounds) clearInterval(t);\n}, 2000);\n",
       'docs/api.md': '# API\n\n- `POST /orders` 创建订单：`{ userId, items: [{ sku, price, quantity }] }`\n- `GET /orders?user=<id>` 某个用户的订单\n',
-      '.claude/settings.json': { permissions: { allow: ['Bash(npm test)', 'PowerShell(npm test)', 'Bash(npm run bench *)', 'PowerShell(npm run bench *)', 'Bash(node scripts/bench.js *)', 'PowerShell(node scripts/bench.js *)', 'mcp__issue-tracker'], deny: ['Read(./.env)'] } },
       '.claude/skills/api-review/SKILL.md': '---\nname: api-review\ndescription: 检查接口改动是否同步了 docs/api.md、测试和错误码表\n---\n\n# 接口改动检查\n\n1. 对照 `git diff` 找出改动的路由。\n2. 确认 docs/api.md 已更新。\n3. 确认每个新错误分支都有测试。\n',
       '.claude/commands/changelog.md': '---\ndescription: 根据最近的提交生成更新日志\n---\n\n读取 `git log --oneline -20`，按 新功能 / 修复 / 其他 分组写出更新日志。\n',
-      '.gitignore': 'node_modules\n.env\n',
+      '.gitignore': 'node_modules\n.env\n.claude/settings.local.json\n',
     }],
     ['Add users and docs', { 'docs/errors.md': '# 错误码\n\n| 码 | 含义 |\n| --- | --- |\n| ORDER_NOT_FOUND | 订单不存在 |\n' }],
   ]);
@@ -53,8 +52,8 @@ export function demoWorld(root: string): World & { repos: Record<string, string>
   w.write('notes/order-design.md', '# 下单设计稿\n\n- 商品列表不能为空\n- 金额用分\n');
   w.write('notes/api-conventions.md', '# 接口约定\n\n- 错误用英文短语，前端按错误码表翻译\n');
 
-  // The repositories are trusted, as after opening them in the claude CLI once.
-  w.write(path.join(w.home, '.claude.json'), { projects: Object.fromEntries(Object.values(repos).map((r) => [r.split(path.sep).join('/'), { hasTrustDialogAccepted: true }])) });
+  // shop-api's own rules, as Code Agent keeps them for a workspace (not committed).
+  w.write(path.join(repos['shop-api'], '.claude', 'settings.local.json'), { permissions: { allow: ['Bash(npm test)', 'PowerShell(npm test)', 'Bash(npm run bench *)', 'PowerShell(npm run bench *)', 'Bash(node scripts/bench.js *)', 'PowerShell(node scripts/bench.js *)', 'mcp__issue-tracker'], deny: ['Read(./.env)'] } });
   w.write(path.join(w.config, 'settings.json'), {
     permissions: { allow: ['Bash(git log *)', 'WebFetch(domain:nodejs.org)'], deny: ['Bash(rm -rf *)'] },
     hooks: { PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'git diff --stat' }] }] },
