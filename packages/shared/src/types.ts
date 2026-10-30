@@ -110,7 +110,7 @@ export interface PeerOrigin extends SessionRef {
 
 /** A call to one of the workspace tools every session gets (in-process MCP server "workspace"). */
 export interface PeerCall {
-  op: 'list' | 'read' | 'status' | 'send' | 'create';
+  op: 'list' | 'read' | 'status' | 'send' | 'create' | 'search' | 'entry';
   target?: SessionRef;
   /** For send / create: what happened to the message. */
   delivery?: 'delivered' | 'queued' | 'held' | 'handled' | 'rejected';
@@ -194,7 +194,7 @@ export interface ToolItem {
   /** Long-running and can be moved to the background. */
   backgroundable?: boolean;
   denialMessage?: string;
-  /** Workspace tool call (list / read / status / send / create sessions). */
+  /** Workspace tool call (list / read / status / send / create sessions, search and read their history). */
   peer?: PeerCall;
   /** Short result lines shown in the card body. */
   rows?: NestedRow[];
@@ -889,7 +889,8 @@ export interface BoardItem {
   unconfirmed?: boolean;
   /** Sessions that worked on it or mentioned it. */
   sessions: string[];
-  log: Array<{ ts: number; text: string; sessionId?: string; auto?: boolean }>;
+  /** Every change, with the commit checked out where it was made. */
+  log: Array<{ ts: number; text: string; sessionId?: string; auto?: boolean; commit?: string }>;
   createdAt: number;
   updatedAt: number;
 }

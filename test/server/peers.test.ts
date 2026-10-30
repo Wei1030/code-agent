@@ -1,5 +1,6 @@
 // Sessions working together: the workspace tools, delivery and receipts, holding messages for the
-// user, the hop limit, sessions created by sessions and their worktrees. The workspace tools are
+// user, the hop limit, sessions created by sessions and their worktrees, searching and reading the
+// workspace's conversations. The workspace tools are
 // Code Agent's own in-process MCP server (custom feature 会话协作, FR-CTOOL-01, FR-OUT-10, issue 10-30#9).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,6 +49,47 @@ test('list, read and status of another session in the workspace, not of other wo
   assert.match(results, /被看的会话 在/, 'its conversation was read');
   assert.match(results, /No session .* in this workspace/, 'another workspace cannot be read');
   assert.equal((await peerCard(a, 'list')).status, 'ok');
+});
+
+test('search the workspace\'s conversations, this session\'s too; read around a hit, and a tool call with its output', async () => {
+  env.model.script(/^记下暗号$/, [shell('node -e "console.log(6*7, \'OUTPUT\')"'), [say('暗号是 ZEBRA-MARK，命令也跑完了')]]);
+  const b = await env.start('记下暗号', { mode: 'bypassPermissions' });
+  await env.turns(b);
+  const otherWs = (await env.c.call('addWorkspace', env.world.repo('other-search'))).id;
+  env.model.script(/^别处的暗号$/, [[say('别处也说了 ZEBRA-MARK')]]);
+  const elsewhere = await env.start('别处的暗号', { ws: otherWs });
+  await env.turns(elsewhere);
+  const items = (await env.rt(b)).items;
+  const said = items.find((i) => i.kind === 'text' && /ZEBRA-MARK/.test(i.text))!;
+  const cmd = items.flatMap((i) => (i.kind === 'toolgroup' ? i.tools : [i])).find((i): i is Tool => i.kind === 'tool' && (i.tool === 'Bash' || i.tool === 'PowerShell'))!;
+  assert.ok(cmd.output, 'the command\'s output is kept');
+
+  env.model.script(/^自己说过 OWL-MARK$/, [[say('记住了')]]);
+  const a = await env.start('自己说过 OWL-MARK');
+  await env.turns(a);
+  await until(async () => (await env.c.call('searchSessions', 'OWL-MARK')).some((h) => h.sessionId === a) && (await env.c.call('searchSessions', 'ZEBRA-MARK')).some((h) => h.sessionId === b), 'both indexed');
+  env.model.script(/^找暗号$/, [
+    [use('mcp__workspace__search_history', { query: 'zebra-mark' })],
+    [use('mcp__workspace__search_history', { query: '42 OUTPUT' })],
+    [use('mcp__workspace__search_history', { query: 'OWL-MARK' })],
+    [use('mcp__workspace__read_session', { session_id: b, around: said.id })],
+    [use('mcp__workspace__read_entry', { session_id: b, entry_id: cmd.id })],
+    [use('mcp__workspace__read_entry', { session_id: b, entry_id: 'no-such-entry' })],
+    [say('找到了')],
+  ]);
+  await env.c.call('send', a, '找暗号', {});
+  await env.turns(a, 2);
+  const results = JSON.stringify(env.model.sent(/^找暗号$/).at(-1)!.body.messages);
+  assert.match(results, new RegExp(`${b}:\\\\n- entry ${said.id}: .*ZEBRA-MARK`), 'found in the other session, any case, with the entry');
+  assert.doesNotMatch(results, new RegExp(elsewhere), 'not in another workspace');
+  assert.match(results, /Nothing in the conversations of this workspace matches \\"42 OUTPUT\\"/, 'tool output is not searched');
+  assert.match(results, /\(this session\)[^"]*OWL-MARK/, 'this session too');
+  assert.match(results, new RegExp(`\\(entry ${cmd.id}\\)`), 'read_session marks the call that has more to read');
+  assert.match(results, /Output:\\n42 OUTPUT/, 'read_entry gives the output');
+  assert.match(results, /No entry no-such-entry/);
+  const card = await peerCard(a, 'search');
+  assert.equal(card.detail, 'zebra-mark');
+  assert.ok(card.peer?.rows?.some((r) => /ZEBRA-MARK/.test(r.text)), 'the card shows the hits');
 });
 
 test('a message to an idle session starts its turn; the sender gets a receipt with the reply', async () => {

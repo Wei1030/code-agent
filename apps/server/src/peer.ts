@@ -1,6 +1,7 @@
 /**
  * Peer sessions: every session in a workspace can list, read, check, message and create the
- * others through the in-process MCP server "workspace". Messages go in over streaming input with
+ * others, and search the workspace's conversations (its own too), through the in-process MCP
+ * server "workspace". Messages go in over streaming input with
  * origin { kind: 'peer' }. Claude Code's own rule decides delivery: only senders of the same
  * permission class (bypass / prompting) are delivered unasked; a long chain without a human
  * message is held; held messages wait for the user in the inbox.
@@ -11,12 +12,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createSdkMcpServer, tool, type McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { Effort, HeldMessage, NestedRow, PeerCall, PeerOrigin, PermissionMode, SessionRef, SessionSummary, ToolItem } from '@code-agent/shared/types';
+import type { Effort, HeldMessage, Item, NestedRow, PeerCall, PeerOrigin, PermissionMode, SessionRef, SessionSummary, ToolItem } from '@code-agent/shared/types';
 import { emptyRuntime } from '@code-agent/shared/runtime';
 import { app, update } from './state';
 import { broadcast, register } from './hub';
 import { WORKTREES_DIR } from './paths';
-import { addItem, allSummaries, findItem, initRuntime, patchItem, patchSummary, raw, rt, summary, upsert } from './sessions/registry';
+import { addItem, allSummaries, findItem, initRuntime, patchItem, patchSummary, raw, rt, searchTranscripts, summary, upsert } from './sessions/registry';
 import { addContext, decorateTool, findToolUse, inTurn, live, onSendTurn, onTurnEnd, sendTurn, startProcess, type Outgoing } from './sessions/live';
 import { addSessionServers, workspaceOf } from './sessions/options';
 import { acquire } from './sessions/slots';
@@ -216,7 +217,7 @@ async function createSession(fromSid: string, a: { title: string; message: strin
   return { id, started, worktree: wt?.branch };
 }
 
-// ------------------------------------------------------------------ reading other sessions
+// ------------------------------------------------------------------ reading sessions and their history
 
 function others(sid: string): SessionSummary[] {
   const me = summary(sid);
@@ -232,18 +233,59 @@ function lastReply(sid: string): string {
   return '';
 }
 
+/** Longest line read_session shows of an entry; read_entry has the rest. */
+const LINE = 2000;
+/** Most of an entry read_entry returns at once. */
+const ENTRY = 20_000;
+
+/** A transcript entry as read_session shows it; `more` when read_entry has more to show. */
+interface Line { id: string; text: string; more: boolean }
+
+const who = (it: Extract<Item, { kind: 'user' }>) => (it.from ? `session "${it.from.title}"` : it.fromApp ? `Code Agent · ${it.fromApp}` : 'user');
+const toolLine = (t: ToolItem) => `${t.tool} ${t.detail}${t.right ? ` → ${t.right}` : ''}${t.status === 'error' || t.status === 'denied' ? ` (${t.status})` : ''}`;
+const toolMore = (t: ToolItem) => !!(t.output || t.agent || t.denialMessage || t.rows?.length || t.images?.length);
+const lineIcon = (text: string) => (text.startsWith('[claude]') ? 'spark' : text.startsWith('[tool') ? 'terminal' : text.startsWith('[plan') ? 'file' : 'user');
+
 /** One line per transcript entry: user and assistant text, one line per tool call. */
-function condensed(sid: string): string[] {
-  const out: string[] = [];
+function condensed(sid: string): Line[] {
+  const out: Line[] = [];
+  const add = (id: string, text: string, more = false) => out.push({ id, text, more: more || text.length > LINE });
   for (const it of rt(sid)?.items ?? []) {
-    if (it.kind === 'user') out.push(`[${it.from ? `session "${it.from.title}"` : it.fromApp ? `Code Agent · ${it.fromApp}` : 'user'}] ${it.text}`);
-    else if (it.kind === 'text') out.push(`[claude] ${it.text}`);
-    else if (it.kind === 'tool') out.push(`[tool] ${it.tool} ${it.detail}${it.right ? ` → ${it.right}` : ''}${it.status === 'error' || it.status === 'denied' ? ` (${it.status})` : ''}`);
-    else if (it.kind === 'toolgroup') out.push(`[tools] ${it.label}: ${it.tools.map((x) => `${x.tool} ${x.detail}`).join('; ')}`);
-    else if (it.kind === 'plan') out.push(`[plan v${it.version}, ${it.status}] ${it.plan.title}`);
-    else if (it.kind === 'footer') out.push(`--- turn ${it.turn} ended (${it.stopReason}) ---`);
+    if (it.kind === 'user') add(it.id, `[${who(it)}] ${it.text}`);
+    else if (it.kind === 'text') add(it.id, `[claude] ${it.text}`);
+    else if (it.kind === 'tool') add(it.id, `[tool] ${toolLine(it)}`, toolMore(it));
+    else if (it.kind === 'toolgroup') add(it.id, `[tools] ${it.label}: ${it.tools.map((x) => `${x.tool} ${x.detail}`).join('; ')}`, it.tools.some(toolMore));
+    else if (it.kind === 'plan') add(it.id, `[plan v${it.version}, ${it.status}] ${it.plan.title}`, true);
+    else if (it.kind === 'footer') add(it.id, `--- turn ${it.turn} ended (${it.stopReason}) ---`);
   }
   return out;
+}
+
+function toolText(t: ToolItem): string {
+  const out = [`[tool] ${toolLine(t)}`];
+  if (t.denialMessage) out.push(`Denied: ${t.denialMessage}`);
+  if (t.agent) out.push(`Subagent ${t.agent.agentType}: ${t.agent.task}`, ...(t.agent.summary ? [t.agent.summary] : []), ...t.agent.rows.map((r) => `- ${r.text}`));
+  if (t.rows?.length) out.push(...t.rows.map((r) => `- ${r.text}${r.right ? ` (${r.right})` : ''}`));
+  if (t.output) out.push(`Output:\n${t.output.type === 'text' ? t.output.text : t.output.lines.join('\n')}`);
+  else if (!t.agent) out.push('(no output kept)');
+  if (t.images?.length) out.push(`(${t.images.length} image(s), not shown here)`);
+  return out.join('\n');
+}
+
+/** An entry in full: a message, a plan, or a tool call with what Code Agent kept of its result. */
+function entryText(it: Item): string {
+  if (it.kind === 'user') return `[${who(it)}] ${it.text}`;
+  if (it.kind === 'text') return `[claude] ${it.text}`;
+  if (it.kind === 'plan') return `[plan v${it.version}, ${it.status}] ${it.plan.title}\n\n${it.plan.markdown ?? [it.plan.summary, ...it.plan.steps.map((s, i) => `${i + 1}. ${s}`)].join('\n')}`;
+  if (it.kind === 'tool') return toolText(it);
+  if (it.kind === 'toolgroup') return [`[tools] ${it.label}`, ...it.tools.map(toolText)].join('\n\n');
+  if (it.kind === 'footer') return `--- turn ${it.turn} ended (${it.stopReason}): ${it.toolCalls} tool calls, ${it.seconds}s ---`;
+  return `[${it.kind}]${'text' in it ? ` ${it.text}` : ''}`;
+}
+
+/** The top-level entry an id names: itself, or the tool group holding the tool call. */
+function topEntry(sid: string, id: string): string | undefined {
+  return rt(sid)?.items.find((it) => it.id === id || (it.kind === 'toolgroup' && it.tools.some((t) => t.id === id)))?.id;
 }
 
 function statusLines(target: string): string[] {
@@ -281,7 +323,7 @@ function workspaceServer(sid: string): McpServerConfig {
   return createSdkMcpServer({
     name: 'workspace',
     version: '1.0.0',
-    instructions: 'Tools for the other Claude Code sessions in this workspace (run by Code Agent) and for the workspace board.',
+    instructions: 'Tools for the Claude Code sessions in this workspace (run by Code Agent) and their history, and for the workspace board.',
     alwaysLoad: true,
     tools: [
       tool('list_sessions', 'List the other sessions in this workspace: id, title, state, who created it, last activity and the start of its last reply.', {}, async () => {
@@ -291,20 +333,61 @@ function workspaceServer(sid: string): McpServerConfig {
         if (!list.length) return text('There are no other sessions in this workspace.');
         return text(list.map((s) => `- ${s.id} "${s.title}" · ${stateLabel(s)}${s.createdBy ? ` · created by "${s.createdBy.title}"` : ''} · last active ${new Date(s.lastActive).toISOString()}${lastReply(s.id) ? ` · last reply: ${short(lastReply(s.id).replace(/\s+/g, ' '), 120)}` : ''}`).join('\n'));
       }, { annotations: { readOnlyHint: true } }),
-      tool('read_session', 'Read another session\'s conversation, condensed: user and assistant text and one line per tool call (no tool output). Pages from the end by default.', {
-        session_id: z.string(), from: z.number().int().min(0).optional().describe('Index of the first entry; default: the last `limit` entries'),
-        limit: z.number().int().min(1).max(200).optional(), query: z.string().optional().describe('Only entries containing this text'),
+      tool('read_session', 'Read a session\'s conversation (this one too), condensed: user and assistant text and one line per tool call, without tool output. Pages from the end by default; `around` shows the entries around a search_history hit. An entry with more to read (tool output, long text, a plan) ends with its entry id: read it with read_entry.', {
+        session_id: z.string(), from: z.number().int().min(0).optional().describe('Index of the first entry to show; default: the last `limit` entries'),
+        around: z.string().optional().describe('An entry id (from search_history): show the entries around it'),
+        limit: z.number().int().min(1).max(200).optional(),
       }, async (a) => {
         const s = target(sid, a.session_id);
         await loaded(s.id);
-        let entries = condensed(s.id).map((l, i) => ({ i, l }));
-        if (a.query) entries = entries.filter((e) => e.l.toLowerCase().includes(a.query!.toLowerCase()));
+        const lines = condensed(s.id);
         const limit = a.limit ?? 30;
-        const page = a.from !== undefined ? entries.slice(a.from, a.from + limit) : entries.slice(-limit);
+        let start = a.from ?? Math.max(0, lines.length - limit);
+        if (a.around) {
+          const top = topEntry(s.id, a.around);
+          const at = lines.findIndex((l) => l.id === top);
+          if (at < 0) return { ...text(`No entry ${a.around} in session "${s.title}".`), isError: true };
+          start = Math.max(0, at - Math.floor(limit / 2));
+        }
+        const page = lines.slice(start, start + limit);
         patchPeer(sid, own('read_session', (i) => i.session_id === a.session_id), {
-          rows: page.slice(-5).map((e) => ({ icon: e.l.startsWith('[claude]') ? 'spark' : e.l.startsWith('[tool') ? 'terminal' : 'user', text: short(e.l, 90) })),
+          rows: page.slice(-5).map((l) => ({ icon: lineIcon(l.text), text: short(l.text, 90) })),
         });
-        return text(`Session "${s.title}" (${stateLabel(s)}), ${entries.length} entries${a.query ? ` matching "${a.query}"` : ''}; showing ${page.length}:\n${page.map((e) => `${e.i}. ${short(e.l, 2000)}`).join('\n')}`);
+        const shown = page.length ? `entries ${start}–${start + page.length - 1}` : 'nothing';
+        return text(`Session "${s.title}" (${stateLabel(s)}), ${lines.length} entries; showing ${shown}:\n${page.map((l, i) => `${start + i}. ${short(l.text, LINE)}${l.more ? ` (entry ${l.id})` : ''}`).join('\n')}`);
+      }, { annotations: { readOnlyHint: true } }),
+      tool('search_history', 'Search the conversations of this workspace\'s sessions, this one included: what the user and Claude wrote, plans, and tool calls by name and main argument (tool output is not searched). The most recently active sessions first, their latest entries first. Read around a hit with read_session(around), or the entry in full with read_entry.', {
+        query: z.string().describe('Text to find, in any case'), session_id: z.string().optional().describe('Only this session'),
+        limit: z.number().int().min(1).max(50).optional(),
+      }, async (a) => {
+        const scope = a.session_id ? [target(sid, a.session_id)] : [summary(sid), ...others(sid)].filter((s): s is SessionSummary => !!s);
+        const rank = new Map(scope.map((s, i) => [s.id, i]));
+        const hits = searchTranscripts(a.query, 100, scope.map((s) => s.id))
+          .sort((x, y) => rank.get(x.session)! - rank.get(y.session)! || y.seq - x.seq)
+          .slice(0, a.limit ?? 20);
+        const flat = (s: string) => s.replace(/\s+/g, ' ');
+        patchPeer(sid, own('search_history', (i) => i.query === a.query), {
+          rows: hits.slice(0, 5).map((h) => ({ icon: 'chat', text: short(flat(h.snippet), 90), right: summary(h.session)?.title })),
+        });
+        if (!hits.length) return text(`Nothing in the conversations of this workspace matches "${a.query}".`);
+        const groups = new Map<string, typeof hits>();
+        for (const h of hits) groups.set(h.session, [...(groups.get(h.session) ?? []), h]);
+        return text([...groups].map(([id, hs]) => `Session "${summary(id)?.title}"${id === sid ? ' (this session)' : ''} ${id}:\n${hs.map((h) => `- entry ${h.item}: ${flat(h.snippet)}`).join('\n')}`).join('\n\n'));
+      }, { annotations: { readOnlyHint: true } }),
+      tool('read_entry', 'Read one entry of a session\'s conversation in full: a message, a plan, or a tool call with the output Code Agent kept (long output is shortened; file contents are not kept). Entry ids come from search_history and read_session.', {
+        session_id: z.string(), entry_id: z.string(),
+        from_char: z.number().int().min(0).optional().describe('Go on reading a long entry from this character'),
+      }, async (a) => {
+        const s = target(sid, a.session_id);
+        await loaded(s.id);
+        const it = findItem(s.id, a.entry_id);
+        if (!it) return { ...text(`No entry ${a.entry_id} in session "${s.title}".`), isError: true };
+        const full = entryText(it);
+        const from = a.from_char ?? 0;
+        const part = full.slice(from, from + ENTRY);
+        const rest = full.length - from - part.length;
+        patchPeer(sid, own('read_entry', (i) => i.entry_id === a.entry_id), { rows: [{ icon: lineIcon(full), text: short(full.split('\n')[0], 90) }] });
+        return text(`${part}${rest > 0 ? `\n… ${rest} more characters: read_entry with from_char ${from + part.length}` : ''}`);
       }, { annotations: { readOnlyHint: true } }),
       tool('session_status', 'What another session is doing now: state, task list, background work, pending requests, files changed, context use.', {
         session_id: z.string(),
@@ -355,7 +438,9 @@ export function addWorkspaceTools(fn: ToolFactory) {
 
 addSessionServers((sid) => ({ workspace: workspaceServer(sid) }));
 
-const OPS: Record<string, PeerCall['op']> = { list_sessions: 'list', read_session: 'read', session_status: 'status', send_to_session: 'send', create_session: 'create' };
+const OPS: Record<string, PeerCall['op']> = {
+  list_sessions: 'list', read_session: 'read', session_status: 'status', send_to_session: 'send', create_session: 'create', search_history: 'search', read_entry: 'entry',
+};
 
 decorateTool((_sid, name, input, item) => {
   const m = /^mcp__workspace__(\w+)$/.exec(name);
@@ -368,6 +453,7 @@ decorateTool((_sid, name, input, item) => {
     ...(op === 'send' || op === 'create' ? { message: String(input.message ?? '') } : {}),
   };
   if (op === 'create') item.detail = String(input.title ?? '');
+  if (op === 'search') item.detail = String(input.query ?? '');
   item.provenance = undefined;
 });
 

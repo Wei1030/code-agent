@@ -227,6 +227,8 @@ const PEER_INFO: Record<PeerCall['op'], { icon: string; label: string }> = {
   status: { icon: 'eye', label: '查看会话状态' },
   send: { icon: 'send', label: '发消息给会话' },
   create: { icon: 'plus', label: '新建会话' },
+  search: { icon: 'search', label: '搜索会话记录' },
+  entry: { icon: 'file', label: '读取会话记录条目' },
 };
 
 const DELIVERY: Record<NonNullable<PeerCall['delivery']>, { label: string; tone?: 'accent' | 'warn' | 'crit' | 'good' }> = {
@@ -237,7 +239,7 @@ const DELIVERY: Record<NonNullable<PeerCall['delivery']>, { label: string; tone?
   rejected: { label: '你没有放行', tone: 'crit' },
 };
 
-/** Calls to the workspace tools: list, read, check, message and create sessions. */
+/** Calls to the workspace tools: list, read, check, message and create sessions, search their history. */
 function PeerCard({ tool }: { tool: ToolItem }) {
   const t = useT();
   const p = tool.peer!;
@@ -249,7 +251,9 @@ function PeerCard({ tool }: { tool: ToolItem }) {
       <div className="thead" onClick={() => hasBody && setOpen(!open)}>
         <Icon name={info.icon} size={15} className="ink2" />
         <span className="name">{t(info.label)}</span>
-        <span className="detail plain">{p.target ? <SessionLink r={p.target} /> : t(tool.detail ?? '')}</span>
+        <span className="detail plain">
+          {p.op === 'search' ? <>{tool.detail}{p.target && <> · <SessionLink r={p.target} /></>}</> : p.target ? <SessionLink r={p.target} /> : t(tool.detail ?? '')}
+        </span>
         {p.worktree && <Chip icon="branch" mono title={t('新会话在自己的 git worktree 和分支里工作')}>{p.worktree}</Chip>}
         {p.delivery && <Chip tone={DELIVERY[p.delivery].tone}>{t(DELIVERY[p.delivery].label)}</Chip>}
         <StatusIcon status={tool.status} />

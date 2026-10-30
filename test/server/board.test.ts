@@ -2,6 +2,7 @@
 // Claude, import from pasted text and GitHub, Markdown export (custom feature 看板).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { setup, M2, type Env } from '../harness/env';
 import { say, use, hang, httpError } from '../harness/fake-model';
 import { until, sleep } from '../harness/client';
@@ -30,6 +31,7 @@ before(async () => {
 after(() => env?.close());
 
 const board = () => env.c.slices.board.filter((b) => b.workspaceId === env.ws);
+const headOf = (dir: string) => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
 
 test('ids count per kind; edits are logged; delete removes', async () => {
   const f1 = await env.c.call('createItem', env.ws, { kind: 'feature', title: '分页' }, { kind: 'manual' });
@@ -42,6 +44,7 @@ test('ids count per kind; edits are logged; delete removes', async () => {
   await env.c.call('updateItem', env.ws, 'F-1', { status: 'doing' }, '状态 → 进行中');
   await until(() => board().find((b) => b.id === 'F-1')?.status === 'doing', 'updated');
   assert.ok(board().find((b) => b.id === 'F-1')!.log.some((l) => /进行中/.test(l.text)));
+  assert.equal(board().find((b) => b.id === 'F-1')!.log.at(-1)!.commit, headOf(env.repo), 'the change keeps the commit checked out');
   await env.c.call('deleteItem', env.ws, 'F-2');
   await until(() => !board().some((b) => b.id === 'F-2'), 'deleted');
 });
@@ -55,6 +58,8 @@ test('the recorder records after a turn, unconfirmed; undo restores; confirm acc
   await env.turns(sid);
   const item = await until(() => board().find((b) => b.title === '自动记下的问题'), 'recorded');
   assert.equal(item.unconfirmed, true);
+  assert.equal(item.log[0].commit, headOf(env.repo));
+  assert.ok(env.model.requests.some((r) => r.tools.includes('StructuredOutput') && /where things stand now, not how they got there/.test(r.prompt)), 'the recorder writes state, not history');
   const card = await until(async () => (await env.rt(sid)).items.find((i) => i.kind === 'board') as Extract<Item, { kind: 'board' }> | undefined, 'board card in the transcript');
   assert.equal(card.by, 'recorder');
   assert.equal(card.model, '后台识别 · model-two · 思考低', 'the card names the model');
@@ -137,11 +142,13 @@ test('the recorder stays off when switched off, and for interrupted turns', asyn
   assert.ok(!board().some((b) => b.title === '不该记下'));
 });
 
-test('Claude\'s board tools: search, create, a wrong status refused (custom feature 看板)', async () => {
+test('Claude\'s board tools: search, create, a wrong status refused; changes keep the commit, read back with it (custom feature 看板)', async () => {
   env.model.script(/用看板工具/, [
     [use('mcp__workspace__board_search', { query: '金额' })],
     [use('mcp__workspace__board_create', { kind: 'feature', title: 'Claude 建的功能', body: '由 Claude 新建' })],
     [use('mcp__workspace__board_update', { id: 'I-1', status: 'doing' })],
+    [use('mcp__workspace__board_update', { id: 'I-1', body: '金额少一分：四舍五入的问题', note: '查到了原因' })],
+    [use('mcp__workspace__board_get', { id: 'I-1' })],
     [say('好')],
   ]);
   const sid = await env.start('用看板工具');
@@ -152,6 +159,10 @@ test('Claude\'s board tools: search, create, a wrong status refused (custom feat
   const results = JSON.stringify(env.model.sent(/用看板工具/).at(-1)!.body.messages);
   assert.match(results, /I-1/, 'search found the issue');
   assert.equal(board().find((b) => b.id === 'I-1')?.status, 'open', 'an issue cannot be "doing"');
+  const head = headOf(env.repo);
+  assert.equal(created!.log[0].commit, head);
+  assert.equal(board().find((b) => b.id === 'I-1')!.log.at(-1)!.commit, head);
+  assert.match(results, new RegExp(`Last change [0-9: -]+ UTC at commit ${head.slice(0, 10)}: Claude：查到了原因`), 'board_get says when and at which commit');
 });
 
 test('the board needs nothing in the system prompt: its tools ask Claude to cite items by id (custom feature 看板)', async () => {
@@ -165,8 +176,11 @@ test('the board needs nothing in the system prompt: its tools ask Claude to cite
   const req = env.model.sent(/^看板说明$/)[0];
   assert.equal((await env.rt(sid)).info?.prompt?.text, 'Always respond to the user in Simplified Chinese.', 'Code Agent adds only the reply language');
   assert.doesNotMatch(JSON.stringify(req.body), /Work in progress on the workspace board/, 'no features in progress at the start');
-  const search = (req.body.tools as Array<{ name: string; description?: string }>).find((t) => t.name === 'mcp__workspace__board_search');
-  assert.match(search?.description ?? '', /write its id/);
+  const tools = req.body.tools as Array<{ name: string; description?: string }>;
+  assert.match(tools.find((t) => t.name === 'mcp__workspace__board_search')?.description ?? '', /write its id/);
+  for (const name of ['board_create', 'board_update']) {
+    assert.match(tools.find((t) => t.name === `mcp__workspace__${name}`)?.description ?? '', /where things stand now, not how they got there/, `${name} asks for state, not history`);
+  }
 });
 
 test('import pasted text: preview rows, apply creates; GitHub issues through gh; the same issue again is known', async () => {

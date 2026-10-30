@@ -154,14 +154,16 @@ export function initRuntime(r: SessionRuntime) {
   persist(r.id);
 }
 
-/** Sessions whose transcript mentions `query` (full-text, newest first), with where it was found. */
-export function searchTranscripts(query: string, limit = 50): Array<{ session: string; item: string; snippet: string }> {
+/** Transcript entries that mention `query` (full-text): session, entry, its position and a snippet; only in `sessions` when given. */
+export function searchTranscripts(query: string, limit = 50, sessions?: string[]): Array<{ session: string; item: string; seq: number; snippet: string }> {
   const q = query.trim();
-  if (!q) return [];
+  if (!q || sessions?.length === 0) return [];
+  const from = 'FROM item_text JOIN items ON items.session = item_text.session AND items.id = item_text.item';
+  const only = sessions ? ` AND item_text.session IN (${sessions.map(() => '?').join(', ')})` : '';
   const rows = q.length >= 3
-    ? db.prepare(`SELECT session, item, snippet(item_text, 2, '[', ']', '…', 12) AS snippet FROM item_text WHERE item_text MATCH ? LIMIT ?`).all(`"${q.replace(/"/g, '""')}"`, limit * 4)
-    : db.prepare(`SELECT session, item, substr(text, max(1, instr(lower(text), lower(?)) - 30), 80) AS snippet FROM item_text WHERE instr(lower(text), lower(?)) > 0 LIMIT ?`).all(q, q, limit * 4);
-  return rows as Array<{ session: string; item: string; snippet: string }>;
+    ? db.prepare(`SELECT item_text.session, item, seq, snippet(item_text, 2, '[', ']', '…', 12) AS snippet ${from} WHERE item_text MATCH ?${only} LIMIT ?`).all(`"${q.replace(/"/g, '""')}"`, ...(sessions ?? []), limit * 4)
+    : db.prepare(`SELECT item_text.session, item, seq, substr(text, max(1, instr(lower(text), lower(?)) - 30), 80) AS snippet ${from} WHERE instr(lower(text), lower(?)) > 0${only} LIMIT ?`).all(q, q, ...(sessions ?? []), limit * 4);
+  return rows as Array<{ session: string; item: string; seq: number; snippet: string }>;
 }
 
 /** Apply a session event here and in every connected UI. */
