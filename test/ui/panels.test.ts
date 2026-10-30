@@ -139,6 +139,22 @@ test('inspector: the info tab shows what Code Agent put in the system prompt (FR
   await p.close();
 });
 
+test('inspector: after clearing, the info tab names the session id Claude Code goes on under, for the terminal too (issue 10-31#8)', async () => {
+  env.model.script(/^清空后的信息页$/, [[say('好')]]);
+  const sid = await env.start('清空后的信息页');
+  await env.turns(sid);
+  await env.c.call('clearConversation', sid);
+  const conv = await until(() => env.c.sessions.get(sid)?.conversations?.at(-1), 'a new session id');
+  const p = await env.page(`/s/${sid}`);
+  await p.waitEl('.ins-rail-btn');
+  await tab(p, '信息');
+  await p.waitEl('.kv dd', conv);
+  await p.waitEl('.kv .hint', sid);
+  await p.waitEl('.hint', `claude --resume ${conv}`);
+  noPageErrors(p);
+  await p.close();
+});
+
 test('the board check floats over the chat while it runs: shrink, settings, stop (custom feature 看板)', async () => {
   await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: M2 } });
   env.model.failModel('model-two', hang);

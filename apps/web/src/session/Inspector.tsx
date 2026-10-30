@@ -451,12 +451,14 @@ function InfoTab({ rt }: { rt: SessionRuntime }) {
   const sources = [prof.sources.user && t('用户'), prof.sources.project && t('项目'), prof.sources.local && t('本地')].filter(Boolean).join(' · ') || t('不读取');
   const memory = rt.context.memoryFiles.map((m) => m.path);
   const cwd = info.cwd || sum?.cwd || ws?.path || '';
-  const resume = `claude --resume ${rt.id}`;
+  // After /clear Claude Code goes on under another session id: that is the one a terminal resumes.
+  const ccId = sum?.conversations?.at(-1) ?? rt.id;
+  const resume = `claude --resume ${ccId}`;
   const copy = (text: string, what: string) => { void navigator.clipboard?.writeText(text); app.toast(t('已复制{w}', { w: what }), 'good'); };
   return (
     <>
       <dl className="kv">
-        <dt>{t('会话 ID')}</dt><dd className="mono">{rt.id}</dd>
+        <dt>{t('会话 ID')}</dt><dd className="mono">{ccId}{ccId !== rt.id && <div className="hint">{t('清空对话后 Claude Code 换了新的会话 ID；在 Code Agent 里它仍是这个会话（{id}）。', { id: rt.id })}</div>}</dd>
         <dt>{t('工作目录')}</dt><dd className="mono">{cwd}</dd>
         {sum?.worktree && <><dt>{t('工作树分支')}</dt><dd className="mono">{sum.worktree}</dd></>}
         <dt>{t('模型')}</dt><dd>{model ? `${model.label} · ${model.endpoint ? t('{e}（兼容端点）', { e: model.desc }) : t('Claude 订阅')}` : rt.model}{info.apiModel && <div className="hint mono">{info.apiModel}</div>}</dd>
@@ -477,7 +479,7 @@ function InfoTab({ rt }: { rt: SessionRuntime }) {
         </div>
       )}
       <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-        <Button size="sm" icon="copy" onClick={() => copy(rt.id, t('会话 ID'))}>{t('复制会话 ID')}</Button>
+        <Button size="sm" icon="copy" onClick={() => copy(ccId, t('会话 ID'))}>{t('复制会话 ID')}</Button>
         <Button size="sm" icon="terminal" onClick={() => copy(`cd "${cwd}" && ${resume}`, t('命令'))}>{t('复制「在终端里继续」的命令')}</Button>
       </div>
       <div className="hint" style={{ marginTop: 8, lineHeight: 1.6 }}>{t('在终端里运行 {c} 可以接着这段对话，回到这里打开它时会补上终端里新聊的内容。先在这里保存会话，避免两边同时写同一段对话。', { c: resume })}</div>

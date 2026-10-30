@@ -83,6 +83,7 @@ export const EN: Record<string, string> = {
   "按预约继续": "Scheduled wake-up",
   "排队中 · {n} · 恢复会话后按顺序发出": "Queued · {n} · sent in order once the session is resumed",
   "未选择": "Not chosen",
+  "清空对话后 Claude Code 换了新的会话 ID；在 Code Agent 里它仍是这个会话（{id}）。": "Claude Code went on under a new session ID after the conversation was cleared; in Code Agent it is still this session ({id}).",
   "现在重试": "Retry now",
   "用量限额重置后自动继续了 {MAX_TRIES} 次，仍然被拒绝，不再自动继续。": "Carried on {MAX_TRIES} times after the usage limit reset and was still refused; it will not carry on by itself any more.",
   "看板设置里选的模型现在不可用，请换一个": "The model chosen in the board settings is not available now; choose another",
