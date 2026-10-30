@@ -55,6 +55,8 @@ export class Client {
   }
 
   call<M extends Method>(method: M, ...args: Parameters<ServerApi[M]>): Promise<Result<M>> {
+    // Like the web app's store: a client's own change applies here at once (the server does not echo it back).
+    if (method === 'setState') Object.assign(this.slices, args[0]);
     return new Promise((res, rej) => {
       this.id += 1;
       this.waiting.set(this.id, { res: res as (v: unknown) => void, rej });

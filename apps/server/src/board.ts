@@ -18,7 +18,7 @@ import { app, set } from './state';
 import { register } from './hub';
 import { load, save } from './store';
 import { addItem, patchItem, rt, summary } from './sessions/registry';
-import { addHook, onTurnEnd } from './sessions/live';
+import { onTurnEnd } from './sessions/live';
 import { addPromptPart } from './sessions/options';
 import { addWorkspaceTools } from './peer';
 import { oneShot } from './oneshot';
@@ -175,13 +175,13 @@ addWorkspaceTools((sid) => [
 
 addPromptPart(() => 'This workspace has a board of features (F-n), issues (I-n) and notes (N-n) kept by Code Agent. Use board_search / board_get when the user mentions an id or past decisions; create or update items only when the user asks or work on an item is finished. Cite items by id (e.g. F-3) so the user can click them.');
 
-// New sessions hear which features are in progress (when the user turned that on).
-addHook('SessionStart', (sid, input) => {
-  if (!app.boardSettings.startContext || input.source !== 'startup') return undefined;
+// Sessions hear which features are in progress (when the user turned that on), in the system prompt
+// of their process: Claude Code does not call SessionStart hook callbacks (2.1.312).
+addPromptPart((sid) => {
+  if (!app.boardSettings.startContext) return null;
   const ws = wsOf(sid);
   const doing = all().filter((x) => x.workspaceId === ws && (x.status === 'doing' || x.status === 'fixing' || (x.kind === 'issue' && x.status === 'confirmed')));
-  if (!doing.length) return undefined;
-  return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: `Work in progress on the workspace board:\n${doing.slice(0, 15).map(brief).join('\n')}` } };
+  return doing.length ? `Work in progress on the workspace board:\n${doing.slice(0, 15).map(brief).join('\n')}` : null;
 });
 
 // ------------------------------------------------------------------ recorder

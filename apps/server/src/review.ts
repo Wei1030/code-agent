@@ -20,7 +20,7 @@ import { addItem, emit, patchItem, rt, summary } from './sessions/registry';
 import { decorateTool, inTurn, interruptTurn, live, onProcessEnd, onSendTurn, onTurnEnd, sendTurn } from './sessions/live';
 import { cwdOf } from './sessions/options';
 import { agentRow } from './sessions/describe';
-import { envFor, pointlessRetry, reasoning, resolveModel } from './models';
+import { envFor, pointlessRetry, reasoning, resolveModel, validModel } from './models';
 import { systemClaude } from './claude/files';
 import { recordUsage } from './usage';
 import { addBusyCheck } from './sessions/slots';
@@ -104,7 +104,7 @@ async function startReview(sid: string, checks: string[], opts: { model?: string
   const id = `rv-${randomUUID().slice(0, 8)}`;
   const repo = await isRepo(cwd);
   const base = repo ? (lastPassed.get(sid) ?? sessionBase[sid] ?? (await head(cwd)) ?? '') : '';
-  const model = opts.model ?? app.reviewProfile.model;
+  const model = validModel(opts.model ?? app.reviewProfile.model);
   const effort = opts.effort ?? app.reviewProfile.effort;
   set('reviews', [{ id, sessionId: sid, status: 'checking', base: base ? base.slice(0, 9) : '（不是 git 仓库）', maxRounds: 5, rounds: [], findings: [], checks, model, effort, startedAt: Date.now(), tokens: 0 }, ...app.reviews]);
   snaps.set(id, [base]);

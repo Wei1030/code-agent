@@ -6,7 +6,7 @@ import os from 'node:os';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { app } from './state';
 import { systemClaude } from './claude/files';
-import { envFor, pointlessRetry, reasoning, resolveModel } from './models';
+import { envFor, pointlessRetry, reasoning, resolveModel, validModel } from './models';
 import { recordUsage } from './usage';
 
 export interface OneShot {
@@ -23,6 +23,9 @@ export interface OneShot {
 }
 
 export async function oneShot<T>(o: OneShot): Promise<T> {
+  // A Claude model while only endpoint models are offered (no Claude login) would end at once without
+  // an answer: run on a model that is there.
+  o = { ...o, model: validModel(o.model) };
   const model = resolveModel(o.model);
   const exe = app.provider.executable === 'system' ? systemClaude() : undefined;
   const abort = new AbortController();

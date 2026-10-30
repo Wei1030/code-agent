@@ -4,7 +4,8 @@
  * Nothing outside it is read or written.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, copyFileSync, statSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -26,6 +27,8 @@ export interface World {
   mcp(name: string, config: object): void;
   /** The test MCP server (test/harness/mcp/tracker.mjs) as a stdio config. */
   tracker(env?: Record<string, string>): object;
+  /** A fake `gh` answering `gh issue list` with these issues; returns the environment that puts it on PATH. */
+  fakeGh(issues: object[]): Record<string, string>;
   /** Environment for processes that live in this world. */
   env(): Record<string, string>;
   remove(): void;
@@ -62,6 +65,18 @@ export function makeWorld(): World {
       const f = path.join(home, '.claude.json');
       const cur = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
       writeFileSync(f, JSON.stringify({ ...cur, mcpServers: { ...cur.mcpServers, [name]: config } }, null, 2));
+    },
+    fakeGh(issues) {
+      // One copy of node named gh, shared by test runs; each world says where its issues are.
+      const bin = path.join(os.tmpdir(), 'ca-test-gh');
+      const exe = path.join(bin, process.platform === 'win32' ? 'gh.exe' : 'gh');
+      if (!existsSync(exe) || statSync(exe).size !== statSync(process.execPath).size) {
+        mkdirSync(bin, { recursive: true });
+        copyFileSync(process.execPath, exe);
+      }
+      const data = write('gh-data.json', issues);
+      const preload = pathToFileURL(path.join(import.meta.dirname, 'gh-preload.mjs')).href;
+      return { PATH: `${bin}${path.delimiter}${process.env.PATH ?? ''}`, NODE_OPTIONS: `--import=${preload}`, FAKE_GH_DATA: data };
     },
     tracker: (env = {}) => ({ type: 'stdio', command: process.execPath, args: [path.join(import.meta.dirname, 'mcp', 'tracker.mjs')], env }),
     read: (file) => readFileSync(path.isAbsolute(file) ? file : path.join(root, file), 'utf8'),

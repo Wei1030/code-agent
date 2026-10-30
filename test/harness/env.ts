@@ -41,6 +41,8 @@ export interface EnvOpts {
   /** Files of the workspace repo. */
   files?: Record<string, string | object>;
   maxRunning?: number;
+  /** Runs on the new world before the server starts; may return environment variables for it. */
+  prepare?: (world: World) => Record<string, string> | void;
 }
 
 /** How many times the session went back to idle after working. */
@@ -57,7 +59,21 @@ export function finished(c: Client, sid: string): number {
 export async function setup(opts: EnvOpts = {}): Promise<Env> {
   const world = makeWorld();
   const model = await new FakeModel().start();
-  const server = await new Server(world, opts.server).start();
+  let server: Server | undefined;
+  try {
+    const extra = opts.prepare?.(world) ?? {};
+    server = await new Server(world, { ...opts.server, env: { ...opts.server?.env, ...extra } }).start();
+    return await ready(world, model, server, opts);
+  } catch (e) {
+    // Nothing left running: a listening fake model would keep the test process alive.
+    server?.kill();
+    await model.close();
+    world.remove();
+    throw e;
+  }
+}
+
+async function ready(world: World, model: FakeModel, server: Server, opts: EnvOpts): Promise<Env> {
   const c = await new Client(server.port).connect();
   const clients = [c];
 
