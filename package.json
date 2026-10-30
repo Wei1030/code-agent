@@ -14,6 +14,7 @@
     "test": "node --import tsx --test packages/shared/src/*.test.ts apps/server/src/*.test.ts apps/web/src/lib/*.test.ts",
     "test:server": "node --import tsx --test --test-concurrency=4 test/server/*.test.ts",
     "test:ui": "npm run build -w @code-agent/web && node --import tsx --test --test-concurrency=3 test/ui/*.test.ts",
-    "test:contract": "node --import tsx --test test/contract/*.test.ts"
+    "test:contract": "node --import tsx --test test/contract/*.test.ts",
+    "test:real": "node --import tsx --test test/real/*.test.ts"
   }
 }
