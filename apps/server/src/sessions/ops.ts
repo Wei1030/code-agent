@@ -382,7 +382,7 @@ register({
   exportMarkdown,
   searchSessions: (query) => {
     const seen = new Map<string, string>();
-    for (const h of searchTranscripts(query, 100)) if (!seen.has(h.session) && summary(h.session)) seen.set(h.session, h.snippet.replace(/\s+/g, ' '));
+    for (const h of searchTranscripts(query, 400)) if (!seen.has(h.session) && summary(h.session)) seen.set(h.session, h.snippet.replace(/\s+/g, ' '));
     return [...seen].slice(0, 100).map(([sessionId, snippet]) => ({ sessionId, snippet }));
   },
   retryBanner: (sid, itemId) => patchItem(sid, itemId, { resolved: true }),

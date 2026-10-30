@@ -833,7 +833,6 @@ export const EN: Record<string, string> = {
   "改了内容": "Changed the content",
   "改了标题": "Changed the title",
   "改动对新会话生效。{n} 个运行中的会话可以重新启动 Claude Code，用上新的工具和设置（对话会接着进行）；系统提示词和回复语言只对新会话生效。": "Changes apply to new sessions. {n} running sessions can restart Claude Code to pick up the new tools and settings (the conversation carries on); the system prompt and reply language reach new sessions only.",
-  "改动时检出的提交 {commit}": "Commit checked out when this changed: {commit}",
   "改变 Claude 回答的写法：解释型会边做边讲取舍，学习型会留一些代码让你自己写。自定义风格放在 output-styles 文件夹里。": "Changes how Claude writes its answers: Explanatory explains the trade-offs as it works; Learning leaves some code for you to write yourself. Custom styles go in the output-styles folder.",
   "放弃": "Discard",
   "放弃修改": "Discard changes",

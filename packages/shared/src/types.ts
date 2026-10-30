@@ -889,8 +889,7 @@ export interface BoardItem {
   unconfirmed?: boolean;
   /** Sessions that worked on it or mentioned it. */
   sessions: string[];
-  /** Every change, with the commit checked out where it was made. */
-  log: Array<{ ts: number; text: string; sessionId?: string; auto?: boolean; commit?: string }>;
+  log: Array<{ ts: number; text: string; sessionId?: string; auto?: boolean }>;
   createdAt: number;
   updatedAt: number;
 }

@@ -19,10 +19,8 @@ import { register } from './hub';
 import { load, save } from './store';
 import { addItem, emit, patchItem, rt, summary } from './sessions/registry';
 import { onTurnEnd } from './sessions/live';
-import { cwdOf } from './sessions/options';
 import { addWorkspaceTools } from './peer';
 import { oneShot } from './oneshot';
-import { head } from './git';
 
 const run = promisify(execFile);
 
@@ -30,14 +28,7 @@ const all = () => app.board;
 const wsOf = (sid: string) => summary(sid)?.workspaceId ?? '';
 
 /** How Claude and the recorder write an item; the log keeps the history. */
-const STATE_RULE = 'An item says where things stand now, not how they got there: when that changes, rewrite the body (the new one replaces it) and drop what no longer holds; do not append dated progress or a history of what was done. The item log keeps every change with its date and commit.';
-
-/** The commit checked out where a change is made, kept in the item log so a reader can check the item against the code. */
-async function commitIn(dir: string | undefined): Promise<string | undefined> {
-  return (dir && (await head(dir))) || undefined;
-}
-const sessionCommit = (sid: string) => commitIn(summary(sid) ? cwdOf(sid) : undefined);
-const workspaceCommit = (wsId: string) => commitIn(app.workspaces.find((w) => w.id === wsId)?.path);
+const STATE_RULE = 'An item says where things stand now, not how they got there: when that changes, rewrite the body (the new one replaces it) and drop what no longer holds; do not append dated progress or a history of what was done. The item log keeps every change.';
 
 function findBoardItem(wsId: string, id: string): BoardItem | undefined {
   return all().find((x) => x.workspaceId === wsId && x.id === id);
@@ -54,22 +45,22 @@ function put(item: BoardItem) {
   set('board', all().some(same) ? all().map((x) => (same(x) ? item : x)) : [...all(), item]);
 }
 
-function createItem(wsId: string, p: Partial<BoardItem> & Pick<BoardItem, 'kind' | 'title'>, source: BoardSource, logText = '新建', commit?: string): BoardItem {
+function createItem(wsId: string, p: Partial<BoardItem> & Pick<BoardItem, 'kind' | 'title'>, source: BoardSource, logText = '新建'): BoardItem {
   const now = Date.now();
   const item: BoardItem = {
     body: '', status: FIRST_STATUS[p.kind], priority: 'normal', tasks: [], decisions: [], sessions: source.sessionId ? [source.sessionId] : [],
     createdAt: now, updatedAt: now, ...p, id: nextId(wsId, p.kind), workspaceId: wsId, source,
-    log: [{ ts: now, text: logText, sessionId: source.sessionId, auto: source.kind === 'auto', ...(commit ? { commit } : {}) }],
+    log: [{ ts: now, text: logText, sessionId: source.sessionId, auto: source.kind === 'auto' }],
   };
   put(item);
   return item;
 }
 
-function updateItem(wsId: string, id: string, p: Partial<BoardItem>, logText?: string, by: { sessionId?: string; auto?: boolean; commit?: string } = {}) {
+function updateItem(wsId: string, id: string, p: Partial<BoardItem>, logText?: string, by: { sessionId?: string; auto?: boolean } = {}) {
   const cur = findBoardItem(wsId, id);
   if (!cur) return;
   const sessions = by.sessionId && !cur.sessions.includes(by.sessionId) ? [...cur.sessions, by.sessionId] : cur.sessions;
-  const log = logText ? [...cur.log, { ts: Date.now(), text: logText, sessionId: by.sessionId, auto: by.auto, ...(by.commit ? { commit: by.commit } : {}) }] : cur.log;
+  const log = logText ? [...cur.log, { ts: Date.now(), text: logText, sessionId: by.sessionId, auto: by.auto }] : cur.log;
   put({ ...cur, ...p, id: cur.id, workspaceId: cur.workspaceId, sessions, log, updatedAt: Date.now() });
 }
 
@@ -86,12 +77,12 @@ function tracker() {
   const before: Before[] = [];
   return {
     before,
-    create(wsId: string, p: Partial<BoardItem> & Pick<BoardItem, 'kind' | 'title'>, source: BoardSource, logText?: string, commit?: string) {
-      const it = createItem(wsId, { ...p, unconfirmed: source.kind === 'auto' ? true : p.unconfirmed }, source, logText, commit);
+    create(wsId: string, p: Partial<BoardItem> & Pick<BoardItem, 'kind' | 'title'>, source: BoardSource, logText?: string) {
+      const it = createItem(wsId, { ...p, unconfirmed: source.kind === 'auto' ? true : p.unconfirmed }, source, logText);
       before.push({ wsId, id: it.id, before: null });
       return it;
     },
-    update(wsId: string, id: string, p: Partial<BoardItem>, logText: string, by: { sessionId?: string; auto?: boolean; commit?: string }) {
+    update(wsId: string, id: string, p: Partial<BoardItem>, logText: string, by: { sessionId?: string; auto?: boolean }) {
       const cur = findBoardItem(wsId, id);
       if (!cur) return false;
       if (!before.some((b) => b.wsId === wsId && b.id === id)) before.push({ wsId, id, before: cur });
@@ -126,10 +117,8 @@ function undoBoardRecord(sid: string, cardId: string) {
 const brief = (x: BoardItem) => `${x.id} [${x.kind} · ${STATUS_LABEL[x.status]}${x.priority !== 'normal' ? ` · ${x.priority}` : ''}] ${x.title}`;
 
 function full(x: BoardItem): string {
-  const last = x.log.at(-1);
   return [
     brief(x),
-    last ? `Last change ${new Date(last.ts).toISOString().slice(0, 16).replace('T', ' ')} UTC${last.commit ? ` at commit ${last.commit.slice(0, 10)}` : ''}: ${last.text}` : '',
     x.body,
     x.tasks.length ? `Tasks:\n${x.tasks.map((t) => `- [${t.done ? 'x' : ' '}] ${t.text}`).join('\n')}` : '',
     x.decisions.length ? `Decisions:\n${x.decisions.map((d) => `- ${d.text} → ${d.outcome ?? 'open'}`).join('\n')}` : '',
@@ -152,7 +141,7 @@ addWorkspaceTools((sid) => [
     const list = all().filter((x) => x.workspaceId === ws && (!a.kind || x.kind === a.kind) && (a.include_closed || !CLOSED.includes(x.status)) && (!a.query || matches(x, a.query)));
     return { content: [{ type: 'text' as const, text: list.length ? list.slice(0, 50).map(brief).join('\n') : 'No matching board items.' }] };
   }, { annotations: { readOnlyHint: true } }),
-  tool('board_get', 'Read one board item in full (the user may name it by id, e.g. F-3), with when and at which commit it last changed: check it against the code before acting on it.', { id: z.string() }, async (a) => {
+  tool('board_get', 'Read one board item in full (the user may name it by id, e.g. F-3).', { id: z.string() }, async (a) => {
     const x = findBoardItem(wsOf(sid), a.id.toUpperCase());
     return { content: [{ type: 'text' as const, text: x ? full(x) : `No item ${a.id}.` }], ...(x ? {} : { isError: true }) };
   }, { annotations: { readOnlyHint: true } }),
@@ -161,9 +150,8 @@ addWorkspaceTools((sid) => [
     tasks: z.array(z.string()).optional(),
   }, async (a) => {
     const ws = wsOf(sid);
-    const commit = await sessionCommit(sid);
     const tr = tracker();
-    const it = tr.create(ws, { kind: a.kind, title: a.title, body: a.body ?? '', priority: a.priority ?? 'normal', tasks: (a.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false })) }, { kind: 'agent', sessionId: sid }, 'Claude 新建', commit);
+    const it = tr.create(ws, { kind: a.kind, title: a.title, body: a.body ?? '', priority: a.priority ?? 'normal', tasks: (a.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false })) }, { kind: 'agent', sessionId: sid }, 'Claude 新建');
     card(sid, 'agent', tr, [{ itemId: it.id, action: 'created', text: a.kind === 'feature' ? '新功能' : a.kind === 'issue' ? '新问题' : '新笔记' }]);
     return { content: [{ type: 'text' as const, text: `Created ${it.id}. Cite it by id from now on.` }] };
   }),
@@ -173,8 +161,6 @@ addWorkspaceTools((sid) => [
     add_decisions: z.array(z.object({ text: z.string(), outcome: z.string().optional() })).optional(), note: z.string().optional().describe('What changed, for the item log'),
   }, async (a) => {
     const ws = wsOf(sid);
-    // Awaited before reading the item, so that the change applies to the item as it is.
-    const commit = await sessionCommit(sid);
     const cur = findBoardItem(ws, a.id.toUpperCase());
     if (!cur) return { content: [{ type: 'text' as const, text: `No item ${a.id}.` }], isError: true };
     if (a.status && !STATUSES[cur.kind].includes(a.status)) return { content: [{ type: 'text' as const, text: `Status ${a.status} does not apply to a ${cur.kind}; use one of ${STATUSES[cur.kind].join(', ')}.` }], isError: true };
@@ -183,7 +169,7 @@ addWorkspaceTools((sid) => [
     const p: Partial<BoardItem> = { tasks, decisions, ...(a.status ? { status: a.status } : {}), ...(a.title ? { title: a.title } : {}), ...(a.body !== undefined ? { body: a.body } : {}), ...(a.priority ? { priority: a.priority } : {}) };
     const text = a.note ?? (a.status ? `状态 → ${STATUS_LABEL[a.status]}` : '已更新');
     const tr = tracker();
-    tr.update(ws, cur.id, p, `Claude：${text}`, { sessionId: sid, commit });
+    tr.update(ws, cur.id, p, `Claude：${text}`, { sessionId: sid });
     card(sid, 'agent', tr, [{ itemId: cur.id, action: 'updated', text }]);
     return { content: [{ type: 'text' as const, text: `Updated ${cur.id}.` }] };
   }),
@@ -313,7 +299,6 @@ async function recordTurn(sid: string, userId: string) {
   }
   showCheck(sid, null);
   if (!summary(sid)) return;
-  const commit = await sessionCommit(sid);
   const tr = tracker();
   const changes: Array<{ itemId: string; action: 'created' | 'updated'; text: string }> = [];
   for (const o of ops.operations ?? []) {
@@ -323,7 +308,7 @@ async function recordTurn(sid: string, userId: string) {
         kind: o.kind, title: o.title, body: o.body ?? '', status, priority: o.priority ?? 'normal',
         tasks: (o.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false })),
         decisions: (o.decisions ?? []).map((d) => ({ id: randomUUID().slice(0, 8), ...d })),
-      }, { kind: 'auto', sessionId: sid }, `自动记录：${o.note}`, commit);
+      }, { kind: 'auto', sessionId: sid }, `自动记录：${o.note}`);
       changes.push({ itemId: it.id, action: 'created', text: o.note });
     } else if (o.op === 'update' && o.id) {
       const cur = findBoardItem(ws, o.id.toUpperCase());
@@ -331,7 +316,7 @@ async function recordTurn(sid: string, userId: string) {
       const status = o.status && STATUSES[cur.kind].includes(o.status) ? o.status : undefined;
       const tasks = [...cur.tasks.map((t) => (o.complete_tasks?.some((c) => t.text.startsWith(c) || c.startsWith(t.text)) ? { ...t, done: true } : t)), ...(o.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false }))];
       const decisions = [...cur.decisions, ...(o.decisions ?? []).map((d) => ({ id: randomUUID().slice(0, 8), ...d }))];
-      if (tr.update(ws, cur.id, { tasks, decisions, ...(status ? { status } : {}), ...(o.body ? { body: o.body } : {}) }, `自动记录：${o.note}`, { sessionId: sid, auto: true, commit })) {
+      if (tr.update(ws, cur.id, { tasks, decisions, ...(status ? { status } : {}), ...(o.body ? { body: o.body } : {}) }, `自动记录：${o.note}`, { sessionId: sid, auto: true })) {
         changes.push({ itemId: cur.id, action: 'updated', text: o.note });
       }
     }
@@ -355,19 +340,17 @@ function stopBoardCheck(sid: string, turnOff: boolean) {
 
 // ------------------------------------------------------------------ review findings
 
-async function findingToBoard(ticketId: string, findingId: string): Promise<string | null> {
+function findingToBoard(ticketId: string, findingId: string): string | null {
   const t = app.reviews.find((x) => x.id === ticketId);
   const f = t?.findings.find((x) => x.id === findingId);
   if (!t || !f) return null;
   const ws = wsOf(t.sessionId);
   const ref = `${ticketId}:${findingId}`;
-  // Awaited before the check, so that nothing changes between the check and the creation.
-  const commit = (await sessionCommit(t.sessionId)) ?? (await workspaceCommit(ws));
   const existing = all().find((x) => x.workspaceId === ws && x.source.ref === ref);
   if (existing) return existing.id;
   return createItem(ws, {
     kind: 'issue', title: f.title, body: `${f.detail}\n位置：${f.file}${f.line ? `:${f.line}` : ''}`, priority: f.severity === 'minor' ? 'low' : 'normal',
-  }, { kind: 'review', sessionId: t.sessionId, ref }, `来自代码审核意见 ${f.id}（审核结束时没有解决）`, commit).id;
+  }, { kind: 'review', sessionId: t.sessionId, ref }, `来自代码审核意见 ${f.id}（审核结束时没有解决）`).id;
 }
 
 // ------------------------------------------------------------------ import
@@ -452,13 +435,12 @@ function normalize(wsId: string, rows: ImportRow[], source: ImportSource): Impor
   });
 }
 
-async function applyImport(wsId: string, rows: ImportRow[]): Promise<string[]> {
+function applyImport(wsId: string, rows: ImportRow[]): string[] {
   const created: string[] = [];
-  const commit = await workspaceCommit(wsId);
   for (const r of rows) {
     if (r.action === 'skip') continue;
-    if (r.action === 'create') created.push(createItem(wsId, { kind: r.kind, title: r.title, body: r.body }, { kind: 'import', ref: r.ref, url: r.url }, `从 ${r.ref} 导入`, commit).id);
-    else updateItem(wsId, r.action, {}, `合并了 ${r.ref}：${r.title}`, { commit });
+    if (r.action === 'create') created.push(createItem(wsId, { kind: r.kind, title: r.title, body: r.body }, { kind: 'import', ref: r.ref, url: r.url }, `从 ${r.ref} 导入`).id);
+    else updateItem(wsId, r.action, {}, `合并了 ${r.ref}：${r.title}`);
   }
   return created;
 }
@@ -484,10 +466,10 @@ function boardMarkdown(wsId: string): string {
 }
 
 register({
-  createItem: async (wsId, p, source) => createItem(wsId, p, source, undefined, await workspaceCommit(wsId)),
-  updateItem: async (wsId, id, p, logText) => updateItem(wsId, id, p, logText, { commit: await workspaceCommit(wsId) }),
+  createItem: (wsId, p, source) => createItem(wsId, p, source),
+  updateItem: (wsId, id, p, logText) => updateItem(wsId, id, p, logText),
   deleteItem,
-  confirmItem: async (wsId, id) => updateItem(wsId, id, { unconfirmed: false }, '已确认', { commit: await workspaceCommit(wsId) }),
+  confirmItem: (wsId, id) => updateItem(wsId, id, { unconfirmed: false }, '已确认'),
   undoBoardRecord,
   stopBoardCheck,
   findingToBoard,

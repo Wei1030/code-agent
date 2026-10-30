@@ -78,11 +78,12 @@ const saved = new Map<string, Item[]>();
 /** Sessions whose items were inserted, removed or replaced: rewrite them all. */
 const reshaped = new Set<string>();
 
-/** Text worth finding again: what the user and Claude wrote, plans, tool calls. */
+/** Text worth finding again: what the user and Claude wrote, plans, tool calls (grouped ones too). */
 function searchable(it: Item): string {
   if (it.kind === 'user' || it.kind === 'text') return it.text;
   if (it.kind === 'plan') return it.plan.markdown ?? `${it.plan.title}\n${it.plan.summary}`;
   if (it.kind === 'tool') return `${it.tool} ${it.detail}`;
+  if (it.kind === 'toolgroup') return it.tools.map((t) => `${t.tool} ${t.detail}`).join('\n');
   return '';
 }
 
@@ -154,16 +155,24 @@ export function initRuntime(r: SessionRuntime) {
   persist(r.id);
 }
 
-/** Transcript entries that mention `query` (full-text): session, entry, its position and a snippet; only in `sessions` when given. */
-export function searchTranscripts(query: string, limit = 50, sessions?: string[]): Array<{ session: string; item: string; seq: number; snippet: string }> {
+/**
+ * Transcript entries that mention `query` (full-text), at most `limit`, with where they were found.
+ * With `sessions`, only theirs: sessions in that order, the latest entries of each first.
+ */
+export function searchTranscripts(query: string, limit = 50, sessions?: string[]): Array<{ session: string; item: string; snippet: string }> {
   const q = query.trim();
   if (!q || sessions?.length === 0) return [];
-  const from = 'FROM item_text JOIN items ON items.session = item_text.session AND items.id = item_text.item';
-  const only = sessions ? ` AND item_text.session IN (${sessions.map(() => '?').join(', ')})` : '';
+  // Sorted before the limit applies: the latest entries must not fall behind earlier ones.
+  const scope = sessions ? `WITH scope(session, rank) AS (VALUES ${sessions.map(() => '(?, ?)').join(', ')}) ` : '';
+  const from = sessions
+    ? 'FROM item_text JOIN scope ON scope.session = item_text.session JOIN items ON items.session = item_text.session AND items.id = item_text.item'
+    : 'FROM item_text';
+  const order = sessions ? ' ORDER BY scope.rank, items.seq DESC' : '';
+  const ranks = sessions?.flatMap((s, i) => [s, i]) ?? [];
   const rows = q.length >= 3
-    ? db.prepare(`SELECT item_text.session, item, seq, snippet(item_text, 2, '[', ']', '…', 12) AS snippet ${from} WHERE item_text MATCH ?${only} LIMIT ?`).all(`"${q.replace(/"/g, '""')}"`, ...(sessions ?? []), limit * 4)
-    : db.prepare(`SELECT item_text.session, item, seq, substr(text, max(1, instr(lower(text), lower(?)) - 30), 80) AS snippet ${from} WHERE instr(lower(text), lower(?)) > 0${only} LIMIT ?`).all(q, q, ...(sessions ?? []), limit * 4);
-  return rows as Array<{ session: string; item: string; seq: number; snippet: string }>;
+    ? db.prepare(`${scope}SELECT item_text.session AS session, item, snippet(item_text, 2, '[', ']', '…', 12) AS snippet ${from} WHERE item_text MATCH ?${order} LIMIT ?`).all(...ranks, `"${q.replace(/"/g, '""')}"`, limit)
+    : db.prepare(`${scope}SELECT item_text.session AS session, item, substr(text, max(1, instr(lower(text), lower(?)) - 30), 80) AS snippet ${from} WHERE instr(lower(text), lower(?)) > 0${order} LIMIT ?`).all(...ranks, q, q, limit);
+  return rows as Array<{ session: string; item: string; snippet: string }>;
 }
 
 /** Apply a session event here and in every connected UI. */

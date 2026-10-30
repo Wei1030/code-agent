@@ -249,7 +249,6 @@ function ItemDetail({ item, onDeleted }: { item: BoardItem; onDeleted: () => voi
                 <div key={i} className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
                   <span className="muted" style={{ width: 70, flex: 'none' }}>{relTime(l.ts)}</span>
                   <span className="grow">{t(l.text)}{s && <span className="muted"> · {s.title}</span>}</span>
-                  {l.commit && <span className="mono muted" title={t('改动时检出的提交 {commit}', { commit: l.commit })}>{l.commit.slice(0, 7)}</span>}
                   {l.auto && <Chip>{t('自动')}</Chip>}
                 </div>
               );

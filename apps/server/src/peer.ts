@@ -361,10 +361,7 @@ function workspaceServer(sid: string): McpServerConfig {
         limit: z.number().int().min(1).max(50).optional(),
       }, async (a) => {
         const scope = a.session_id ? [target(sid, a.session_id)] : [summary(sid), ...others(sid)].filter((s): s is SessionSummary => !!s);
-        const rank = new Map(scope.map((s, i) => [s.id, i]));
-        const hits = searchTranscripts(a.query, 100, scope.map((s) => s.id))
-          .sort((x, y) => rank.get(x.session)! - rank.get(y.session)! || y.seq - x.seq)
-          .slice(0, a.limit ?? 20);
+        const hits = searchTranscripts(a.query, a.limit ?? 20, scope.map((s) => s.id));
         const flat = (s: string) => s.replace(/\s+/g, ' ');
         patchPeer(sid, own('search_history', (i) => i.query === a.query), {
           rows: hits.slice(0, 5).map((h) => ({ icon: 'chat', text: short(flat(h.snippet), 90), right: summary(h.session)?.title })),
