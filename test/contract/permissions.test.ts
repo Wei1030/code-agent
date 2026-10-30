@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { query, type CanUseTool, type Options, type PermissionUpdate } from '@anthropic-ai/claude-agent-sdk';
 import { makeWorld, type World } from '../harness/world';
-import { FakeModel, say, use, shell, type Step } from '../harness/fake-model';
+import { FakeModel, say, use, shell, plan, type Step } from '../harness/fake-model';
 import { cliEnv } from '../harness/cli';
 
 let world: World;
@@ -113,4 +113,11 @@ test('a repository\'s committed allow rules apply only in a trusted folder; loca
   world.write(path.join(l, '.claude', 'settings.local.json'), { permissions: { allow: ['Bash(npm test)', 'PowerShell(npm test)'] } });
   const local = await run([shell('npm test'), [say('好')]], {}, l);
   assert.equal(local.asks.length, 0, 'local rules need no trust');
+});
+
+test('in plan mode the plan is written to a plan file; ExitPlanMode asks with its text', async () => {
+  const { asks } = await run([...plan('# 契约计划\n\n1. 第一步\n'), [say('好')]], { permissionMode: 'plan' });
+  assert.deepEqual(asks.map((a) => a.tool), ['ExitPlanMode'], 'writing the plan file is not asked');
+  assert.match(String(asks[0].input.plan), /契约计划/);
+  assert.match(String(asks[0].input.planFilePath), /plans[\/].+\.md$/);
 });

@@ -22,6 +22,10 @@ export interface World {
   read(file: string): string;
   exists(file: string): boolean;
   git(cwd: string, ...args: string[]): string;
+  /** Register an MCP server for all workspaces (Claude Code's user scope, ~/.claude.json). */
+  mcp(name: string, config: object): void;
+  /** The test MCP server (test/harness/mcp/tracker.mjs) as a stdio config. */
+  tracker(env?: Record<string, string>): object;
   /** Environment for processes that live in this world. */
   env(): Record<string, string>;
   remove(): void;
@@ -54,6 +58,12 @@ export function makeWorld(): World {
 
   return {
     root, home, config, data, env, git, write,
+    mcp(name, config) {
+      const f = path.join(home, '.claude.json');
+      const cur = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
+      writeFileSync(f, JSON.stringify({ ...cur, mcpServers: { ...cur.mcpServers, [name]: config } }, null, 2));
+    },
+    tracker: (env = {}) => ({ type: 'stdio', command: process.execPath, args: [path.join(import.meta.dirname, 'mcp', 'tracker.mjs')], env }),
     read: (file) => readFileSync(path.isAbsolute(file) ? file : path.join(root, file), 'utf8'),
     exists: (file) => existsSync(path.isAbsolute(file) ? file : path.join(root, file)),
     repo(name, files = { 'README.md': `# ${name}\n` }, { git: isGit = true } = {}) {

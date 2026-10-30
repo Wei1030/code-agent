@@ -46,6 +46,10 @@ export const use = (name: string, input: Record<string, unknown>): Block => ({ t
 /** A shell command with the shell this Claude Code offers (Bash, or PowerShell on Windows without Git Bash). */
 export const shell = (command: string, extra: Record<string, unknown> = {}) => (r: Req): Block[] =>
   [use(r.tools.includes('Bash') ? 'Bash' : 'PowerShell', { command, description: command.slice(0, 40), ...extra })];
+/** Where Claude Code wants the plan written in plan mode (named in its system prompt). */
+export const planFile = (r: Req) => /create your plan at ([^\s"]+\.md)/.exec(JSON.stringify(r.body).replace(/\\\\/g, '\\'))?.[1] ?? '';
+/** Two steps, as a model plans: write the plan file, then ExitPlanMode (Claude Code reads the file). */
+export const plan = (markdown: string): Step[] => [(r) => [use('Write', { file_path: planFile(r), content: markdown })], [use('ExitPlanMode', {})]];
 /** A command that runs for a while (works in Bash and PowerShell). */
 export const sleepCmd = (seconds: number) => `node -e "setTimeout(() => {}, ${seconds * 1000})"`;
 export const httpError =(status: number, errorType: string, message?: string): Fault => ({ fault: 'http', status, errorType, message });
