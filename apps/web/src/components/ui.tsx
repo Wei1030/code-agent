@@ -260,6 +260,7 @@ export function MenuButton({ children, items, icon, variant = 'ghost', size, tit
 export function Modal({ title, sub, onClose, children, footer, width, footLeft }: {
   title: ReactNode; sub?: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; width?: number; footLeft?: ReactNode;
 }) {
+  const t = useT();
   return createPortal(
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" style={width ? { width: `min(${width}px, calc(100vw - 40px))` } : undefined} role="dialog" aria-modal="true">
@@ -268,7 +269,7 @@ export function Modal({ title, sub, onClose, children, footer, width, footLeft }
             <h2>{title}</h2>
             {sub && <div className="sub">{sub}</div>}
           </div>
-          <Button variant="ghost" icon="x" title="关闭" onClick={onClose} />
+          <Button variant="ghost" icon="x" title={t('关闭')} onClick={onClose} />
         </div>
         <div className="modal-body">{children}</div>
         {(footer || footLeft) && <div className="modal-foot">{footLeft && <div className="left">{footLeft}</div>}{footer}</div>}
@@ -280,13 +281,11 @@ export function Modal({ title, sub, onClose, children, footer, width, footLeft }
 
 /** Global confirmation dialog driven by useApp().ask(). */
 export function ConfirmHost() {
+  const t = useT();
   const confirm = useApp((s) => s.confirm);
   const set = useApp((s) => s.set);
-  const [typed, setTyped] = useState('');
-  useEffect(() => setTyped(''), [confirm]);
   if (!confirm) return null;
   const close = () => set({ confirm: null });
-  const blocked = !!confirm.typeToConfirm && typed !== confirm.typeToConfirm;
   return (
     <Modal
       title={confirm.title}
@@ -294,8 +293,8 @@ export function ConfirmHost() {
       width={480}
       footer={
         <>
-          <Button onClick={close}>取消</Button>
-          <Button variant={confirm.danger ? 'danger' : 'primary'} disabled={blocked} onClick={async () => {
+          <Button onClick={close}>{t('取消')}</Button>
+          <Button variant={confirm.danger ? 'danger' : 'primary'} onClick={async () => {
             // Stay open with a spinner while the confirmed action talks to the server.
             try { await confirm.onConfirm(); } finally { close(); }
           }}>{confirm.confirmLabel}</Button>
@@ -303,12 +302,6 @@ export function ConfirmHost() {
       }
     >
       <div style={{ whiteSpace: 'pre-line', color: 'var(--ink-2)' }}>{confirm.body}</div>
-      {confirm.typeToConfirm && (
-        <div className="field">
-          <label>输入 {confirm.typeToConfirm} 以确认</label>
-          <input className="input mono" value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus />
-        </div>
-      )}
     </Modal>
   );
 }

@@ -1,7 +1,7 @@
 // Lists the Chinese UI strings that have no English entry in src/lib/i18n.en.ts, and the entries
 // whose string no source uses any more.
 //   npm run i18n:missing -w @code-agent/web
-// Every Chinese string literal in the web app and the shared catalog counts (tables of labels are
+// Every Chinese string literal in the web app and the shared package counts (tables of labels are
 // passed through t() later), so a few that are never shown may be listed too.
 // The server's text counts as well: a template becomes a key with a {placeholder} per expression
 // (named after an identifier or a property, numbered otherwise), which the web app matches as a
@@ -15,7 +15,7 @@ import ts from 'typescript';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const web = path.resolve(here, '..');
 const server = path.resolve(web, '../server/src');
-const roots = [path.join(web, 'src'), path.resolve(web, '../../packages/shared/src/catalog.ts'), server];
+const roots = [path.join(web, 'src'), path.resolve(web, '../../packages/shared/src'), server];
 const files = [];
 const walk = (p) => {
   if (statSync(p).isDirectory()) for (const n of readdirSync(p)) walk(path.join(p, n));

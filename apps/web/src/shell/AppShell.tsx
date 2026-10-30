@@ -3,7 +3,7 @@ import { NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Button, ConfirmHost, Popover, Select, Toasts, Toggle, UserAvatar } from '../components/ui';
 import { useApp } from '../store/app';
-import { useT } from '../lib/i18n';
+import { resolveLocale, useT } from '../lib/i18n';
 import { relTime } from '../lib/format';
 import { cx } from '../lib/util';
 import { FolderPicker } from './FolderPicker';
@@ -53,6 +53,7 @@ export function AppShell() {
 
 /** A thin bar at the top while a server call the user waits for takes longer than 300 ms. */
 function TopProgress() {
+  const t = useT();
   const busy = useApp((s) => s.busy > 0);
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -63,7 +64,7 @@ function TopProgress() {
     const timer = setTimeout(() => setShown(true), 300);
     return () => clearTimeout(timer);
   }, [busy]);
-  return shown ? <div className="top-progress" role="progressbar" aria-label="正在处理" /> : null;
+  return shown ? <div className="top-progress" role="progressbar" aria-label={t('正在处理')} /> : null;
 }
 
 /** 看板 in the left rail, with the selected workspace's count of items waiting for confirmation. */
@@ -182,7 +183,7 @@ function LanguageButton() {
   return (
     <>
       <button ref={ref} className="lang-btn" onClick={() => setOpen(!open)} title={t('界面语言')}>
-        <Icon name="globe" size={18} />{pref === 'en' ? 'EN' : '中'}
+        <Icon name="globe" size={18} />{resolveLocale(pref) === 'en' ? 'EN' : '中'}
       </button>
       <Popover anchor={ref.current} open={open} onClose={() => setOpen(false)} placement="bottom-end" width={220}>
         {opts.map((o) => (

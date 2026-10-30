@@ -105,6 +105,7 @@ export function hookOutput(rule: HookRule): Record<string, unknown> {
 export function sampleInput(event: string): Record<string, unknown> {
   if (event === 'PreToolUse' || event === 'PermissionRequest') return { hook_event_name: event, tool_name: 'Bash', tool_input: { command: 'git push --force origin main' } };
   if (isToolEvent(event)) return { hook_event_name: event, tool_name: 'Edit', tool_input: { file_path: 'src/cart/timer.ts' } };
+  // i18n-ignore: sample data the user edits.
   if (event === 'UserPromptSubmit') return { hook_event_name: event, prompt: '把限流改成令牌桶' };
   return { hook_event_name: event };
 }

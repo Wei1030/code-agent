@@ -265,7 +265,7 @@ function ReviewEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
         </Section>
 
         <Section title={t('项目说明')}>
-          <Toggle on={draft.claudeMd} onChange={(v) => set({ claudeMd: v })} label={t('读取项目的 CLAUDE.md')} hint={t('项目的约定和命令通常写在这里，审核时有用。只读仓库里的说明和设置，不读你个人和本机的规则。')} />
+          <Toggle on={draft.claudeMd} onChange={(v) => set({ claudeMd: v })} label={t('读取项目的 CLAUDE.md')} hint={t('项目的约定和命令通常写在这里，审核时有用。只读 CLAUDE.md，不读任何设置文件，所以仓库里的权限规则也不能让审核者改文件。')} />
         </Section>
 
         <Section title={t('审核要求')} right={<button className="link-btn" onClick={() => setShowRules(!showRules)}>{showRules ? t('收起内置规则') : t('查看内置规则')}</button>}>

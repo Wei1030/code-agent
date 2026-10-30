@@ -65,10 +65,10 @@ export function Usage() {
     for (const d of days) { const c = usage.cache?.[dayKey(d.date)]; if (c) { input += c.input; read += c.cacheRead; } }
     return input ? Math.round((read / input) * 100) : null;
   }, [days, usage.cache]);
-  const series = SERIES.filter((s) => s.key !== 'other' || days.some((d) => d.other > 0));
+  const series = SERIES.filter((s) => s.key !== 'other' || days.some((d) => d.other > 0)).map((s) => ({ ...s, label: t(s.label) }));
   const sum = days.reduce((a, d) => a + total(d), 0);
   const today = days[days.length - 1];
-  const bySeries = SERIES.map((s) => ({ ...s, v: days.reduce((a, d) => a + d[s.key], 0) })).filter((s) => s.v > 0);
+  const bySeries = SERIES.map((s) => ({ ...s, label: t(s.label), v: days.reduce((a, d) => a + d[s.key], 0) })).filter((s) => s.v > 0);
   const filteredSessions = sessions.filter((s) => !s.draft && (wsFilter === 'all' || s.workspaceId === wsFilter));
   const top = [...filteredSessions].sort((a, b) => b.tokens - a.tokens).slice(0, 6);
   const byWs = workspaces.map((w) => ({ w, v: days.reduce((a, d) => a + Object.entries(usage.days[dayKey(d.date)] ?? {}).reduce((b, [k, v]) => b + (k.split('\t')[0] === w.id ? v : 0), 0), 0) }))

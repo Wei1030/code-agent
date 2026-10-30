@@ -21,8 +21,6 @@ export interface ConfirmRequest {
   body: string;
   confirmLabel: string;
   danger?: boolean;
-  /** When set, the user must type this word to enable the confirm button. */
-  typeToConfirm?: string;
   onConfirm: () => unknown;
 }
 
