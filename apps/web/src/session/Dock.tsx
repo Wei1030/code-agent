@@ -1,7 +1,7 @@
 /** Panels docked above the composer: approval, questions, plan review, read-only bar, queue. */
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import type { PendingRequest, QueuedMessage, RuleDestination } from '../api/types';
+import type { PendingRequest, QueuedMessage, RuleDestination, SuggestedUpdate } from '../api/types';
 import { describeRule } from '../lib/rules';
 import { Icon } from '../components/Icon';
 import { Button, Check, Chip, Field, Radio, Select } from '../components/ui';
@@ -10,6 +10,7 @@ import { useApp } from '../store/app';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { languageOf } from '../lib/highlight';
+import { MODE_INFO } from '../lib/catalog';
 import { DiffLines } from './Transcript';
 
 function useSince(since: number) {
@@ -23,33 +24,57 @@ function useSince(since: number) {
 }
 
 const DESTINATIONS: Array<{ value: RuleDestination; label: string; desc: string }> = [
-  { value: 'session', label: '仅本会话', desc: '会话结束后失效，不写入文件' },
-  { value: 'workspace', label: '这个工作区', desc: '只在这个工作区生效' },
-  { value: 'global', label: '所有工作区', desc: '对以后所有会话生效' },
+  { value: 'session', label: '本会话', desc: '会话结束后失效，不写入文件' },
+  { value: 'workspace', label: '本工作区', desc: '写入工作区的 .claude/settings.local.json，只在本机' },
+  { value: 'global', label: '所有工作区', desc: '写入 Claude 的用户设置，对以后所有会话生效' },
 ];
+
+/** One line of "allow, and don't ask again": a rule, a directory or the mode switch from one suggested update. */
+type Line = { on: boolean; update: number; kind: 'rule' | 'dir' | 'mode'; text: string };
+
+/** Claude Code's suggestions, one line per rule, directory and mode switch, in its order. */
+function linesOf(suggestions: SuggestedUpdate[]): Line[] {
+  return suggestions.flatMap((u, i): Line[] => (
+    u.type === 'setMode' ? [{ on: true, update: i, kind: 'mode', text: u.mode }]
+      : 'directories' in u ? u.directories.map((d) => ({ on: true, update: i, kind: 'dir', text: d }))
+        : u.rules.map((r) => ({ on: true, update: i, kind: 'rule', text: r }))
+  ));
+}
+
+/** The suggested updates with only the lines kept, rules as edited. */
+function kept(suggestions: SuggestedUpdate[], lines: Line[]): SuggestedUpdate[] {
+  return suggestions.flatMap((u, i): SuggestedUpdate[] => {
+    const own = lines.filter((l) => l.update === i && l.on);
+    if (!own.length) return [];
+    if (u.type === 'setMode') return [u];
+    if ('directories' in u) return [{ ...u, directories: own.map((l) => l.text) }];
+    return [{ ...u, rules: own.map((l) => l.text.trim()) }];
+  });
+}
+
+const VALID_RULE = /^[\w-]+(\(.*\))?$/s;
 
 export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingRequest, { kind: 'approval' }> }) {
   const t = useT();
   const waited = useSince(req.since);
   const showRaw = useApp((s) => s.prefs.showRawSdkText);
-  const [choice, setChoice] = useState<'once' | 'remember' | 'edit' | 'deny' | 'dir'>(req.defaultToNo ? 'deny' : 'once');
-  const candidates = req.outside?.candidates ?? [];
-  const [dir, setDir] = useState(candidates.find((c) => c.split('\\').length === 3) ?? candidates[0] ?? '');
-  const [rule, setRule] = useState(req.suggestions[0] ?? '');
-  const [dest, setDest] = useState<RuleDestination>('workspace');
-  const [command, setCommand] = useState(req.command ?? '');
+  const [choice, setChoice] = useState<'once' | 'always' | 'deny'>(req.defaultToNo ? 'deny' : 'once');
+  const [lines, setLines] = useState<Line[]>(() => linesOf(req.suggestions));
+  const [dest, setDest] = useState<RuleDestination>('session');
   const [message, setMessage] = useState('');
   const [rawOpen, setRawOpen] = useState(showRaw);
   const [typed, setTyped] = useState('');
+  const setLine = (i: number, p: Partial<Line>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...p } : l)));
+  const chosen = lines.filter((l) => l.on);
+  const alwaysOk = chosen.length > 0 && chosen.every((l) => l.kind !== 'rule' || VALID_RULE.test(l.text.trim()));
 
   const submit = () => {
     if (choice === 'deny') api.respondApproval(sid, req.id, { behavior: 'deny', message: message.trim() || undefined });
-    else if (choice === 'remember') api.respondApproval(sid, req.id, { behavior: 'allow', remember: { rule, destination: dest } });
-    else if (choice === 'edit') api.respondApproval(sid, req.id, { behavior: 'allow', command });
-    else if (choice === 'dir') api.respondApproval(sid, req.id, { behavior: 'allow', addDir: { dir, destination: dest } });
+    else if (choice === 'always') api.respondApproval(sid, req.id, { behavior: 'allow', always: { updates: kept(req.suggestions, lines), destination: dest } });
     else api.respondApproval(sid, req.id, { behavior: 'allow' });
   };
-  const primaryLabel = { once: t('允许'), remember: t('允许并记住'), edit: t('修改后允许'), dir: t('允许并加入目录'), deny: message.trim() ? t('拒绝并发送说明') : t('拒绝') }[choice];
+  const primaryLabel = { once: t('允许'), always: t('允许并记住'), deny: message.trim() ? t('拒绝并发送说明') : t('拒绝') }[choice];
+  const raw = { decisionReason: req.decisionReason, blockedPath: req.blockedPath, suggestions: req.suggestions, toolUseID: req.toolItemId };
 
   if (req.defaultToNo) {
     return (
@@ -64,7 +89,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
           <pre className="code-block"><span className="muted">$ </span>{req.command}</pre>
           <div className="ink2">{t(req.reason ?? '')}</div>
           <div className="row">
-            <Button variant="primary" className="focus-ring" onClick={() => api.respondApproval(sid, req.id, { behavior: 'deny', message: '用户拒绝了这次删除。' })}>{t('拒绝')}</Button>
+            <Button variant="primary" className="focus-ring" onClick={() => api.respondApproval(sid, req.id, { behavior: 'deny' })}>{t('拒绝')}</Button>
             <span className="grow" />
             <input className="input mono" style={{ width: 200 }} placeholder={t('输入 ALLOW 以启用允许')} value={typed} onChange={(e) => setTyped(e.target.value)} />
             <Button disabled={typed !== 'ALLOW'} onClick={() => api.respondApproval(sid, req.id, { behavior: 'allow' })}>{t('仅此一次允许')}</Button>
@@ -77,7 +102,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
   return (
     <div className="dpanel approval">
       <div className="dpanel-head">
-        <Icon name={req.outside ? 'folder' : 'shield'} size={20} className="ink2" />
+        <Icon name={req.blockedPath ? 'folder' : 'shield'} size={20} className="ink2" />
         <b>{t(req.title)}</b>
         {req.agent && <Chip icon="agent" tone="outline">{t('由子代理 {a} 发起', { a: req.agent })}</Chip>}
         <span className="grow" />
@@ -89,17 +114,17 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
           <span className="grow">{t(req.reason ?? '')}</span>
           <button className="link-btn" onClick={() => setRawOpen(!rawOpen)}>{rawOpen ? t('收起原文') : t('SDK 原文')}</button>
         </div>
-        {rawOpen && <pre className="code-block">{`decisionReason: "No allow rule matched ${req.tool}${req.command ? `(${req.command})` : ''}"\ntoolUseID: "${req.toolItemId}"\nrequestId: "${req.id}"`}</pre>}
+        {rawOpen && <pre className="code-block">{JSON.stringify(raw, null, 2)}</pre>}
         {req.command && (
           <div>
             <pre className="code-block"><span className="muted">$ </span><b>{req.command}</b></pre>
             {req.description && <div className="hint" style={{ fontStyle: 'italic', marginTop: 4 }}>{req.description}</div>}
           </div>
         )}
-        {req.outside && (
+        {req.blockedPath && (
           <div className="outside-path">
             <Icon name="folder" size={15} />
-            <span className="mono grow">{req.outside.path}</span>
+            <span className="mono grow">{req.blockedPath}</span>
             <Chip tone="warn">{t('工作区外')}</Chip>
           </div>
         )}
@@ -107,41 +132,31 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
         <div className={cx('opt', choice === 'once' && 'on')} onClick={() => setChoice('once')}>
           <div className="opt-row"><Radio on={choice === 'once'} onChange={() => setChoice('once')} /><span className="grow">{t('仅允许这一次')}</span></div>
         </div>
-        {req.outside && (
-          <div className={cx('opt', choice === 'dir' && 'on')} onClick={() => setChoice('dir')}>
-            <div className="opt-row"><Radio on={choice === 'dir'} onChange={() => setChoice('dir')} /><span className="grow">{t('允许，并把目录加为额外目录')}</span></div>
-            {choice === 'dir' && (
-              <div className="extra" onClick={(e) => e.stopPropagation()}>
-                <span className="ink2">{t('目录')}</span>
-                <Select size="sm" value={dir} onChange={setDir} width={340} options={candidates.map((c) => ({ value: c, label: <span className="mono">{c}</span> }))} />
-                <span className="ink2">{t('适用范围')}</span>
-                <Select<RuleDestination> size="sm" value={dest} onChange={setDest} width={260} options={DESTINATIONS.map((d) => ({ value: d.value, label: t(d.label), desc: t(d.desc) }))} />
-                <span className="hint" style={{ flexBasis: '100%' }}>{t('目录里的文件以后可以直接读取，修改按当前权限模式处理。保存后可以在「设置 → 权限规则」里管理。')}</span>
-              </div>
-            )}
-          </div>
-        )}
-        {req.suggestions.length > 0 && (
-          <div className={cx('opt', choice === 'remember' && 'on')} onClick={() => setChoice('remember')}>
-            <div className="opt-row"><Radio on={choice === 'remember'} onChange={() => setChoice('remember')} /><span className="grow">{t('允许，并且以后不再询问')}</span></div>
-            {choice === 'remember' && (
-              <div className="extra" onClick={(e) => e.stopPropagation()}>
-                <span className="ink2">{t('规则')}</span>
-                <Select size="sm" value={rule} onChange={setRule} width={260} options={req.suggestions.map((s) => ({ value: s, label: <span className="mono">{s}</span> }))} />
-                <span className="ink2">{t('适用范围')}</span>
-                <Select<RuleDestination> size="sm" value={dest} onChange={setDest} width={260} options={DESTINATIONS.map((d) => ({ value: d.value, label: t(d.label), desc: t(d.desc) }))} />
-                <span className="hint">{describeRule(rule)}</span>
-              </div>
-            )}
-          </div>
-        )}
-        {req.command && (
-          <div className={cx('opt', choice === 'edit' && 'on')} onClick={() => setChoice('edit')}>
-            <div className="opt-row"><Radio on={choice === 'edit'} onChange={() => setChoice('edit')} /><span className="grow">{t('修改命令后允许')}</span></div>
-            {choice === 'edit' && (
-              <div className="extra" onClick={(e) => e.stopPropagation()}>
-                <input className="input mono" value={command} onChange={(e) => setCommand(e.target.value)} autoFocus />
-                <span className="hint">{t('执行修改后的命令；Claude 不会被告知被修改过。')}</span>
+        {lines.length > 0 && (
+          <div className={cx('opt', choice === 'always' && 'on')} onClick={() => setChoice('always')}>
+            <div className="opt-row"><Radio on={choice === 'always'} onChange={() => setChoice('always')} /><span className="grow">{t('允许，且以后不再询问')}</span></div>
+            {choice === 'always' && (
+              <div className="always" onClick={(e) => e.stopPropagation()}>
+                <div className="hint">{t('Claude Code 建议的做法，取消勾选的不会生效：')}</div>
+                {lines.map((l, i) => (
+                  <div key={i} className={cx('always-line', !l.on && 'off')}>
+                    <Check on={l.on} onChange={(on) => setLine(i, { on })} label="" />
+                    {l.kind === 'rule' ? (
+                      <div className="grow">
+                        <input className={cx('input sm mono', l.on && !VALID_RULE.test(l.text.trim()) && 'invalid')} value={l.text} disabled={!l.on} onChange={(e) => setLine(i, { text: e.target.value })} />
+                        <div className="hint">{t(ruleVerb(req.suggestions[l.update]))} · {describeRule(l.text)}</div>
+                      </div>
+                    ) : l.kind === 'dir' ? (
+                      <span className="grow">{t(dirVerb(req.suggestions[l.update]))} <span className="mono">{l.text}</span></span>
+                    ) : (
+                      <span className="grow">{t('切换到「{m}」模式（只对本会话）', { m: t(MODE_INFO[l.text]?.label ?? l.text) })}</span>
+                    )}
+                  </div>
+                ))}
+                <div className="row">
+                  <span className="ink2">{t('规则和目录保存到')}</span>
+                  <Select<RuleDestination> size="sm" value={dest} onChange={setDest} width={240} options={DESTINATIONS.map((d) => ({ value: d.value, label: t(d.label), desc: t(d.desc) }))} />
+                </div>
               </div>
             )}
           </div>
@@ -158,10 +173,21 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
       <div className="dpanel-foot">
         <Button variant="danger-outline" icon="stop" onClick={() => api.respondApproval(sid, req.id, { behavior: 'deny', interrupt: true })}>{t('拒绝并停止本轮')}</Button>
         <span className="grow" />
-        <Button variant={choice === 'deny' ? 'danger' : 'primary'} onClick={submit} disabled={choice === 'edit' && !command.trim()}>{primaryLabel}</Button>
+        <Button variant={choice === 'deny' ? 'danger' : 'primary'} onClick={submit} disabled={choice === 'always' && !alwaysOk}>{primaryLabel}</Button>
       </div>
     </div>
   );
+}
+
+/** What a suggested rule does when added: Claude Code mostly suggests allow rules. */
+function ruleVerb(u: SuggestedUpdate): string {
+  if (u.type === 'removeRules') return '移除规则';
+  if (u.type === 'replaceRules') return '替换为规则';
+  return u.type === 'addRules' && u.behavior === 'deny' ? '添加拒绝规则' : u.type === 'addRules' && u.behavior === 'ask' ? '添加询问规则' : '添加允许规则';
+}
+
+function dirVerb(u: SuggestedUpdate): string {
+  return u.type === 'removeDirectories' ? '移除额外目录' : '加为额外目录：';
 }
 
 export function QuestionPanel({ sid, req }: { sid: string; req: Extract<PendingRequest, { kind: 'question' }> }) {

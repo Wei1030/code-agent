@@ -14,7 +14,7 @@ export const MODELS: ModelInfo[] = [
 export const EFFORT_LABEL: Record<string, string> = { low: '低', medium: '中', high: '高', xhigh: '超高', max: '最高' };
 
 export const MODE_INFO: Record<string, { label: string; desc: string; icon: string }> = {
-  default: { label: '编辑前询问', desc: '未授权的操作都先问我', icon: 'shield' },
+  default: { label: '默认模式', desc: '未授权的操作都先问我', icon: 'shield' },
   acceptEdits: { label: '自动接受编辑', desc: '工作区内的文件编辑直接执行', icon: 'pencil' },
   plan: { label: '规划模式', desc: '只探索和出计划，不改文件', icon: 'list' },
   dontAsk: { label: '不询问', desc: '未预先授权的一律拒绝', icon: 'lock' },

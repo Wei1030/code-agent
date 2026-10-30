@@ -389,3 +389,14 @@
 /* Above the loaded part of a long transcript; scrolling up to it loads the page before. */
 .earlier-line { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 12px; padding: 4px 0; }
 .transcript { overflow-anchor: none; }
+
+/* "Allow, and don't ask again": Claude Code's suggestions, each kept or not. */
+.opt .always { padding-left: 26px; display: flex; flex-direction: column; gap: 8px; cursor: default; }
+.always-line { display: flex; align-items: flex-start; gap: 8px; }
+.always-line > .check { margin-top: 5px; }
+.always-line.off { color: var(--muted); }
+.always-line .input { width: 100%; }
+.always-line .hint { margin-top: 2px; }
+.input.invalid { border-color: var(--crit); }
+.more-requests { display: flex; align-items: center; gap: 8px; color: var(--warn-ink); font-size: 12.5px; padding: 0 2px 6px; }
+.opt .always .row > .ink2 { white-space: nowrap; flex: none; }

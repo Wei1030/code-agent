@@ -1,9 +1,7 @@
 /**
  * Permission rules as Claude Code writes them (`Tool` or `Tool(specifier)`): parsing, a plain-language
- * description, and a simplified version of Claude Code's matching for previews and the mock.
- * The real decision is always made by Claude Code; this only explains it.
+ * description and building one in the rule editor. Whether a rule applies is Claude Code's decision only.
  */
-import type { PermissionRule } from './types';
 
 export type RuleKind = 'bash' | 'read' | 'edit' | 'web' | 'mcp' | 'agent' | 'skill' | 'raw';
 
@@ -65,75 +63,4 @@ export function buildRule(kind: RuleKind, a: string, b = '', bashMode: 'prefix' 
     case 'skill': return v ? `Skill(${v})` : 'Skill';
     default: return v;
   }
-}
-
-function globToRegex(glob: string, segment: boolean): RegExp {
-  let re = '';
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i];
-    if (c === '*' && glob[i + 1] === '*') { re += '.*'; i++; }
-    else if (c === '*') re += segment ? '[^/]*' : '.*';
-    else re += c.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-  }
-  return new RegExp(`^${re}$`);
-}
-
-function matchCommand(spec: string, cmd: string): boolean {
-  const s = spec.replace(/:\*$/, ' *');
-  // "ls *" also matches the bare "ls" when the trailing * is the only wildcard.
-  if (s.endsWith(' *') && !s.slice(0, -2).includes('*') && cmd === s.slice(0, -2)) return true;
-  return globToRegex(s, false).test(cmd);
-}
-
-function matchPath(spec: string, path: string): boolean {
-  const p = path.replace(/\\/g, '/').replace(/^\.\//, '');
-  let pat = spec;
-  if (pat.startsWith('//')) return globToRegex(pat.slice(1), true).test(p.startsWith('/') ? p : `/${p}`);
-  if (pat.startsWith('/') || pat.startsWith('./')) pat = pat.replace(/^\.?\//, '');
-  else if (!pat.includes('/')) pat = `**/${pat}`; // bare names match at any depth
-  if (pat.endsWith('/')) pat += '**';
-  return globToRegex(pat, true).test(p) || (pat.startsWith('**/') && globToRegex(pat.slice(3), true).test(p));
-}
-
-/** Does `rule` match one call? `input` is the command, file path or URL. */
-export function matchRule(rule: string, tool: string, input = ''): boolean {
-  const { tool: rt, spec } = parseRule(rule);
-  if (rt.startsWith('mcp__') || tool.startsWith('mcp__')) return globToRegex(rt, false).test(tool);
-  const t = tool === 'Write' || tool === 'NotebookEdit' ? 'Edit' : tool;
-  if (rt !== t) return false;
-  if (spec === null || spec === '*' || spec === '') return true;
-  if (t === 'Bash' || t === 'PowerShell') return matchCommand(spec, input.trim());
-  if (t === 'Read' || t === 'Edit') return matchPath(spec, input.trim());
-  if (t === 'WebFetch') {
-    const host = input.trim().replace(/^https?:\/\//, '').replace(/[/:].*$/, '');
-    return spec.startsWith('domain:') ? globToRegex(spec.slice(7), true).test(host) : false;
-  }
-  return spec === input.trim();
-}
-
-/** Split a shell command on the operators Claude Code recognises (&&, ||, ;, |, &, newline). */
-export function splitCommand(cmd: string): string[] {
-  return cmd.split(/&&|\|\||;|\|&|\||&|\n/).map((s) => s.trim()).filter(Boolean);
-}
-
-export type Outcome =
-  | { kind: 'deny' | 'ask' | 'allow'; rule: PermissionRule; part?: string }
-  | { kind: 'none'; unmatched?: string };
-
-/**
- * Deny, then ask, then allow; the first match decides. For a compound command a deny or ask rule
- * applies when any part matches, and an allow rule only approves when every part is allowed.
- */
-export function evaluate(rules: PermissionRule[], tool: string, input = ''): Outcome {
-  const parts = tool === 'Bash' || tool === 'PowerShell' ? splitCommand(input) : [input];
-  for (const kind of ['deny', 'ask'] as const) {
-    for (const part of parts) {
-      const r = rules.find((x) => x.behavior === kind && matchRule(x.rule, tool, part));
-      if (r) return { kind, rule: r, part: parts.length > 1 ? part : undefined };
-    }
-  }
-  const allows = parts.map((part) => rules.find((x) => x.behavior === 'allow' && matchRule(x.rule, tool, part)));
-  const missing = parts.findIndex((_, i) => !allows[i]);
-  if (missing < 0 && allows[0]) return { kind: 'allow', rule: allows[0] };
-  return { kind: 'none', unmatched: parts.length > 1 && missing >= 0 ? parts[missing] : undefined };
 }

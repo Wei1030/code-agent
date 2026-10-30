@@ -72,7 +72,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const t = useT();
   const sid = rt.id;
   const app = useApp();
-  const profile = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
   const [text, setText] = useState(() => drafts.get(sid)?.text ?? storedText(sid));
   const [atts, setAtts] = useState<Attachment[]>(() => drafts.get(sid)?.atts ?? []);
   const [refs, setRefs] = useState<SessionRef[]>(() => drafts.get(sid)?.refs ?? []);
@@ -285,10 +284,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   const ctxPct = rt.context.max ? (ctxUsed / rt.context.max) * 100 : 0;
   const pickMode = (m: PermissionMode) => {
     if (m !== 'bypassPermissions') { api.setMode(sid, m); return; }
-    if (!profile.allowBypass) {
-      app.toast(t('当前配置方案未允许「跳过权限检查」。请先在设置 → 配置方案中开启。'), 'warn');
-      return;
-    }
     app.ask({
       title: t('切换到「跳过权限检查」？'),
       body: t('所有工具调用都不再询问，直接执行（拒绝规则仍然生效）。只建议在隔离的环境中使用。'),
@@ -369,7 +364,6 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
           onChange={pickMode}
           options={(Object.keys(MODE_INFO) as PermissionMode[]).map((m) => ({
             value: m, icon: MODE_INFO[m].icon, label: t(MODE_INFO[m].label), desc: t(MODE_INFO[m].desc),
-            right: m === 'bypassPermissions' && !profile.allowBypass ? <Icon name="lock" size={13} /> : undefined,
           }))} />
         <div className="ctx-meter" title={t('上下文 {u} / {m}，点击展开或收起明细', { u: fmtTokens(ctxUsed), m: fmtTokens(rt.context.max) })}
           onClick={() => app.setInspector(app.inspector.open && app.inspector.tab === 'context' ? { open: false } : { open: true, tab: 'context' })}>

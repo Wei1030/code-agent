@@ -216,7 +216,7 @@ function ApprovalsInbox() {
     .map((r) => ({ rt: r, sum: sessions.find((s) => s.id === r.id) }))
     .filter((x) => x.sum)
     .sort((a, b) => a.rt.request!.since - b.rt.request!.since);
-  const count = pending.length + held.length + decisions.length;
+  const count = pending.reduce((n, p) => n + 1 + (p.rt.moreRequests ?? 0), 0) + held.length + decisions.length;
   useEffect(() => {
     document.title = count > 0 ? `(${count}) Code Agent` : 'Code Agent';
   }, [count]);
@@ -231,7 +231,7 @@ function ApprovalsInbox() {
         {count === 0 && <div className="empty"><b>{t('没有待处理的请求')}</b>{t('审批、提问、计划审阅、待放行的会话消息和要你决定的代码审核会出现在这里')}</div>}
         {pending.map(({ rt, sum }) => {
           const req = rt.request!;
-          const what = req.kind === 'approval' ? `${req.tool} · ${req.command ?? req.diff?.path ?? req.outside?.path ?? ''}`
+          const what = req.kind === 'approval' ? `${req.tool} · ${req.command ?? req.diff?.path ?? req.blockedPath ?? ''}`
             : req.kind === 'question' ? t('Claude 有问题要问你')
               : req.kind === 'elicitation' ? t('{s} 需要你提供信息', { s: req.server })
                 : t('计划待审阅');
@@ -241,6 +241,7 @@ function ApprovalsInbox() {
               <div className="grow">
                 <div className="t ellipsis">{sum!.title}</div>
                 <div className="d ellipsis">{what}</div>
+                {(rt.moreRequests ?? 0) > 0 && <div className="d">{t('后面还有 {n} 个请求', { n: rt.moreRequests ?? 0 })}</div>}
                 <div className="w">{rt.id === currentId ? t('正在查看') : t('已等待 {t}', { t: relTime(req.since).replace('刚刚', '不到 1 分钟') })}</div>
               </div>
             </div>

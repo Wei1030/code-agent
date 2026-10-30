@@ -3,13 +3,13 @@
  * way when the user runs `claude` in a terminal. Two writable scopes (all workspaces / one
  * workspace on this machine) plus read-only rules committed with the repository.
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { PermissionRule } from '../../api/types';
 import { Icon } from '../../components/Icon';
 import { Button, Chip, Seg, Select } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { NoWorkspace, useWorkspaceChoice } from '../../components/NoWorkspace';
-import { buildRule, describeRule, evaluate, type RuleKind } from '../../lib/rules';
+import { buildRule, describeRule, type RuleKind } from '../../lib/rules';
 import { uid } from '../../lib/util';
 import { useT } from '../../lib/i18n';
 
@@ -31,13 +31,6 @@ const KINDS: Array<{ value: RuleKind; label: string; field: string; placeholder:
   { value: 'raw', label: '直接写规则', field: '规则', placeholder: 'Bash(git log *)', hint: '格式：工具名(匹配内容)' },
 ];
 
-const TRY_TOOLS = [
-  { value: 'Bash', label: '命令', placeholder: 'git status && npm test' },
-  { value: 'Edit', label: '修改文件', placeholder: 'src/cart/timer.ts' },
-  { value: 'Read', label: '读取文件', placeholder: '.env.local' },
-  { value: 'WebFetch', label: '抓取网页', placeholder: 'https://pastebin.com/abc' },
-];
-
 export function Permissions() {
   const t = useT();
   const app = useApp();
@@ -48,7 +41,6 @@ export function Permissions() {
   const own = app.rules.filter((r) => (scope === 'global' ? r.scope === 'global' : r.scope === 'workspace' && r.workspaceId === wsId));
   const repo = scope === 'workspace' ? app.rules.filter((r) => r.scope === 'repo' && r.workspaceId === wsId) : [];
   const globalCount = app.rules.filter((r) => r.scope === 'global').length;
-  const effective = scope === 'global' ? own : [...app.rules.filter((r) => r.scope === 'global'), ...own, ...repo];
   const file = scope === 'global' ? '~/.claude/settings.json' : `${ws?.path ?? ''}\\.claude\\settings.local.json`;
 
   const add = (behavior: Behavior, rule: string) => {
@@ -107,12 +99,10 @@ export function Permissions() {
             </div>
           )}
           <div className="hint" style={{ marginTop: 10 }}>
-            {t('审批时选「以后不再询问」或「把目录加为额外目录」也会添加到这里；选「仅本会话」的不写入文件，会话结束就失效。')}
+            {t('审批时选「允许，且以后不再询问」并保存到这个工作区或所有工作区的规则和目录，也会出现在这里；保存到「本会话」的不写入文件，会话结束就失效。')}
           </div>
         </div>
 
-        <TryIt rules={effective} dirs={scope === 'workspace' && ws ? [ws.path, ...app.dirs.filter((d) => d.scope === 'global' || (d.scope === 'workspace' && d.workspaceId === wsId)).map((d) => d.path)] : null}
-          scopeLabel={scope === 'global' ? t('全局规则') : t('全局 + {w} 的规则', { w: ws?.name ?? '' })} />
       </div>
       )}
     </>
@@ -189,53 +179,6 @@ function RuleEditor({ onAdd }: { onAdd: (behavior: Behavior, rule: string) => vo
 }
 
 const isAbsolute = (p: string) => /^[a-z]:[\\/]|^\\\\|^\//i.test(p.trim());
-const within = (p: string, dir: string) => {
-  const a = p.trim().replace(/\//g, '\\').toLowerCase();
-  const d = dir.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
-  return a === d || a.startsWith(`${d}\\`);
-};
-
-function TryIt({ rules, dirs, scopeLabel }: { rules: PermissionRule[]; dirs: string[] | null; scopeLabel: string }) {
-  const t = useT();
-  const [tool, setTool] = useState('Bash');
-  const [input, setInput] = useState('');
-  const cur = TRY_TOOLS.find((x) => x.value === tool)!;
-  const o = useMemo(() => (input.trim() ? evaluate(rules, tool, input) : null), [rules, tool, input]);
-  const verdict = o && (o.kind === 'deny'
-    ? { tone: 'crit' as const, text: t('禁止') }
-    : o.kind === 'ask' ? { tone: 'warn' as const, text: t('先问你') }
-      : o.kind === 'allow' ? { tone: 'good' as const, text: t('直接执行') }
-        : { tone: 'outline' as const, text: t('没有命中规则') });
-
-  return (
-    <div className="panel" style={{ alignSelf: 'start' }}>
-      <div className="panel-head"><h3>{t('试一试')}</h3><span className="sub">{scopeLabel}</span></div>
-      <div className="panel-body col">
-        <Seg value={tool} onChange={(v) => { setTool(v); setInput(''); }} items={TRY_TOOLS.map((x) => ({ value: x.value, label: t(x.label) }))} />
-        <input className="input mono" placeholder={cur.placeholder} value={input} onChange={(e) => setInput(e.target.value)} />
-        {o && verdict && (
-          <div className="try-result">
-            <Chip tone={verdict.tone}>{verdict.text}</Chip>
-            {o.kind !== 'none' ? (
-              <div className="hint">
-                {t('命中规则')} <span className="mono">{o.rule.rule}</span>
-                {o.part && <> · {t('命中的部分：')}<span className="mono">{o.part}</span></>}
-              </div>
-            ) : (
-              <div className="hint">
-                {o.unmatched && <>{t('「{p}」没有允许规则，所以整条命令不能直接执行。', { p: o.unmatched })} </>}
-                {(tool === 'Read' || tool === 'Edit') && isAbsolute(input) && dirs && !dirs.some((d) => within(input, d))
-                  ? t('这个路径在工作区和额外目录之外：读取和修改都会先问你，那时可以顺手把目录加为额外目录。')
-                  : t('交给权限模式：「编辑前询问」会问你；「自动接受编辑」会直接修改工作区（含额外目录）内的文件；只读命令和工作区内的读取不需要询问。')}
-              </div>
-            )}
-          </div>
-        )}
-        <div className="hint">{t('这里按 Claude Code 的规则做近似判断，实际以 Claude Code 为准。')}</div>
-      </div>
-    </div>
-  );
-}
 
 /** Directories outside the workspace that Claude may use like the workspace itself. */
 function DirsPanel({ scope, wsId, wsPath }: { scope: 'global' | 'workspace'; wsId: string; wsPath: string }) {

@@ -3,15 +3,15 @@
  * (AskUserQuestion), plan review (ExitPlanMode) and MCP elicitations. Each waits for the user's
  * answer in the UI.
  */
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { ElicitationRequest, ElicitationResult, PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk';
 import type {
-  ApprovalAnswer, ElicitationAnswer, ElicitationField, PendingRequest, PlanAnswer, PlanDoc, Question, QuestionAnswer, RuleDestination, ToolItem,
+  ApprovalAnswer, ElicitationAnswer, ElicitationField, PendingRequest, PermissionMode, PlanAnswer, PlanDoc, Question, QuestionAnswer, RuleDestination,
+  SuggestedUpdate, ToolItem,
 } from '@code-agent/shared/types';
 import { parseRule } from '@code-agent/shared/rules';
 import { app, update } from '../state';
-import { addItem, emit, findItem, patchItem, rt, summary } from './registry';
+import { addItem, emit, findItem, patchItem, rt } from './registry';
 import { waitForUser, type Live } from './live';
 import { proposedDiff, rel, toolDetail, toolName, mcpParts } from './describe';
 import { cwdOf } from './options';
@@ -25,15 +25,23 @@ function ruleString(r: { toolName: string; ruleContent?: string }) {
   return r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName;
 }
 
-/** Parent directories of a path, nearest first, for "allow and add the directory". */
-function parents(p: string): string[] {
-  const out: string[] = [];
-  let d = path.dirname(p);
-  while (d && d !== path.dirname(d)) {
-    out.push(d);
-    d = path.dirname(d);
-  }
-  return out.slice(0, 4);
+function ruleValue(rule: string) {
+  const pr = parseRule(rule);
+  return { toolName: pr.tool, ...(pr.spec !== null ? { ruleContent: pr.spec } : {}) };
+}
+
+/** Claude Code's suggestions as the UI shows them: the same updates, rules as text. */
+function suggested(u: PermissionUpdate): SuggestedUpdate {
+  if (u.type === 'addRules' || u.type === 'replaceRules' || u.type === 'removeRules') return { type: u.type, rules: u.rules.map(ruleString), behavior: u.behavior, destination: u.destination };
+  if (u.type === 'addDirectories' || u.type === 'removeDirectories') return { type: u.type, directories: u.directories, destination: u.destination };
+  return { type: 'setMode', mode: u.mode, destination: u.destination };
+}
+
+/** Back to the SDK's update, kept where the user chose; a mode change is for the session. */
+function toUpdate(u: SuggestedUpdate, dest: RuleDestination): PermissionUpdate {
+  if (u.type === 'setMode') return { type: 'setMode', mode: u.mode as Extract<PermissionUpdate, { type: 'setMode' }>['mode'], destination: 'session' };
+  if ('directories' in u) return { type: u.type, directories: u.directories, destination: DEST[dest] };
+  return { type: u.type, rules: u.rules.map(ruleValue), behavior: u.behavior, destination: DEST[dest] };
 }
 
 function ensureToolItem(l: Live, id: string, name: string, input: Input): ToolItem {
@@ -45,63 +53,34 @@ function ensureToolItem(l: Live, id: string, name: string, input: Input): ToolIt
   return item;
 }
 
-/** Rules to offer under "don't ask again" when Claude Code suggests none. */
-function suggestRules(name: string, input: Input, cwd: string): string[] {
-  if ((name === 'Bash' || name === 'PowerShell') && typeof input.command === 'string') {
-    const cmd = input.command.trim();
-    if (/[;&|<>`$\n]/.test(cmd)) return [];
-    const words = cmd.split(/\s+/);
-    return [...new Set([`${name}(${cmd})`, ...(words.length > 2 ? [`${name}(${words.slice(0, 2).join(' ')} *)`] : []), ...(words.length > 1 ? [`${name}(${words[0]} *)`] : [])])];
-  }
-  if ((name === 'Edit' || name === 'Write' || name === 'NotebookEdit') && typeof (input.file_path ?? input.notebook_path) === 'string') {
-    const r = rel(cwd, String(input.file_path ?? input.notebook_path));
-    const dir = path.posix.dirname(r.replace(/\\/g, '/'));
-    return path.isAbsolute(r) ? ['Edit'] : [dir === '.' ? 'Edit(/*)' : `Edit(/${dir}/**)`, 'Edit'];
-  }
-  if (name === 'WebFetch' && typeof input.url === 'string') {
-    try {
-      return [`WebFetch(domain:${new URL(input.url).hostname})`];
-    } catch {
-      return [];
-    }
-  }
-  const mcp = mcpParts(name);
-  if (mcp) return [name, `mcp__${mcp.server}`];
-  return [name];
-}
-
 export async function canUseTool(l: Live, name: string, input: Input, o: CanUseOpts): Promise<PermissionResult> {
   if (name === 'AskUserQuestion') return askQuestion(l, input, o);
   if (name === 'ExitPlanMode') return reviewPlan(l, input, o);
   const item = ensureToolItem(l, o.toolUseID, name, input);
   const cwd = cwdOf(l.sid);
   const command = typeof input.command === 'string' ? input.command : undefined;
-  const file = typeof input.file_path === 'string' ? input.file_path : undefined;
+  const file = typeof input.file_path === 'string' ? input.file_path : typeof input.path === 'string' ? input.path : undefined;
   const diff = name === 'Edit' || name === 'Write' ? proposedDiff(name, input, cwd) : undefined;
   const mcp = mcpParts(name);
-  const outside = o.blockedPath ? { path: o.blockedPath, candidates: parents(o.blockedPath) } : undefined;
-  const title = outside
-    ? (name === 'Read' || name === 'Grep' || name === 'Glob' ? '允许读取工作区外的文件？' : '允许修改工作区外的文件？')
-    : command ? '允许执行这条命令？'
-      : diff ? `允许修改 ${diff.path}？`
-        : mcp ? `允许调用 ${mcp.server} 的 ${mcp.tool}？`
-          : name === 'WebFetch' ? `允许访问 ${String(input.url ?? '')}？`
+  const title = command ? '允许执行这条命令？'
+    : diff ? `允许修改 ${diff.path}？`
+      : mcp ? `允许调用 ${mcp.server} 的 ${mcp.tool}？`
+        : name === 'WebFetch' ? `允许访问 ${String(input.url ?? '')}？`
+          : file && (name === 'Read' || name === 'Grep' || name === 'Glob') ? `允许读取 ${file}？`
             : `允许使用 ${name}？`;
-  const ws = app.workspaces.find((w) => w.id === summary(l.sid)?.workspaceId);
-  const reason = outside
-    ? `这个位置不在工作区 ${ws?.path ?? cwd} 内，也不在已添加的额外目录里。`
-    : o.decisionReason ? `Claude Code 的判断：${o.decisionReason}` : '没有匹配的允许规则；当前会话对未授权的操作会先询问。';
-  const fromCli = (o.suggestions ?? []).flatMap((s) => (s.type === 'addRules' ? s.rules.map(ruleString) : []));
-  const suggestions = o.suppressAlwaysAllowRule || o.defaultToNo ? [] : fromCli.length ? fromCli : suggestRules(name, input, cwd);
+  const reason = o.decisionReason ? `Claude Code 的判断：${o.decisionReason}` : '没有匹配的允许规则；当前会话对未授权的操作会先询问。';
   const agentType = o.agentID ? l.taskTypes.get(o.agentID) ?? '子代理' : undefined;
+  // Claude Code says when a lasting rule would grant more than this one call: then none is offered.
+  const suggestions = o.suppressAlwaysAllowRule || o.defaultToNo ? [] : (o.suggestions ?? []).map(suggested);
   const req: PendingRequest = {
     kind: 'approval', id: randomUUID(), toolItemId: item.id, tool: toolName(name), title, reason,
     ...(command ? { command } : {}), ...(typeof input.description === 'string' ? { description: input.description } : {}),
-    ...(diff ? { diff } : file && !diff && name !== 'Read' ? {} : {}),
+    ...(diff ? { diff } : {}),
     ...(agentType ? { agent: agentType } : {}),
-    suggestions: [...new Set(suggestions)],
+    suggestions,
     ...(o.defaultToNo ? { defaultToNo: true } : {}),
-    ...(outside ? { outside } : {}),
+    ...(o.decisionReason ? { decisionReason: o.decisionReason } : {}),
+    ...(o.blockedPath ? { blockedPath: o.blockedPath } : {}),
     since: Date.now(),
   };
   patchItem(l.sid, item.id, { status: 'waiting', right: '等待审批' });
@@ -116,27 +95,23 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
     patchItem(l.sid, item.id, { status: 'denied', right: undefined, provenance: '已被你拒绝', ...(a.message ? { denialMessage: a.message } : {}) });
     return { behavior: 'deny', message: a.message || 'The user denied this action.', interrupt: !!a.interrupt, toolUseID: o.toolUseID };
   }
-  const updates: PermissionUpdate[] = [];
-  if (a.remember) {
-    const pr = parseRule(a.remember.rule);
-    updates.push({ type: 'addRules', rules: [{ toolName: pr.tool, ...(pr.spec !== null ? { ruleContent: pr.spec } : {}) }], behavior: 'allow', destination: DEST[a.remember.destination] });
-  }
-  if (a.addDir) {
-    updates.push({ type: 'addDirectories', directories: [a.addDir.dir], destination: DEST[a.addDir.destination] });
-    if (a.addDir.destination === 'session') {
-      update('dirs', (ds) => [...ds, { id: randomUUID(), path: a.addDir!.dir, scope: 'session', sessionId: l.sid }]);
+  const kept = a.always?.updates ?? [];
+  const updates = kept.map((u) => toUpdate(u, a.always!.destination));
+  // Code Agent's own lists follow what Claude Code now has.
+  for (const u of kept) {
+    if (u.type === 'addDirectories' && a.always!.destination === 'session') {
+      update('dirs', (ds) => [...ds, ...u.directories.filter((d) => !ds.some((x) => x.scope === 'session' && x.sessionId === l.sid && x.path === d)).map((d) => ({ id: randomUUID(), path: d, scope: 'session' as const, sessionId: l.sid }))]);
     }
+    if (u.type === 'setMode') emit(l.sid, { t: 'settings', patch: { mode: u.mode as PermissionMode } });
   }
-  const edited = a.command && command !== undefined && a.command !== command;
-  const provenance = a.addDir ? `已加入额外目录：${a.addDir.dir}` : a.remember ? `已记住：${a.remember.rule}` : edited ? '已由你修改后批准' : '已由你批准';
-  patchItem(l.sid, item.id, { status: 'running', right: undefined, provenance, ...(edited ? { detail: a.command } : {}) });
+  patchItem(l.sid, item.id, { status: 'running', right: undefined, provenance: updates.length ? '已由你批准，以后不再询问' : '已由你批准' });
   if (updates.some((u) => u.destination !== 'session')) {
-    // Claude Code writes the settings file; read the rules back once it has.
+    // Claude Code writes the settings file; read the rules and directories back once it has.
     setTimeout(() => void import('../claude/permissions').then((m) => m.reloadRules()), 600);
   }
   return {
     behavior: 'allow',
-    updatedInput: edited ? { ...input, command: a.command } : input,
+    updatedInput: input,
     ...(updates.length ? { updatedPermissions: updates } : {}),
     toolUseID: o.toolUseID,
   };

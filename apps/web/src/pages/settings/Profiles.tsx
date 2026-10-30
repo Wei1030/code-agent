@@ -104,14 +104,11 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
               <div className="form-grid">
                 <Field label={t('默认权限模式')}>
                   <Select<PermissionMode> value={draft.mode} onChange={(v) => set({ mode: v })}
-                    options={(Object.keys(MODE_INFO) as PermissionMode[]).map((m) => ({ value: m, icon: MODE_INFO[m].icon, label: t(MODE_INFO[m].label), desc: t(MODE_INFO[m].desc), disabled: m === 'bypassPermissions' && !draft.allowBypass }))} />
+                    options={(Object.keys(MODE_INFO) as PermissionMode[]).map((m) => ({ value: m, icon: MODE_INFO[m].icon, label: t(MODE_INFO[m].label), desc: t(MODE_INFO[m].desc) }))} />
                 </Field>
                 <Field label={t('需要审批时')}>
                   <Seg value={draft.prompts} onChange={(v) => set({ prompts: v })} items={[{ value: 'host', label: t('在界面中询问我') }, { value: 'none', label: t('一律拒绝') }]} />
                 </Field>
-              </div>
-              <div style={{ margin: '10px 0' }}>
-                <Toggle on={draft.allowBypass} onChange={(v) => set({ allowBypass: v, mode: !v && draft.mode === 'bypassPermissions' ? 'default' : draft.mode })} label={t('允许切换到「跳过权限检查」')} hint={t('只建议在容器或虚拟机中开启')} />
               </div>
               <div className="hint">{t('哪些操作直接执行、哪些先问你、哪些禁止，在')} <Link to="/settings/permissions">{t('权限规则')}</Link> {t('里设置。')}</div>
             </Section>
@@ -208,7 +205,7 @@ const REVIEW_TOOLS = [
 ];
 
 const BUILT_IN_RULES = [
-  '只读：能读文件、搜索、运行只读命令（git diff / log / show / status、rg、ls 等）；其他命令由 Code Agent 直接拒绝，不会问你。',
+  '只读：能读文件、搜索、运行只读命令（git diff / log / show / status、rg、ls 等）。审核者在「不询问」模式下运行，哪些命令算只读由 Claude Code 判断，其他的直接拒绝，不会问你。',
   '看不到作者会话的对话，只拿到改动范围、改动目标，以及之前各轮的意见和作者的答复。',
   '前 3 轮全局审核：看整个改动，追查调用方、数据流、配置、测试和文档受到的影响；之后的轮次只看上一轮之后的修改，确认意见是否解决。',
   '只报正确性问题，不管风格；每条意见标出严重程度（阻断 / 重要 / 次要）、文件和行号。没有阻断和重要问题就算通过。',
@@ -268,7 +265,7 @@ function ReviewEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
         </Section>
 
         <Section title={t('项目说明')}>
-          <Toggle on={draft.claudeMd} onChange={(v) => set({ claudeMd: v })} label={t('读取 CLAUDE.md')} hint={t('项目的约定和命令通常写在这里，审核时有用')} />
+          <Toggle on={draft.claudeMd} onChange={(v) => set({ claudeMd: v })} label={t('读取项目的 CLAUDE.md')} hint={t('项目的约定和命令通常写在这里，审核时有用。只读仓库里的说明和设置，不读你个人和本机的规则。')} />
         </Section>
 
         <Section title={t('审核要求')} right={<button className="link-btn" onClick={() => setShowRules(!showRules)}>{showRules ? t('收起内置规则') : t('查看内置规则')}</button>}>

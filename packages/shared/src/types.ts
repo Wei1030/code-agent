@@ -241,10 +241,13 @@ export type PendingRequest =
     description?: string;
     diff?: { path: string; lines: string[] };
     agent?: string;
-    suggestions: string[];
+    /** Claude Code's suggestions for not being asked again, as it gave them and in its order. */
+    suggestions: SuggestedUpdate[];
     defaultToNo?: boolean;
-    /** The file is outside the workspace and its extra directories; `candidates` are directories that would cover it. */
-    outside?: { path: string; candidates: string[] };
+    /** What Claude Code said about this ask, as it said it. */
+    decisionReason?: string;
+    /** The path outside the working directories that made Claude Code ask. */
+    blockedPath?: string;
     since: number;
   }
   | { kind: 'question'; id: string; toolItemId: string; questions: Question[]; since: number }
@@ -268,8 +271,21 @@ export type PendingRequest =
 /** Where "allow and don't ask again" keeps the rule. Maps to the SDK's session / localSettings / userSettings. */
 export type RuleDestination = 'session' | 'workspace' | 'global';
 
+/** A permission update Claude Code suggests with an ask (the SDK's PermissionUpdate; rules as `Tool(spec)` text). */
+export type SuggestedUpdate =
+  | { type: 'addRules' | 'replaceRules' | 'removeRules'; rules: string[]; behavior: 'allow' | 'deny' | 'ask'; destination: string }
+  | { type: 'addDirectories' | 'removeDirectories'; directories: string[]; destination: string }
+  | { type: 'setMode'; mode: string; destination: string };
+
+/** What "allow, and don't ask again" applies: the suggested updates the user kept, rules as edited. */
+export interface AlwaysAllow {
+  updates: SuggestedUpdate[];
+  /** Where the rules and directories are kept; a mode change is for the session. */
+  destination: RuleDestination;
+}
+
 export type ApprovalAnswer =
-  | { behavior: 'allow'; command?: string; remember?: { rule: string; destination: RuleDestination }; addDir?: { dir: string; destination: RuleDestination } }
+  | { behavior: 'allow'; always?: AlwaysAllow }
   | { behavior: 'deny'; message?: string; interrupt?: boolean };
 
 export interface QuestionAnswer {
@@ -384,6 +400,8 @@ export interface SessionRuntime {
   turn: number;
   tokens: number;
   info?: SessionInfo;
+  /** Requests waiting behind `request` (Claude Code can ask several things at once). */
+  moreRequests?: number;
   /** Sent to the web app: the items before the ones it has (a transcript comes a page at a time). */
   earlier?: EarlierItems;
 }
@@ -402,7 +420,8 @@ export type SessionEvent =
   | { t: 'item.remove'; id: string }
   | { t: 'items.reset'; items: Item[] }
   | { t: 'state'; state: SessionState }
-  | { t: 'request'; request: PendingRequest | null }
+  /** more: how many other requests wait behind this one. */
+  | { t: 'request'; request: PendingRequest | null; more?: number }
   | { t: 'queue'; queue: QueuedMessage[] }
   | { t: 'tasks'; tasks: Task[] }
   | { t: 'background'; background: BgTask[] }
@@ -420,7 +439,6 @@ export interface Profile {
   name: string;
   desc: string;
   isDefault?: boolean;
-  allowBypass: boolean;
   model: string;
   effort: Effort;
   mode: PermissionMode;

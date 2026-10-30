@@ -10,12 +10,11 @@ import { query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, t
 import type {
   AgentRun, Attachment, BgTask, FileChange, Item, PeerOrigin, PendingRequest, SessionRef, Task, ToolItem,
 } from '@code-agent/shared/types';
-import { evaluate } from '@code-agent/shared/rules';
 import { app, update } from '../state';
 import { broadcast } from '../hub';
 import { addItem, emit, findItem, patchItem, patchSummary, raw, rt, summary } from './registry';
 import { InputQueue } from './input';
-import { agentRow, BACKGROUNDABLE, EDIT_TOOLS, READ_ONLY, toolDetail, toolName, toolResult } from './describe';
+import { agentRow, BACKGROUNDABLE, READ_ONLY, toolDetail, toolName, toolResult } from './describe';
 import { buildOptions } from './options';
 import { contextFrom } from './context';
 import { recordUsage, recordLimit } from '../usage';
@@ -69,6 +68,8 @@ export interface Live {
   closing: boolean;
   turn: Turn | null;
   pending: Map<string, (a: unknown) => void>;
+  /** What Claude Code waits on the user for, oldest first: it can ask several things at once (parallel calls, subagents). */
+  asks: PendingRequest[];
   tools: Map<string, ToolTrack>;
   streams: Map<string, StreamItem[]>;
   /** The group still open (reads, or task-list updates) while no text or other tool came since. */
@@ -217,7 +218,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   const q = query({ prompt: input, options: opts.options });
   let endedResolve!: () => void;
   l = {
-    sid, q, input, cwd: opts.cwd, closing: false, turn: null, pending: new Map(), tools: new Map(), streams: new Map(), group: null,
+    sid, q, input, cwd: opts.cwd, closing: false, turn: null, pending: new Map(), asks: [], tools: new Map(), streams: new Map(), group: null,
     taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
   };
   lives.set(sid, l);
@@ -361,7 +362,7 @@ export function sendTurn(sid: string, m: Outgoing): string {
   l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false, meta: m.meta };
   for (const fn of sendFns) fn(sid, m);
   l.group = null;
-  emit(sid, { t: 'state', state: 'running' });
+  emit(sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
   emit(sid, { t: 'status', status: { kind: 'working', label: '正在思考' } });
   patchSummary(sid, { lastActive: Date.now() });
   l.input.push(userMessage(m, id));
@@ -415,7 +416,10 @@ export async function interruptTurn(sid: string) {
 function closeOpenItems(l: Live, right: string) {
   const r = rt(l.sid);
   if (!r) return;
+  // A call still waiting for the user (a background subagent's, after the turn ended) stays open.
+  const waiting = new Set(l.asks.map((a) => ('toolItemId' in a ? a.toolItemId : '')));
   for (const it of r.items) {
+    if (waiting.has(it.id)) continue;
     if ((it.kind === 'text' || it.kind === 'thinking') && it.streaming) patchItem(l.sid, it.id, { streaming: false, ...(it.kind === 'text' ? { aborted: true } : {}) });
     if (it.kind === 'tool' && (it.status === 'running' || it.status === 'waiting') && !it.background) patchItem(l.sid, it.id, { status: 'error', right, backgroundable: false });
     if (it.kind === 'toolgroup') for (const t of it.tools) if (t.status === 'running') patchItem(l.sid, t.id, { status: 'error', right });
@@ -424,9 +428,16 @@ function closeOpenItems(l: Live, right: string) {
 
 // ------------------------------------------------------------------ requests
 
+/** The UI shows the oldest request and how many more wait; the session waits on the user while any does. */
+function showAsks(l: Live) {
+  const head = l.asks[0] ?? null;
+  emit(l.sid, { t: 'request', request: head, more: Math.max(0, l.asks.length - 1) });
+  emit(l.sid, { t: 'state', state: head ? 'requires_action' : l.turn ? 'running' : 'idle' });
+}
+
 export function waitForUser<T>(l: Live, req: PendingRequest): Promise<T> {
-  emit(l.sid, { t: 'request', request: req });
-  emit(l.sid, { t: 'state', state: 'requires_action' });
+  l.asks.push(req);
+  showAsks(l);
   const sum = summary(l.sid);
   if (sum && !sum.jobId) {
     broadcast({ t: 'notify', n: {
@@ -437,8 +448,8 @@ export function waitForUser<T>(l: Live, req: PendingRequest): Promise<T> {
   }
   return new Promise<T>((resolve) => {
     l.pending.set(req.id, (a) => {
-      emit(l.sid, { t: 'request', request: null });
-      if (l.turn) emit(l.sid, { t: 'state', state: 'running' });
+      l.asks = l.asks.filter((x) => x.id !== req.id);
+      showAsks(l);
       resolve(a as T);
     });
   });
@@ -477,7 +488,8 @@ function ensureTurn(l: Live) {
   if (l.turn) return;
   // Claude Code started a turn by itself (a background task finished, a wake-up…).
   l.turn = { userId: lastUserId(l.sid), startedAt: Date.now(), toolCalls: 0, interrupted: false };
-  emit(l.sid, { t: 'state', state: 'running' });
+  // A request still waiting (a background subagent's) keeps the session waiting on the user.
+  emit(l.sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
 }
 
 function lastUserId(sid: string): string {
@@ -640,20 +652,6 @@ function onAssistant(l: Live, msgId: string, blocks: Block[]) {
   }
 }
 
-function provenanceFor(l: Live, name: string, input: Input): string | undefined {
-  const r = rt(l.sid);
-  if (!r) return undefined;
-  if (READ_ONLY.has(name)) return '只读操作';
-  if (r.mode === 'bypassPermissions') return '模式：跳过权限检查';
-  if (r.mode === 'acceptEdits' && EDIT_TOOLS.has(name)) return '模式：自动接受编辑';
-  const ws = summary(l.sid)?.workspaceId;
-  const rules = app.rules.filter((x) => x.scope === 'global' || x.workspaceId === ws);
-  const arg = typeof input.command === 'string' ? input.command : typeof input.file_path === 'string' ? input.file_path : typeof input.url === 'string' ? input.url : '';
-  const o = evaluate(rules, name, arg);
-  if (o.kind === 'allow') return `规则 ${o.rule.rule}`;
-  return undefined;
-}
-
 function onToolUse(l: Live, id: string, name: string, input: Input) {
   const { sid } = l;
   if (l.tools.has(id)) return;
@@ -676,7 +674,6 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
   }
   const item: ToolItem = {
     kind: 'tool', id, tool: toolName(name), detail: toolDetail(name, input, l.cwd), status: 'running',
-    provenance: provenanceFor(l, name, input),
     ...(BACKGROUNDABLE.has(name) ? { backgroundable: true } : {}),
   };
   if (name === 'Agent' || name === 'Task') {

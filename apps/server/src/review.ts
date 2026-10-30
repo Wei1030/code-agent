@@ -26,7 +26,6 @@ import { recordUsage } from './usage';
 import { addBusyCheck } from './sessions/slots';
 import { addQueueBlocker, pumpQueue } from './sessions/ops';
 import { head, isRepo, numstat, snapshot } from './git';
-import { readOnlyCommand } from '@code-agent/shared/readonly';
 import { addWorkspaceTools } from './peer';
 
 const GLOBAL_ROUNDS = 3;
@@ -291,23 +290,6 @@ function roundPrompt(t: ReviewTicket, n: number): string {
 
 const REVIEWER_ROLE = 'You are a code reviewer. You never change anything: read files with Read, Grep and Glob, and run only read-only shell commands (git diff/log/show/status, ls, cat, grep, find; on Windows the shell tool is PowerShell). Anything else is refused.';
 
-type HookOut = Promise<{ hookSpecificOutput?: { hookEventName: 'PreToolUse'; permissionDecision: 'allow' | 'deny'; permissionDecisionReason: string } }>;
-
-/** Only read-only commands, enforced by the harness rather than asked of the model. */
-async function guard(input: Record<string, unknown>): HookOut {
-  const name = String(input.tool_name ?? '');
-  const ti = (input.tool_input ?? {}) as Record<string, unknown>;
-  if (name === 'Bash' || name === 'PowerShell') {
-    return readOnlyCommand(String(ti.command ?? ''))
-      ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', permissionDecisionReason: 'read-only command of the reviewer' } }
-      : { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer may only run read-only commands (git diff/log/show, ls, cat, grep, find…).' } };
-  }
-  if (['Edit', 'Write', 'NotebookEdit', 'MultiEdit'].includes(name)) {
-    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The code reviewer is read-only.' } };
-  }
-  return {};
-}
-
 async function runReviewer(id: string, n: number, attempt = 1) {
   const t = get(id)!;
   const sid = t.sessionId;
@@ -336,11 +318,13 @@ async function runReviewer(id: string, n: number, attempt = 1) {
       prompt: roundPrompt(t, n),
       options: {
         cwd, model: model.name, ...reasoning(model, t.effort),
+        // Read-only by Claude Code itself: no tool that edits, and in "don't ask" mode a command runs only
+        // when Claude Code judges it read-only. The user's own allow rules (user and local settings) are
+        // not loaded, so none of them lets the reviewer change anything.
         tools: ['Read', 'Glob', 'Grep', 'Bash', 'PowerShell', ...extra], allowedTools: ['Read', 'Glob', 'Grep', ...extra],
         permissionMode: 'dontAsk', persistSession: false,
-        settingSources: prof.claudeMd ? ['user', 'project', 'local'] : [],
+        settingSources: prof.claudeMd ? ['project'] : [],
         systemPrompt: { type: 'preset', preset: 'claude_code', append: REVIEWER_ROLE },
-        hooks: { PreToolUse: [{ hooks: [(input) => guard(input as unknown as Record<string, unknown>)] }] },
         outputFormat: { type: 'json_schema', schema: VERDICT_SCHEMA },
         env: envFor(t.model), abortController: abort, ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
       },
