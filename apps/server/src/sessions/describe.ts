@@ -86,8 +86,6 @@ export function toolIcon(name: string): string {
 
 export const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'LS']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
-/** Tools that may run long and can be sent to the background. */
-export const BACKGROUNDABLE = new Set(['Bash', 'PowerShell', 'Agent', 'Task']);
 
 export function lines(text: string, max = 400): string[] {
   const all = text.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');

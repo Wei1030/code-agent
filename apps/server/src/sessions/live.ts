@@ -14,7 +14,7 @@ import { app, update } from '../state';
 import { broadcast } from '../hub';
 import { addItem, emit, findItem, patchItem, patchSummary, raw, rt, summary } from './registry';
 import { InputQueue } from './input';
-import { agentRow, BACKGROUNDABLE, READ_ONLY, toolDetail, toolName, toolResult } from './describe';
+import { agentRow, READ_ONLY, toolDetail, toolName, toolResult } from './describe';
 import { buildOptions } from './options';
 import { contextFrom } from './context';
 import { recordUsage, recordLimit } from '../usage';
@@ -678,10 +678,9 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
     // Shown as a plan card or question panel through the permission request.
     return;
   }
-  const item: ToolItem = {
-    kind: 'tool', id, tool: toolName(name), detail: toolDetail(name, input, l.cwd), status: 'running',
-    ...(BACKGROUNDABLE.has(name) ? { backgroundable: true } : {}),
-  };
+  // backgroundable comes with task_started: before Claude Code registers the call as a task it
+  // cannot be moved to the background.
+  const item: ToolItem = { kind: 'tool', id, tool: toolName(name), detail: toolDetail(name, input, l.cwd), status: 'running' };
   if (name === 'Agent' || name === 'Task') {
     const agent: AgentRun = {
       agentType: String(input.subagent_type ?? 'general-purpose'), task: String(input.prompt ?? input.description ?? '').slice(0, 400),
@@ -966,7 +965,11 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const taskId = String(m.task_id);
       if (m.subagent_type) l.taskTypes.set(taskId, String(m.subagent_type));
       const kind: BgTask['kind'] = m.task_type === 'local_bash' ? 'bash' : m.task_type === 'local_workflow' ? 'workflow' : m.task_type === 'monitor' ? 'monitor' : 'agent';
-      if (m.tool_use_id) l.taskByTool.set(String(m.tool_use_id), taskId);
+      if (m.tool_use_id) {
+        l.taskByTool.set(String(m.tool_use_id), taskId);
+        const card = findItem(sid, String(m.tool_use_id));
+        if (card?.kind === 'tool' && card.status === 'running' && !card.background && m.is_backgrounded !== true) patchItem(sid, card.id, { backgroundable: true });
+      }
       if (m.is_backgrounded === true || kind === 'bash' || kind === 'monitor') {
         upsertBg(sid, { id: taskId, kind, name: String(m.description ?? ''), status: 'running', startedAt: Date.now(), parent: m.parent_task_id as string | undefined });
       }
