@@ -43,12 +43,20 @@ let n = 0;
 export const say = (text: string): Block => ({ type: 'text', text });
 export const think = (thinking: string): Block => ({ type: 'thinking', thinking, signature: 'test' });
 export const use = (name: string, input: Record<string, unknown>): Block => ({ type: 'tool_use', id: `toolu_t${Date.now().toString(36)}${++n}`, name, input });
-export const httpError = (status: number, errorType: string, message?: string): Fault => ({ fault: 'http', status, errorType, message });
+/** A shell command with the shell this Claude Code offers (Bash, or PowerShell on Windows without Git Bash). */
+export const shell = (command: string, extra: Record<string, unknown> = {}) => (r: Req): Block[] =>
+  [use(r.tools.includes('Bash') ? 'Bash' : 'PowerShell', { command, description: command.slice(0, 40), ...extra })];
+/** A command that runs for a while (works in Bash and PowerShell). */
+export const sleepCmd = (seconds: number) => `node -e "setTimeout(() => {}, ${seconds * 1000})"`;
+export const httpError =(status: number, errorType: string, message?: string): Fault => ({ fault: 'http', status, errorType, message });
 export const hang: Fault = { fault: 'hang' };
 export const cut: Fault = { fault: 'cut' };
 
-const textOf = (c: unknown): string => (typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b) => b?.type === 'text').map((b) => b.text).join('\n') : '');
-const isPrompt = (m: any) => m.role === 'user' && !(Array.isArray(m.content) && m.content.some((b: any) => b.type === 'tool_result')) && textOf(m.content).trim() !== '';
+/** What the user wrote in a message: text blocks other than Claude Code's reminders and notes. */
+const NOT_TYPED = /^\s*(<system-reminder>|\[Request interrupted)/;
+const textOf = (c: unknown): string => (typeof c === 'string' ? c : Array.isArray(c) ? c.filter((b) => b?.type === 'text' && !NOT_TYPED.test(b.text)).map((b) => b.text).join('\n') : '');
+/** A user message with something the user wrote (also next to tool results: a message put into the turn). */
+const isPrompt = (m: any) => m.role === 'user' && textOf(m.content).trim() !== '';
 
 /** Claude Code names the working directory in the environment block of its prompt. */
 function cwdOf(body: any): string {
@@ -122,9 +130,9 @@ export class FakeModel {
     else this.failing.delete(model);
   }
 
-  /** Requests whose latest prompt matches. */
+  /** Requests of the agent loop (with tools; not title or summary requests) whose latest prompt matches. */
   sent(match: RegExp): Req[] {
-    return this.requests.filter((r) => match.test(r.prompt));
+    return this.requests.filter((r) => r.tools.length > 0 && match.test(r.prompt));
   }
 
   private parse(body: any, headers: http.IncomingHttpHeaders): Req {

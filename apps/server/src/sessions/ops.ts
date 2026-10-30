@@ -51,7 +51,9 @@ export function pumpQueue(sid: string): boolean {
   return true;
 }
 
-onTurnEnd((sid) => {
+onTurnEnd((sid, t) => {
+  // After an interrupt the queue waits: the user chooses to run it (runQueued) or drop it.
+  if (t.interrupted) return;
   // Give other turn-end handlers (reviews, receipts) a moment to queue their messages first.
   setTimeout(() => pumpQueue(sid), 0);
 });
@@ -168,9 +170,11 @@ async function forkAt(sid: string, beforeUserId?: string): Promise<string> {
     peerUnread: 0, waiting: false, jobId: undefined, createdBy: undefined,
   };
   upsert(s);
+  const items = r.items.slice(0, Math.max(0, idx)).map((it) => ({ ...it }));
   initRuntime(emptyRuntime(newId, {
-    items: r.items.slice(0, Math.max(0, idx)).map((it) => ({ ...it })), model: r.model, effort: r.effort, mode: r.mode, context: r.context,
-    turn: r.turn, tokens: r.tokens, readOnly: false,
+    items, model: r.model, effort: r.effort, mode: r.mode, context: r.context,
+    // A fork before a message has had only the turns before it.
+    turn: beforeUserId ? items.filter((it) => it.kind === 'user').length : r.turn, tokens: r.tokens, readOnly: false,
   }));
   if (resumable) void acquire(newId, () => startProcess(newId, { resume: true }));
   return newId;
