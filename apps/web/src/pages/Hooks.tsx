@@ -89,7 +89,7 @@ export function Hooks() {
               <div key={h.id} className="hook-card file">
                 <Icon name="lock" size={14} className="muted" />
                 <div className="grow">
-                  <div className="row"><b className="ink2">{h.source}</b><Chip>{h.type === 'builtin' ? t('内置') : h.type}</Chip>{h.matcher && <Chip mono>{h.matcher}</Chip>}</div>
+                  <div className="row"><b className="ink2">{h.source}</b><Chip>{h.type}</Chip>{h.matcher && <Chip mono>{h.matcher}</Chip>}</div>
                   <div className="mono muted" style={{ fontSize: 12 }}>{h.detail}</div>
                 </div>
                 <span className="hint">{t('只读 · 与上面的规则一起执行')}</span>

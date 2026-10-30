@@ -680,11 +680,11 @@ export interface HookRule {
   workspaceId?: string;
 }
 
-/** A hook defined in a settings file or built into Code Agent; read-only here. */
+/** A hook defined in a settings file; read-only here. */
 export interface FileHook {
   id: string;
   event: string;
-  type: 'command' | 'http' | 'mcp_tool' | 'prompt' | 'agent' | 'builtin';
+  type: 'command' | 'http' | 'mcp_tool' | 'prompt' | 'agent';
   matcher: string;
   detail: string;
   source: string;

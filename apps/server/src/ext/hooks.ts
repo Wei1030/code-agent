@@ -3,6 +3,8 @@
  * Claude Code's settings files (shown read-only, run by Claude Code) and the execution log.
  */
 import { randomUUID } from 'node:crypto';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
 import type { HookEvent, HookJSONOutput } from '@anthropic-ai/claude-agent-sdk';
 import type { FileHook, HookLogEntry, HookRule, Workspace } from '@code-agent/shared/types';
 import { HOOK_EVENTS } from '@code-agent/shared/catalog';
@@ -28,15 +30,30 @@ function targetOf(input: Record<string, unknown>): string {
   return [input.tool_name, String(what).slice(0, 80)].filter(Boolean).join(' · ') || String(input.hook_event_name ?? '');
 }
 
-async function webhook(url: string, body: unknown, timeoutSec: number): Promise<string> {
+/** POST the event; a JSON object in the answer is the hook's output. */
+async function webhook(url: string, body: unknown, timeoutSec: number): Promise<{ status: number; output?: Record<string, unknown> }> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutSec * 1000);
   try {
     const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ctl.signal });
-    return `HTTP ${r.status}`;
+    const text = await r.text();
+    let output: unknown;
+    try { output = text.trim() ? JSON.parse(text) : undefined; } catch { /* not JSON: no output */ }
+    return { status: r.status, output: r.ok && output && typeof output === 'object' && !Array.isArray(output) && Object.keys(output).length ? output as Record<string, unknown> : undefined };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Several rules on one event: added context adds up; for anything else the first rule that says something wins. */
+function merge(out: Record<string, unknown> | undefined, next: Record<string, unknown>): Record<string, unknown> {
+  if (!out) return next;
+  const a = out.hookSpecificOutput as Record<string, unknown> | undefined;
+  const b = next.hookSpecificOutput as Record<string, unknown> | undefined;
+  if (!b) return out;
+  if (!a) return { ...out, hookSpecificOutput: b };
+  const context = [a.additionalContext, b.additionalContext].filter(Boolean).join('\n\n');
+  return { ...out, hookSpecificOutput: { ...b, ...a, ...(context ? { additionalContext: context } : {}) } };
 }
 
 async function runRules(event: string, sid: string, input: Record<string, unknown>): Promise<HookJSONOutput | undefined> {
@@ -44,12 +61,23 @@ async function runRules(event: string, sid: string, input: Record<string, unknow
   const rules = app.hookRules.filter((r) => r.event === event && (r.scope === 'global' || r.workspaceId === ws) && ruleMatches(r, input));
   if (!rules.length) return undefined;
   let out: Record<string, unknown> | undefined;
+  let denied = false;
   for (const r of rules) {
     const t0 = Date.now();
     let result = RESULT[r.action];
     let outcome: HookLogEntry['outcome'] = r.action === 'deny' || r.action === 'block' ? 'crit' : r.action === 'ask' || r.action === 'defer' ? 'warn' : 'good';
     if (r.action === 'notify') {
       broadcast({ t: 'notify', n: { kind: 'background', sid, title: `钩子「${r.name}」`, body: r.text || targetOf(input), tone: 'info' } });
+    } else if (r.action === 'log') {
+      if (r.text.trim()) {
+        try {
+          mkdirSync(path.dirname(r.text.trim()), { recursive: true });
+          appendFileSync(r.text.trim(), `${JSON.stringify({ time: new Date().toISOString(), event, rule: r.name, session: summary(sid)?.title, input })}\n`);
+        } catch (e) {
+          result = `写入失败：${e instanceof Error ? e.message : String(e)}`;
+          outcome = 'crit';
+        }
+      }
     } else if (r.action === 'webhook') {
       const send = webhook(r.text, { ...input, session_title: summary(sid)?.title }, r.timeout || 10);
       if (r.async) {
@@ -57,24 +85,31 @@ async function runRules(event: string, sid: string, input: Record<string, unknow
         result = '已发送（异步）';
       } else {
         try {
-          result = await send;
+          const res = await send;
+          result = `HTTP ${res.status}`;
+          if (res.output) out = merge(out, res.output);
         } catch (e) {
           result = `发送失败：${e instanceof Error ? e.message : String(e)}`;
           outcome = 'crit';
         }
       }
-    } else if (r.action !== 'log') {
-      if (!out) {
-        out = hookOutput(r);
-        if (event === 'PermissionRequest' && (r.action === 'allow' || r.action === 'deny')) {
-          out = { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: r.action === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: r.text || 'Denied by a hook rule.' } } };
-        }
-        if (r.action === 'title' && r.text) patchSummary(sid, { title: r.text });
-        if (event === 'PreToolUse' && r.action === 'deny') markDenied(sid, String(input.tool_use_id ?? ''), `被钩子「${r.name}」拒绝`);
+    } else {
+      let o = hookOutput(r);
+      if (event === 'PermissionRequest' && (r.action === 'allow' || r.action === 'deny')) {
+        o = { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: r.action === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: r.text || 'Denied by a hook rule.' } } };
+      }
+      out = merge(out, o);
+      if (r.action === 'title' && r.text) patchSummary(sid, { title: r.text });
+      if (event === 'PreToolUse' && r.action === 'deny' && !denied) {
+        denied = true;
+        markDenied(sid, String(input.tool_use_id ?? ''), `被钩子「${r.name}」拒绝`);
       }
     }
     logHook({ event, rule: r.name, target: targetOf(input), outcome, result, ms: Date.now() - t0 });
   }
+  // A webhook that denied a tool call shows on its card like a rule.
+  const decision = (out?.hookSpecificOutput as { permissionDecision?: string } | undefined)?.permissionDecision;
+  if (event === 'PreToolUse' && decision === 'deny' && !denied) markDenied(sid, String(input.tool_use_id ?? ''), '被钩子拒绝');
   return out as HookJSONOutput | undefined;
 }
 
@@ -95,11 +130,6 @@ export function noteFileHook(_sid: string, m: Record<string, unknown>) {
     detail: [m.stdout, m.stderr].filter(Boolean).join('\n').slice(0, 2000) || undefined,
   });
 }
-
-/** Hooks Code Agent itself installs in every session. */
-const BUILTIN: FileHook[] = [
-  { id: 'builtin-board', event: 'SessionStart', type: 'builtin', matcher: '', detail: '新会话开始时告诉 Claude 看板上进行中的功能', source: 'Code Agent' },
-];
 
 type SettingsHooks = Record<string, Array<{ matcher?: string; hooks?: Array<Record<string, unknown>> }>>;
 
@@ -125,7 +155,6 @@ export function reloadFileHooks() {
   const list = [
     ...fileHooksOf('global', undefined, '~/.claude/settings.json'),
     ...app.workspaces.flatMap((ws) => [...fileHooksOf('workspace', ws, `${ws.name}/.claude/settings.local.json`), ...fileHooksOf('repo', ws, `${ws.name}/.claude/settings.json`)]),
-    ...BUILTIN,
   ];
   if (JSON.stringify(list) !== JSON.stringify(app.fileHooks)) set('fileHooks', list);
 }
