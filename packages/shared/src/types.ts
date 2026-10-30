@@ -46,8 +46,6 @@ export interface Workspace {
   path: string;
   branch: string | null;
   lastActive: number;
-  /** Claude Code trusts the folder, so the settings committed in it (repository rules) apply. */
-  trusted: boolean;
 }
 
 export interface SessionSummary {
@@ -472,14 +470,13 @@ export interface Profile {
 
 /**
  * A permission rule in Claude Code's own settings files:
- * global = ~/.claude/settings.json, workspace = <workspace>/.claude/settings.local.json (this machine only),
- * repo = <workspace>/.claude/settings.json (committed with the repository; read-only here).
+ * global = ~/.claude/settings.json, workspace = <workspace>/.claude/settings.local.json.
  */
 export interface PermissionRule {
   id: string;
   behavior: 'allow' | 'ask' | 'deny';
   rule: string;
-  scope: 'global' | 'workspace' | 'repo';
+  scope: 'global' | 'workspace';
   workspaceId?: string;
 }
 

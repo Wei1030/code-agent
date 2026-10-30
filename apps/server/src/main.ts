@@ -16,7 +16,7 @@ import { allSummaries } from './sessions/registry';
 import './sessions/ops';
 import { sessionsOnBoot } from './sessions/ops';
 import { scanExternal } from './sessions/history';
-import { onWorkspacesChanged, refreshWorkspaces } from './workspaces';
+import { onWorkspacesChanged, refreshBranches } from './workspaces';
 import { checkLogin } from './provider';
 import { reloadRules } from './claude/permissions';
 import { reloadFileHooks } from './ext/hooks';
@@ -124,8 +124,7 @@ async function main() {
     void scanExternal();
   }
   startScheduler();
-  void refreshWorkspaces();
-  setInterval(() => void refreshWorkspaces(), 30_000);
+  setInterval(() => void refreshBranches(), 30_000);
   setInterval(reloadDisk, 15_000);
 
   const shutdown = async () => {

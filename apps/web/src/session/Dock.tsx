@@ -25,7 +25,7 @@ function useSince(since: number) {
 
 const DESTINATIONS: Array<{ value: RuleDestination; label: string; desc: string }> = [
   { value: 'session', label: '本会话', desc: '会话结束后失效，不写入文件' },
-  { value: 'workspace', label: '本工作区', desc: '写入工作区的 .claude/settings.local.json，只在本机' },
+  { value: 'workspace', label: '本工作区', desc: '这个工作区以后的会话都不再询问' },
   { value: 'global', label: '所有工作区', desc: '写入 Claude 的用户设置，对以后所有会话生效' },
 ];
 

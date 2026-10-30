@@ -1,6 +1,6 @@
 // What the panels show and do in the browser: home's workspace cards and adding a folder, session
 // states in the lists, a question's option previews, and the inspector's file preview, changes and
-// event list (FR-WS-01, FR-WS-05, FR-SES-12, FR-ASK-03, FR-FILE-01, FR-FILE-02, FR-OBS-01, issue 10-30#12).
+// event list (FR-WS-01, FR-WS-05, FR-SES-12, FR-ASK-03, FR-FILE-01, FR-FILE-02, FR-OBS-01).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -35,10 +35,6 @@ test('home: a card per workspace with its branch, sessions and what runs; the fo
   await p.fill('.modal input.mono', plain);
   await p.click('.modal .btn.primary', '添加为工作区');
   await until(() => env.c.slices.workspaces.some((w) => w.path === path.resolve(plain)), 'added');
-  // Like the claude CLI on first use, Code Agent asks before trusting the folder (issue 10-30#12).
-  await p.waitEl('.modal', '信任这个文件夹吗？');
-  await p.click('.modal .btn.primary', '信任');
-  await until(() => env.c.slices.workspaces.find((w) => w.path === path.resolve(plain))?.trusted, 'trusted');
   await p.goto('/');
   await p.waitEl('.ws-card', '非 Git 仓库');
   noPageErrors(p);

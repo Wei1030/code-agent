@@ -1,6 +1,5 @@
 // Approvals: Claude Code decides what to ask and what to suggest; Code Agent shows it as given and
-// hands back what the user chose; trusting a workspace's folder so its repository rules apply
-// (FR-PERM-01/03/04/05/06/07/08/10, issue 10-30#12).
+// hands back what the user chose (FR-PERM-01/03/04/05/06/07/08/10).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -225,30 +224,4 @@ test('"always refuse when approval is needed" in the profile: nothing waits (FR-
   const card = (await env.rt(sid)).items.find((i) => i.kind === 'tool' && i.tool === 'Read') as Extract<Item, { kind: 'tool' }>;
   assert.equal(card.status, 'denied');
   await env.c.call('setState', { profiles: prev });
-});
-
-test('a repository\'s rules apply once its folder is trusted; trusting writes Claude Code\'s flag and keeps the rest (issue 10-30#12)', async () => {
-  const dir = env.world.repo('shared', { 'a.txt': 'x\n', '.claude/settings.json': { permissions: { allow: ['Bash(node -e *)', 'PowerShell(node -e *)'] } } });
-  const ws = await env.c.call('addWorkspace', dir);
-  assert.equal(ws.trusted, false);
-  const cmd = (tag: string): Step[] => [shell(`node -e "console.log('${tag}')"`), [say('好')]];
-  env.model.script(/^未信任时$/, cmd('untrusted'));
-  const before = await env.start('未信任时', { ws: ws.id });
-  const r = await approval(before);
-  await env.c.call('respondApproval', before, r.id, { behavior: 'deny' });
-  await env.turns(before);
-
-  const file = path.join(env.world.home, '.claude.json');
-  const kept = Object.keys(JSON.parse(readFileSync(file, 'utf8')));
-  await env.c.call('trustWorkspace', ws.id);
-  const json = JSON.parse(readFileSync(file, 'utf8'));
-  assert.equal(json.projects[path.resolve(dir).split(path.sep).join('/')].hasTrustDialogAccepted, true);
-  assert.deepEqual(kept.filter((k) => !(k in json)), [], 'the other keys are kept');
-  await until(() => env.c.slices.workspaces.find((w) => w.id === ws.id)?.trusted === true, 'shown as trusted');
-  env.model.script(/^信任之后$/, cmd('trusted'));
-  await noAsk(await env.start('信任之后', { ws: ws.id }));
-  // A Claude Code started before keeps the flag when it writes its config on the way out.
-  await env.c.call('stop', before);
-  await until(() => env.c.sessions.get(before)?.live === false, 'saved');
-  assert.equal(JSON.parse(readFileSync(file, 'utf8')).projects[path.resolve(dir).split(path.sep).join('/')].hasTrustDialogAccepted, true);
 });

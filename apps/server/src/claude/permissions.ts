@@ -1,21 +1,21 @@
 /**
  * Permission rules and extra directories live in Claude Code's settings files:
- * global = <config>/settings.json, workspace = .claude/settings.local.json,
- * repo = .claude/settings.json (read-only here). Session-only directories stay in memory.
+ * global = <config>/settings.json, workspace = .claude/settings.local.json. Session-only directories
+ * stay in memory.
  */
 import type { ExtraDir, PermissionRule, Workspace } from '@code-agent/shared/types';
 import { app, onWrite, set } from '../state';
-import { editJson, readSettings, settingsPath, type SettingsScope } from './files';
+import { editJson, readSettings, settingsPath } from './files';
 
 type Perms = { allow?: string[]; ask?: string[]; deny?: string[]; additionalDirectories?: string[] };
 const BEHAVIORS = ['allow', 'ask', 'deny'] as const;
 
-function perms(scope: SettingsScope, ws?: Workspace): Perms {
+function perms(scope: 'global' | 'workspace', ws?: Workspace): Perms {
   const p = readSettings(scope, ws).permissions;
   return p && typeof p === 'object' ? (p as Perms) : {};
 }
 
-function rulesOf(scope: SettingsScope, ws?: Workspace): PermissionRule[] {
+function rulesOf(scope: 'global' | 'workspace', ws?: Workspace): PermissionRule[] {
   const p = perms(scope, ws);
   return BEHAVIORS.flatMap((b) => (p[b] ?? []).filter((r) => typeof r === 'string').map((rule) => ({
     id: `${scope}:${ws?.id ?? ''}:${b}:${rule}`, behavior: b, rule, scope, ...(ws ? { workspaceId: ws.id } : {}),
@@ -29,7 +29,7 @@ function dirsOf(scope: 'global' | 'workspace', ws?: Workspace): ExtraDir[] {
 }
 
 export function readRules(): PermissionRule[] {
-  return [...rulesOf('global'), ...app.workspaces.flatMap((ws) => [...rulesOf('workspace', ws), ...rulesOf('repo', ws)])];
+  return [...rulesOf('global'), ...app.workspaces.flatMap((ws) => rulesOf('workspace', ws))];
 }
 
 export function readDirs(): ExtraDir[] {
@@ -50,7 +50,6 @@ onWrite('rules', (next) => {
   const files = new Set<string>([key('global'), ...app.workspaces.map((w) => key('workspace', w.id))]);
   for (const k of files) want.set(k, { allow: [], ask: [], deny: [] });
   for (const r of next) {
-    if (r.scope === 'repo') continue;
     const k = key(r.scope, r.scope === 'workspace' ? r.workspaceId : undefined);
     want.get(k)?.[r.behavior].push(r.rule);
   }

@@ -8,7 +8,6 @@ import { randomUUID } from 'node:crypto';
 import type { FsNode } from '@code-agent/shared/catalog';
 import type { Workspace } from '@code-agent/shared/types';
 import { register } from './hub';
-import { isTrusted, trustFolder } from './claude/files';
 import { app, set, update } from './state';
 
 const run = promisify(execFile);
@@ -28,12 +27,6 @@ function notifyChanged() {
   }
 }
 
-async function gitRoot(dir: string): Promise<string | null> {
-  return run('git', ['rev-parse', '--show-toplevel'], { cwd: dir, windowsHide: true }).then((r) => r.stdout.trim() || null, () => null);
-}
-
-const trustOf = async (dir: string) => isTrusted(dir, await gitRoot(dir));
-
 export async function gitBranch(dir: string): Promise<string | null> {
   try {
     const { stdout } = await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir, windowsHide: true });
@@ -44,15 +37,13 @@ export async function gitBranch(dir: string): Promise<string | null> {
   }
 }
 
-/** Keep branches and trust current (the user may switch branches or trust a folder in the claude CLI). */
-export async function refreshWorkspaces() {
+/** Keep branches current (the user may switch branches outside Code Agent). */
+export async function refreshBranches() {
   let dirty = false;
   const next = await Promise.all(app.workspaces.map(async (w) => {
-    if (!existsSync(w.path)) return w;
-    const branch = await gitBranch(w.path);
-    const trusted = await trustOf(w.path);
-    if (branch !== w.branch || trusted !== w.trusted) dirty = true;
-    return { ...w, branch, trusted };
+    const branch = existsSync(w.path) ? await gitBranch(w.path) : w.branch;
+    if (branch !== w.branch) dirty = true;
+    return { ...w, branch };
   }));
   if (dirty) set('workspaces', next);
 }
@@ -66,7 +57,7 @@ async function addWorkspace(dir: string): Promise<Workspace> {
   if (!existsSync(p) || !statSync(p).isDirectory()) throw new Error(`文件夹不存在：${p}`);
   const existing = app.workspaces.find((w) => w.path.toLowerCase() === p.toLowerCase());
   if (existing) return existing;
-  const ws: Workspace = { id: `ws-${randomUUID().slice(0, 8)}`, name: path.basename(p) || p, path: p, branch: await gitBranch(p), lastActive: Date.now(), trusted: await trustOf(p) };
+  const ws: Workspace = { id: `ws-${randomUUID().slice(0, 8)}`, name: path.basename(p) || p, path: p, branch: await gitBranch(p), lastActive: Date.now() };
   set('workspaces', [ws, ...app.workspaces]);
   notifyChanged();
   return ws;
@@ -181,19 +172,9 @@ async function removeWorkspace(id: string) {
   notifyChanged();
 }
 
-/** Trust the workspace's folder for Claude Code (the user agreed), so its repository settings apply. */
-async function trustWorkspace(id: string): Promise<void> {
-  const w = app.workspaces.find((x) => x.id === id);
-  if (!w) throw new Error('工作区不存在');
-  await trustFolder(w.path);
-  update('workspaces', (ws) => ws.map((x) => (x.id === id ? { ...x, trusted: true } : x)));
-  notifyChanged();
-}
-
 register({
   addWorkspace,
   removeWorkspace,
-  trustWorkspace,
   listDir,
   listFiles,
 });

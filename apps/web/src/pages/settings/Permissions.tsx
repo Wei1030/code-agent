@@ -12,7 +12,6 @@ import { NoWorkspace, useWorkspaceChoice } from '../../components/NoWorkspace';
 import { buildRule, describeRule, parseRule, rulesFor, type RuleKind } from '../../lib/rules';
 import { uid } from '../../lib/util';
 import { useT } from '../../lib/i18n';
-import { askTrust } from '../../lib/trust';
 
 const BEHAVIORS = [
   { value: 'allow', label: '允许', desc: '直接执行，不再问你', tone: 'good' },
@@ -40,7 +39,6 @@ export function Permissions() {
   const ws = app.workspaces.find((w) => w.id === wsId);
 
   const own = app.rules.filter((r) => (scope === 'global' ? r.scope === 'global' : r.scope === 'workspace' && r.workspaceId === wsId));
-  const repo = scope === 'workspace' ? app.rules.filter((r) => r.scope === 'repo' && r.workspaceId === wsId) : [];
   const globalCount = app.rules.filter((r) => r.scope === 'global').length;
   const file = scope === 'global' ? '~/.claude/settings.json' : `${ws?.path ?? ''}\\.claude\\settings.local.json`;
 
@@ -76,7 +74,7 @@ export function Permissions() {
         <div>
           <div className="panel" style={{ marginBottom: 14 }}>
             <div className="panel-head">
-              <h3>{scope === 'global' ? t('对所有工作区生效') : t('只对 {w} 生效（仅本机）', { w: ws?.name ?? '' })}</h3>
+              <h3>{scope === 'global' ? t('对所有工作区生效') : t('只对 {w} 生效', { w: ws?.name ?? '' })}</h3>
               <span className="grow" />
               {scope === 'workspace' && globalCount > 0 && (
                 <button className="link-btn" onClick={() => setScope('global')}>{t('另有 {n} 条全局规则同时生效 →', { n: globalCount })}</button>
@@ -88,24 +86,6 @@ export function Permissions() {
 
           <DirsPanel scope={scope} wsId={wsId} wsPath={ws?.path ?? ''} />
 
-          {scope === 'workspace' && (
-            <div className="panel">
-              <div className="panel-head">
-                <h3>{t('来自仓库')}</h3>
-                <span className="sub mono">.claude/settings.json</span>
-                <span className="grow" />
-                <span className="hint">{t('随代码提交，团队共享；这里只读')}</span>
-              </div>
-              {ws && !ws.trusted && (
-                <div className="banner-warn" style={{ margin: '10px 12px 0' }}>
-                  <Icon name="warning" size={15} />
-                  <span className="grow">{t('Claude Code 还没有信任这个文件夹，这里的规则不会生效。')}</span>
-                  <Button size="sm" onClick={() => askTrust(ws)}>{t('信任这个文件夹')}</Button>
-                </div>
-              )}
-              {repo.length ? <RuleList rules={repo} /> : <div className="empty">{t('这个仓库没有提交权限规则')}</div>}
-            </div>
-          )}
           <div className="hint" style={{ marginTop: 10 }}>
             {t('审批时选「允许，且以后不再询问」并保存到这个工作区或所有工作区的规则和目录，也会出现在这里；保存到「本会话」的不写入文件，会话结束就失效。')}
           </div>
