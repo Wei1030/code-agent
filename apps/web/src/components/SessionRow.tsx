@@ -13,7 +13,7 @@ import { Button, Chip, Popover, Status } from './ui';
 export function StateBadge({ s }: { s: SessionSummary }) {
   const t = useT();
   if (s.waiting) return <Status tone="warn">{t('等待空位')}</Status>;
-  if (s.resume && s.state !== 'running') {
+  if (s.resume && s.state === 'idle') {
     return s.resume.kind === 'wake'
       ? <Status tone="info">{t('{time} 继续', { time: hhmm(s.resume.at) })}</Status>
       : <Status tone="warn">{t('限额重置后 {time} 继续', { time: hhmm(s.resume.at) })}</Status>;
