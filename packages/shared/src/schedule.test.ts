@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { afterLimit, describeSchedule, fillVars, nextRun, parseCron, promptVars } from './schedule';
+import { afterLimit, describeSchedule, fillVars, isWakeTurn, nextRun, parseCron, promptVars, wakeTooLate } from './schedule';
 import type { JobSchedule } from './types';
 
 const base: JobSchedule = { kind: 'daily', time: '09:00', weekdays: [1], everyHours: 6, cron: '', enabled: true, vars: {}, missed: 'skip' };
@@ -66,4 +66,18 @@ test('after a usage limit: a minute past a known reset; half an hour when it is 
   assert.equal(afterLimit(now, now - 5 * min), now + 31 * min, 'a reset already past');
   assert.equal(afterLimit(now, now + 10_000), now + 70_000, 'at least a minute from now');
   assert.equal(afterLimit(now, now + 9 * 3600_000), now + 6 * 3600_000, 'at most six hours');
+});
+
+test('a turn Claude Code starts by itself is the wake-up once its time has come, unless a background task just reported back (issue 10-31#5)', () => {
+  const now = Date.UTC(2026, 9, 31, 12, 0);
+  assert.equal(isWakeTurn(now - 30_000, [], now), true);
+  assert.equal(isWakeTurn(now + 60_000, [], now), false, 'too early: a background task reporting');
+  assert.equal(isWakeTurn(now - 30_000, [now - 2000], now), false, 'a task ended just now: its report');
+  assert.equal(isWakeTurn(now - 30_000, [now - 60_000, undefined], now), true, 'tasks that ended earlier do not count');
+});
+
+test('a wake-up more than an hour overdue is too late (issue 10-31#3)', () => {
+  const now = Date.UTC(2026, 9, 31, 12, 0);
+  assert.equal(wakeTooLate(now - 50 * 60_000, now), false);
+  assert.equal(wakeTooLate(now - 61 * 60_000, now), true);
 });

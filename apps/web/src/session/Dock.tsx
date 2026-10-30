@@ -315,9 +315,21 @@ export function WaitingBar({ sid }: { sid: string }) {
 }
 
 /** The session carries on by itself at a set time: a wake-up Claude scheduled, or once the usage limit resets. */
-export function ResumeBar({ sid, resume }: { sid: string; resume: Resume }) {
+export function ResumeBar({ sid, resume, live }: { sid: string; resume: Resume; live: boolean }) {
   const t = useT();
   const time = hhmm(resume.at);
+  const cancel = () => {
+    const go = () => void api.cancelResume(sid).catch(() => undefined);
+    // While its process runs, Claude Code holds the wake-up and has no way to cancel it.
+    if (resume.kind !== 'wake' || resume.by !== 'cli' || !live) return go();
+    useApp.getState().ask({
+      title: t('取消预约？'),
+      body: t('Claude Code 没有取消预约的办法：取消会结束这个会话的 Claude Code 进程，也就是保存这个会话。对话记录会保留，之后可以恢复。'),
+      confirmLabel: t('结束进程并取消'),
+      danger: true,
+      onConfirm: go,
+    });
+  };
   return (
     <div className="readonly-bar waiting">
       <Icon name="clock" size={16} />
@@ -326,7 +338,7 @@ export function ResumeBar({ sid, resume }: { sid: string; resume: Resume }) {
           : resume.reason ? t('Claude 预约了 {time} 继续：{reason}', { time, reason: resume.reason }) : t('Claude 预约了 {time} 继续。', { time })}
       </span>
       {resume.kind === 'limit' && <Button onClick={() => void api.resumeNow(sid)}>{t('现在重试')}</Button>}
-      <Button onClick={() => void api.cancelResume(sid).catch(() => undefined)}>{resume.kind === 'wake' ? t('取消预约') : t('不自动继续')}</Button>
+      <Button onClick={cancel}>{resume.kind === 'wake' ? t('取消预约') : t('不自动继续')}</Button>
     </div>
   );
 }

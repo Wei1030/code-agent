@@ -84,7 +84,7 @@ export function SessionPage() {
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'plan' && <PlanReviewBar key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
-            {sum.resume && rt.state !== 'running' && <ResumeBar sid={id} resume={sum.resume} />}
+            {sum.resume && rt.state !== 'running' && <ResumeBar sid={id} resume={sum.resume} live={sum.live} />}
             {sum.waiting && <WaitingBar sid={id} />}
             {rt.readOnly ? (
               !sum.waiting && <ReadOnlyBar sid={id} model={rt.model} worktreeGone={!!sum.worktreeGone} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />

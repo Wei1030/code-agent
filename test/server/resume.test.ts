@@ -82,6 +82,21 @@ test('a wake-up outlives a server restart; cancelling drops it, ending the proce
   await until(() => !sum(a).resume, 'cancelled');
 });
 
+test('a job run that schedules a wake-up is not woken: it ends with its answer (issue 10-31#4)', async () => {
+  env.model.script(/^作业里预约$/, [[use('ScheduleWakeup', { delaySeconds: 60, reason: '作业里的预约', prompt: '作业醒来', noop: false })]]);
+  const schema = JSON.stringify({ type: 'object', required: ['summary'], properties: { summary: { type: 'string' } } });
+  await env.c.call('setState', { jobs: [{
+    id: 'wake-job', name: '预约的作业', workspaceId: env.ws, prompt: '作业里预约', schema, model: M1, effort: 'low', mode: 'dontAsk',
+    schedule: { kind: 'manual', time: '09:00', weekdays: [1], everyHours: 6, cron: '', enabled: true, vars: {}, missed: 'runOnce' }, notify: 'never',
+  }] });
+  const id = await env.c.call('runJob', 'wake-job', {}, 'manual');
+  const run = await until(() => env.c.slices.jobRuns.find((r) => r.id === id && ['success', 'invalid', 'error'].includes(r.status)), 'run finished');
+  assert.equal(run.status, 'success');
+  assert.ok(env.model.requests.some((r) => r.tools.includes('ScheduleWakeup') && /作业里预约/.test(r.prompt)), 'the run did schedule');
+  assert.equal(sum(run.sessionId!).resume, undefined, 'nothing planned for the job run');
+  await env.c.call('setState', { jobs: [] });
+});
+
 test('the usage limit: carried on after the reset, now on request, not when the user writes, at most three times in a row', async () => {
   env.model.failModel('model-one', httpError(429, 'rate_limit_error', 'Usage limit reached', { 'x-should-retry': 'false' }));
   env.model.script(/^限额会话$/, [[say('不会到这里')]]);

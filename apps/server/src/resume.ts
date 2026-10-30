@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Resume } from '@code-agent/shared/types';
-import { afterLimit } from '@code-agent/shared/schedule';
+import { afterLimit, isWakeTurn, wakeTooLate } from '@code-agent/shared/schedule';
 import { app } from './state';
 import { register } from './hub';
 import { resolveModel } from './models';
@@ -58,6 +58,12 @@ function fire(sid: string) {
   plan(sid, undefined);
   if (r.by === 'cli' && live(sid)) return;
   if (sum.worktreeGone) return;
+  if (r.kind === 'wake' && wakeTooLate(r.at, Date.now())) {
+    const d = new Date(r.at);
+    const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'warn', text: `Claude 预约了 ${when} 继续，那时 Code Agent 没有在运行。过了一个多小时，这次预约不再执行。` });
+    return;
+  }
   if (r.kind === 'limit') tries.set(sid, r.tries ?? 1);
   // i18n-ignore: the prompt Claude reads.
   const m: Outgoing = r.kind === 'wake'
@@ -85,7 +91,8 @@ decorateTool((_sid, name, input, item) => {
 });
 
 onToolResult((sid, name, input, text, isError) => {
-  if (name !== 'ScheduleWakeup' || isError) return;
+  // A job run ends with its answer: nothing comes back to it.
+  if (name !== 'ScheduleWakeup' || isError || summary(sid)?.jobId) return;
   if (input.stop) {
     if (summary(sid)?.resume?.kind === 'wake') plan(sid, undefined);
     return { right: '不再唤醒' };
@@ -101,7 +108,7 @@ onToolResult((sid, name, input, text, isError) => {
 
 onSelfTurn((sid) => {
   const r = summary(sid)?.resume;
-  if (r?.kind !== 'wake' || r.by !== 'cli' || Date.now() < r.at - 5000) return;
+  if (r?.kind !== 'wake' || r.by !== 'cli' || !isWakeTurn(r.at, (rt(sid)?.background ?? []).map((b) => b.endedAt), Date.now())) return;
   plan(sid, undefined);
   return { text: wakeText(r.prompt), fromApp: WAKE_LABEL };
 });
@@ -155,7 +162,8 @@ export function startResumes() {
   for (const s of allSummaries()) {
     if (!s.resume) continue;
     if (s.resume.by === 'cli') patchSummary(s.id, { resume: { ...s.resume, by: 'server' } });
-    // One whose time passed while the server was down goes once the server has settled.
+    // One whose time passed while the server was down goes once the server has settled (a wake-up
+    // more than an hour late is dropped instead).
     arm(s.id, 5000);
   }
 }

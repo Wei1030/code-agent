@@ -1,6 +1,7 @@
 // What the extension and settings pages do when used: the board's new item and status, a job run
 // by hand, a hook rule made and tried, a permission rule added, an MCP server added; in a session
-// the rewind and code-review dialogs; held messages and a review decision in the inbox.
+// the rewind and code-review dialogs, cancelling a wake-up; held messages and a review decision in
+// the inbox.
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -119,4 +120,19 @@ test('inbox: a held message released from it (会话协作)', async () => {
   noPageErrors(p);
   await p.close();
   await env.c.call('setState', { peer: { ...env.c.slices.peer, inbound: 'parity' } });
+});
+
+test('cancelling a wake-up the process holds asks first, then ends the process (issue 10-31#6)', async () => {
+  env.model.script(/^等会儿再看$/, [[use('ScheduleWakeup', { delaySeconds: 600, reason: '等构建跑完', prompt: '看看构建', noop: false })], [say('先睡一会儿')]]);
+  const sid = await env.start('等会儿再看');
+  await env.turns(sid);
+  await until(() => env.c.sessions.get(sid)?.resume?.by === 'cli', 'planned');
+  const p = await env.page(`/s/${sid}`);
+  await p.click('.readonly-bar.waiting .btn', '取消预约');
+  await p.waitEl('.modal', '结束这个会话的 Claude Code 进程');
+  assert.equal(env.c.sessions.get(sid)?.live, true, 'nothing ended before the answer');
+  await p.click('.modal .btn', '结束进程并取消');
+  await until(() => !env.c.sessions.get(sid)?.resume && env.c.sessions.get(sid)?.live === false, 'cancelled, the process ended');
+  noPageErrors(p);
+  await p.close();
 });
