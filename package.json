@@ -10,7 +10,10 @@
     "dev": "npm run dev -w @code-agent/server",
     "start": "npm run build -w @code-agent/web && npm start -w @code-agent/server",
     "build": "npm run build -w @code-agent/web",
-    "typecheck": "npm run typecheck -w @code-agent/shared && npm run typecheck -w @code-agent/server && npm run typecheck -w @code-agent/web",
-    "test": "node --import tsx --test packages/shared/src/*.test.ts apps/server/src/*.test.ts apps/web/src/lib/*.test.ts"
+    "typecheck": "npm run typecheck -w @code-agent/shared && npm run typecheck -w @code-agent/server && npm run typecheck -w @code-agent/web && tsc --noEmit -p test/tsconfig.json",
+    "test": "node --import tsx --test packages/shared/src/*.test.ts apps/server/src/*.test.ts apps/web/src/lib/*.test.ts",
+    "test:server": "node --import tsx --test --test-concurrency=4 test/server/*.test.ts",
+    "test:ui": "npm run build -w @code-agent/web && node --import tsx --test --test-concurrency=3 test/ui/*.test.ts",
+    "test:contract": "node --import tsx --test test/contract/*.test.ts"
   }
 }
