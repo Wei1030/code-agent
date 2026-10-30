@@ -85,6 +85,29 @@ export interface SessionSummary {
    * works through, so the inbox shows every session's requests whether or not it was opened here.
    */
   requests?: RequestBrief[];
+  /** It carries on by itself at a set time. */
+  resume?: Resume;
+}
+
+/**
+ * When and how a session carries on by itself: a wake-up Claude scheduled (ScheduleWakeup), or a
+ * turn the usage limit refused, continued once the limit has reset.
+ */
+export interface Resume {
+  kind: 'wake' | 'limit';
+  /** When (ms since the epoch). */
+  at: number;
+  /** Why, as Claude put it (wake-ups). */
+  reason?: string;
+  /** The message the wake-up sends. */
+  prompt?: string;
+  /**
+   * Who sends it: Claude Code, whose process holds the wake-up; or Code Agent, once that process is
+   * gone (and always after a limit).
+   */
+  by: 'cli' | 'server';
+  /** Continuations after a limit refused this session in a row. */
+  tries?: number;
 }
 
 /** One waiting request in a few words, for the inbox. */

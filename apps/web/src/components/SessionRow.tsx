@@ -4,7 +4,7 @@ import { useMatch, useNavigate } from 'react-router-dom';
 import type { SessionSummary } from '../api/types';
 import { api } from '../api';
 import { useApp } from '../store/app';
-import { relTime, tokens } from '../lib/format';
+import { hhmm, relTime, tokens } from '../lib/format';
 import { cx, download } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { Icon } from './Icon';
@@ -13,6 +13,11 @@ import { Button, Chip, Popover, Status } from './ui';
 export function StateBadge({ s }: { s: SessionSummary }) {
   const t = useT();
   if (s.waiting) return <Status tone="warn">{t('等待空位')}</Status>;
+  if (s.resume && s.state !== 'running') {
+    return s.resume.kind === 'wake'
+      ? <Status tone="info">{t('{time} 继续', { time: hhmm(s.resume.at) })}</Status>
+      : <Status tone="warn">{t('限额重置后 {time} 继续', { time: hhmm(s.resume.at) })}</Status>;
+  }
   if (!s.live) return <span className="muted">{t('已保存')}</span>;
   if (s.state === 'requires_action') return <Status tone="warn">{t('等你处理')}</Status>;
   if (s.state === 'running') return <Status tone="info">{t('运行中')}</Status>;

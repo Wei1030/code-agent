@@ -12,7 +12,7 @@ export type Block =
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> };
 
 export type Fault =
-  | { fault: 'http'; status: number; errorType: string; message?: string }
+  | { fault: 'http'; status: number; errorType: string; message?: string; headers?: Record<string, string> }
   | { fault: 'hang' }
   | { fault: 'cut' };
 
@@ -52,7 +52,7 @@ export const planFile = (r: Req) => /create your plan at ([^\s"]+\.md)/.exec(JSO
 export const plan = (markdown: string): Step[] => [(r) => [use('Write', { file_path: planFile(r), content: markdown })], [use('ExitPlanMode', {})]];
 /** A command that runs for a while (works in Bash and PowerShell). */
 export const sleepCmd = (seconds: number) => `node -e "setTimeout(() => {}, ${seconds * 1000})"`;
-export const httpError =(status: number, errorType: string, message?: string): Fault => ({ fault: 'http', status, errorType, message });
+export const httpError = (status: number, errorType: string, message?: string, headers?: Record<string, string>): Fault => ({ fault: 'http', status, errorType, message, headers });
 export const hang: Fault = { fault: 'hang' };
 export const cut: Fault = { fault: 'cut' };
 
@@ -203,7 +203,7 @@ export class FakeModel {
   private async respond(res: http.ServerResponse, r: Req, answer: Block[] | Fault, slow: number) {
     if (!Array.isArray(answer)) {
       if (answer.fault === 'http') {
-        res.writeHead(answer.status, { 'content-type': 'application/json' }).end(JSON.stringify({ type: 'error', error: { type: answer.errorType, message: answer.message ?? answer.errorType } }));
+        res.writeHead(answer.status, { 'content-type': 'application/json', ...answer.headers }).end(JSON.stringify({ type: 'error', error: { type: answer.errorType, message: answer.message ?? answer.errorType } }));
         return;
       }
       if (answer.fault === 'hang') {

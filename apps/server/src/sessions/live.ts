@@ -92,6 +92,8 @@ export interface Live {
   ended: Promise<void>;
   /** The process id Claude Code reported once it started. */
   pid?: number;
+  /** The usage limit refusing this process's requests, as its last rate_limit_event said. */
+  rejection?: { rateLimitType?: string; resetsAt?: number };
 }
 
 const lives = new Map<string, Live>();
@@ -147,6 +149,29 @@ export function onSendTurn(fn: (sid: string, m: Outgoing) => void) {
 const processEndFns: Array<(sid: string) => void> = [];
 export function onProcessEnd(fn: (sid: string) => void) {
   processEndFns.push(fn);
+}
+
+type ResultFn = (sid: string, name: string, input: Input, text: string, isError: boolean) => Partial<ToolItem> | void;
+const resultFns: ResultFn[] = [];
+/** Runs when a main-thread tool call returns; what it returns goes onto the call's card. */
+export function onToolResult(fn: ResultFn) {
+  resultFns.push(fn);
+}
+
+type SelfTurnFn = (sid: string) => { text: string; fromApp: string } | void;
+const selfTurnFns: SelfTurnFn[] = [];
+/**
+ * Runs when Claude Code starts a turn by itself (a wake-up, a background task reporting back). A
+ * message returned is shown as what started the turn: Claude Code does not echo it.
+ */
+export function onSelfTurn(fn: SelfTurnFn) {
+  selfTurnFns.push(fn);
+}
+
+const limitFns: Array<(sid: string, rejection: Live['rejection']) => void> = [];
+/** Runs when the usage limit refused a turn, with the limit's type and reset when Claude Code named them. */
+export function onLimitRefusal(fn: (sid: string, rejection: Live['rejection']) => void) {
+  limitFns.push(fn);
 }
 
 type HookFn = (sid: string, input: Record<string, unknown>) => Promise<HookJSONOutput | undefined> | HookJSONOutput | undefined;
@@ -518,6 +543,13 @@ function ensureTurn(l: Live) {
   if (l.turn) return;
   // Claude Code started a turn by itself (a background task finished, a wake-up…).
   l.turn = { userId: lastUserId(l.sid), startedAt: Date.now(), toolCalls: 0, interrupted: false };
+  for (const fn of selfTurnFns) {
+    const said = fn(l.sid);
+    if (!said) continue;
+    const id = randomUUID();
+    addItem(l.sid, { kind: 'user', id, text: said.text, attachments: [], ts: Date.now(), fromApp: said.fromApp });
+    l.turn.userId = id;
+  }
   // A request still waiting (a background subagent's) keeps the session waiting on the user.
   emit(l.sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
 }
@@ -559,6 +591,7 @@ function handle(l: Live, m: SDKMessage) {
       return;
     case 'rate_limit_event':
       recordLimit(m.rate_limit_info);
+      l.rejection = m.rate_limit_info.status === 'rejected' ? { rateLimitType: m.rate_limit_info.rateLimitType, resetsAt: m.rate_limit_info.resetsAt } : undefined;
       if (m.rate_limit_info.status === 'rejected') {
         addItem(sid, { kind: 'banner', id: randomUUID(), banner: 'rateLimit', detail: m.rate_limit_info.resetsAt ? new Date(m.rate_limit_info.resetsAt * 1000).toLocaleString() : undefined });
       }
@@ -826,6 +859,8 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
       const cur = rt(l.sid)!.background.find((x) => x.id === task);
       if (cur?.status === 'running') upsertBg(l.sid, { ...cur, status: isError ? 'failed' : 'completed', endedAt: Date.now() });
     }
+    const said = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? (b.content as Block[]).map((x) => x.text ?? '').join('\n') : '';
+    for (const fn of resultFns) Object.assign(p, fn(l.sid, track.name, track.input, said, isError) ?? {});
     patchTool(l, b.tool_use_id, p);
     if (r.change && !isError) addChange(l, r.change);
   }
@@ -868,6 +903,7 @@ function onAssistantError(l: Live, error: string) {
     addItem(l.sid, { kind: 'banner', id: randomUUID(), banner: 'notLoggedIn', detail: error });
   } else if (error === 'rate_limit') {
     addItem(l.sid, { kind: 'banner', id: randomUUID(), banner: 'rateLimit' });
+    for (const fn of limitFns) fn(l.sid, l.rejection);
   }
 }
 

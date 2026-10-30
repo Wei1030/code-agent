@@ -92,6 +92,10 @@ export interface ServerApi {
   rejectHeld(id: string): void;
   cancelWaiting(sid: string): void;
   pumpSlots(): void;
+  /** Drop the session's planned continuation (a wake-up held by its process ends that process). */
+  cancelResume(sid: string): void;
+  /** Carry on now instead of at the planned time (after a usage limit). */
+  resumeNow(sid: string): void;
 
   runJob(jobId: string, vars: Record<string, string>, trigger: 'manual' | 'schedule'): string;
   catchUpJob(jobId: string): string;

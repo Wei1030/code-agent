@@ -47,6 +47,12 @@ export function clock(ts: number): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
 }
 
+/** Hours and minutes, as a clock shows them. */
+export function hhmm(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export function duration(sec: number): string {
   const e = en();
   if (sec < 60) return `${sec < 10 ? sec.toFixed(1) : Math.round(sec)}${e ? 's' : ' 秒'}`;

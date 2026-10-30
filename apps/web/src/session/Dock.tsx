@@ -1,13 +1,14 @@
 /** Panels docked above the composer: approval, questions, plan review, read-only bar, queue. */
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import type { PendingRequest, QueuedMessage, RuleDestination, SuggestedUpdate } from '../api/types';
+import type { PendingRequest, QueuedMessage, Resume, RuleDestination, SuggestedUpdate } from '../api/types';
 import { describeRule } from '../lib/rules';
 import { Icon } from '../components/Icon';
 import { Button, Check, Chip, Field, Radio, Select } from '../components/ui';
 import { api } from '../api';
 import { useApp } from '../store/app';
 import { cx } from '../lib/util';
+import { hhmm } from '../lib/format';
 import { useT } from '../lib/i18n';
 import { languageOf } from '../lib/highlight';
 import { MODE_INFO } from '../lib/catalog';
@@ -309,6 +310,23 @@ export function WaitingBar({ sid }: { sid: string }) {
       <span className="grow">{t('排队等待空位：同时运行的会话已达上限（{n} 个），而且都在工作或等你处理。有会话空闲后，会自动保存最久没有活动的那个，然后开始这个会话。', { n: max })}</span>
       <Button onClick={() => nav('/settings/general')}>{t('调整上限')}</Button>
       <Button onClick={() => api.cancelWaiting(sid)}>{t('不等了')}</Button>
+    </div>
+  );
+}
+
+/** The session carries on by itself at a set time: a wake-up Claude scheduled, or once the usage limit resets. */
+export function ResumeBar({ sid, resume }: { sid: string; resume: Resume }) {
+  const t = useT();
+  const time = hhmm(resume.at);
+  return (
+    <div className="readonly-bar waiting">
+      <Icon name="clock" size={16} />
+      <span className="grow">
+        {resume.kind === 'limit' ? t('这一轮被用量限额拒绝了。限额重置后，{time} 会自动接着做。', { time })
+          : resume.reason ? t('Claude 预约了 {time} 继续：{reason}', { time, reason: resume.reason }) : t('Claude 预约了 {time} 继续。', { time })}
+      </span>
+      {resume.kind === 'limit' && <Button onClick={() => void api.resumeNow(sid)}>{t('现在重试')}</Button>}
+      <Button onClick={() => void api.cancelResume(sid).catch(() => undefined)}>{resume.kind === 'wake' ? t('取消预约') : t('不自动继续')}</Button>
     </div>
   );
 }

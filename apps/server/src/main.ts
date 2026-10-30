@@ -26,6 +26,7 @@ import { reloadAgents } from './ext/agents';
 import './ext/instructions';
 import { sessionFile } from './sessions/extras';
 import { startScheduler } from './ext/jobs';
+import { startResumes } from './resume';
 import './peer';
 import './review';
 import './board';
@@ -154,6 +155,7 @@ async function main() {
     void scanExternal();
   }
   startScheduler();
+  startResumes();
   setInterval(() => void refreshBranches(), 30_000);
   setInterval(reloadDisk, 15_000);
 

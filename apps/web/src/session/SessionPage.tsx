@@ -8,11 +8,11 @@ import { Button } from '../components/ui';
 import { StateBadge, useSessionActions } from '../components/SessionRow';
 import { useApp, type InspectorTab } from '../store/app';
 import { promptsOf, useSessions } from '../store/sessions';
-import { relTime, tokens as fmtTokens } from '../lib/format';
+import { hhmm, relTime, tokens as fmtTokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
 import { SessionLink, Transcript } from './Transcript';
-import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar, WaitingBar } from './Dock';
+import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar, ResumeBar, WaitingBar } from './Dock';
 import { Composer } from './Composer';
 import { Inspector } from './Inspector';
 import { RewindDialog } from './RewindDialog';
@@ -84,6 +84,7 @@ export function SessionPage() {
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'plan' && <PlanReviewBar key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
+            {sum.resume && rt.state !== 'running' && <ResumeBar sid={id} resume={sum.resume} />}
             {sum.waiting && <WaitingBar sid={id} />}
             {rt.readOnly ? (
               !sum.waiting && <ReadOnlyBar sid={id} model={rt.model} worktreeGone={!!sum.worktreeGone} onFork={() => void api.forkAt(id).then((nid) => nav(`/s/${nid}`))} />
@@ -120,7 +121,8 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
       <div className="grow">
         <div className="t truncate">{s.title}</div>
         <div className={cx('m truncate', ((s.state === 'requires_action' && s.live) || s.waiting) && 'warn')} title={s.createdBy ? t('由会话「{x}」创建', { x: s.createdBy.title }) : undefined}>
-          {s.draft ? t('未发送') : s.waiting ? t('等待空位') : s.live && s.state === 'requires_action' ? t('等你处理') : s.live && s.state === 'running' ? t('运行中') : relTime(s.lastActive)}
+          {s.draft ? t('未发送') : s.waiting ? t('等待空位') : s.live && s.state === 'requires_action' ? t('等你处理') : s.live && s.state === 'running' ? t('运行中')
+            : s.resume ? (s.resume.kind === 'wake' ? t('{time} 继续', { time: hhmm(s.resume.at) }) : t('限额重置后 {time} 继续', { time: hhmm(s.resume.at) })) : relTime(s.lastActive)}
           {s.createdBy && <span className="by"> · {t('由「{x}」创建', { x: s.createdBy.title })}</span>}
         </div>
       </div>

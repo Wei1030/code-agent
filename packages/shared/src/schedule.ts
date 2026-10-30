@@ -108,3 +108,12 @@ export function fillVars(prompt: string, vars: Record<string, string>): string {
   const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   return prompt.replace(/\{\{\s*([\w-]+)\s*\}\}/g, (_, k: string) => (k === 'date' ? date : vars[k] ?? ''));
 }
+
+/**
+ * When to carry on after the usage limit refused a turn: a minute after the limit resets when that
+ * time is known and ahead, else in half an hour; never sooner than a minute or later than six hours.
+ */
+export function afterLimit(now: number, resetsAt: number | null | undefined): number {
+  const at = resetsAt && resetsAt > now ? resetsAt + 60_000 : now + 31 * 60_000;
+  return Math.min(Math.max(at, now + 60_000), now + 6 * 3600_000);
+}

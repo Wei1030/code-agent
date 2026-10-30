@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeSchedule, fillVars, nextRun, parseCron, promptVars } from './schedule';
+import { afterLimit, describeSchedule, fillVars, nextRun, parseCron, promptVars } from './schedule';
 import type { JobSchedule } from './types';
 
 const base: JobSchedule = { kind: 'daily', time: '09:00', weekdays: [1], everyHours: 6, cron: '', enabled: true, vars: {}, missed: 'skip' };
@@ -56,4 +56,14 @@ test('prompt variables: in order of first use, without duplicates or the automat
   assert.deepEqual(promptVars('从 {{since}} 到 {{until}}，再看 {{since}}，日期 {{date}}'), ['since', 'until']);
   const out = fillVars('从 {{since}} 到 {{until}} · {{date}}', { since: '周一' });
   assert.match(out, /^从 周一 到  · \d{4}-\d{2}-\d{2}$/);
+});
+
+test('after a usage limit: a minute past a known reset; half an hour when it is unknown or past; within a minute to six hours', () => {
+  const now = Date.UTC(2026, 9, 31, 12, 0);
+  const min = 60_000;
+  assert.equal(afterLimit(now, now + 90 * min), now + 91 * min);
+  assert.equal(afterLimit(now, null), now + 31 * min);
+  assert.equal(afterLimit(now, now - 5 * min), now + 31 * min, 'a reset already past');
+  assert.equal(afterLimit(now, now + 10_000), now + 70_000, 'at least a minute from now');
+  assert.equal(afterLimit(now, now + 9 * 3600_000), now + 6 * 3600_000, 'at most six hours');
 });
