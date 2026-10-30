@@ -119,5 +119,5 @@ test('in plan mode the plan is written to a plan file; ExitPlanMode asks with it
   const { asks } = await run([...plan('# 契约计划\n\n1. 第一步\n'), [say('好')]], { permissionMode: 'plan' });
   assert.deepEqual(asks.map((a) => a.tool), ['ExitPlanMode'], 'writing the plan file is not asked');
   assert.match(String(asks[0].input.plan), /契约计划/);
-  assert.match(String(asks[0].input.planFilePath), /plans[\/].+\.md$/);
+  assert.match(String(asks[0].input.planFilePath), /plans[\\/].+\.md$/);
 });
