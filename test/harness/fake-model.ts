@@ -157,18 +157,23 @@ export class FakeModel {
     const fail = this.failing.get(r.model);
     if (fail) return { blocks: fail };
     const so = (r.body.tools ?? []).find((t: any) => t.name === 'StructuredOutput');
+    const sc = this.scripts.find((s) => s.match(r));
     if (so) {
-      const last = [...(r.body.messages ?? [])].reverse().find((m: any) => m.role === 'assistant');
-      if (Array.isArray(last?.content) && last.content.some((b: any) => b.type === 'tool_use' && b.name === 'StructuredOutput')) return { blocks: [say('完成。')] };
+      // Done once Claude Code took the structured output; after a rejected one, answer again.
+      const msgs = r.body.messages ?? [];
+      const last = [...msgs].reverse().find((m: any) => m.role === 'assistant');
+      const result = msgs.at(-1)?.content;
+      const rejected = Array.isArray(result) && result.some((b: any) => b.type === 'tool_result' && b.is_error);
+      if (Array.isArray(last?.content) && last.content.some((b: any) => b.type === 'tool_use' && b.name === 'StructuredOutput') && !rejected) return { blocks: [say('完成。')] };
       for (const f of this.structuredFns) {
         const out = f(so.input_schema, r);
         if (out?.blocks) return { blocks: out.blocks };
         if (out && 'output' in out) return { blocks: [use('StructuredOutput', out.output as Record<string, unknown>)] };
       }
-      return { blocks: [use('StructuredOutput', sample(so.input_schema) as Record<string, unknown>)] };
+      // A scripted run (a job doing work first) goes through its steps.
+      if (!sc || r.step >= sc.steps.length) return { blocks: [use('StructuredOutput', sample(so.input_schema) as Record<string, unknown>)] };
     }
     if (!r.tools.length) return { blocks: [say('好的。')] };
-    const sc = this.scripts.find((s) => s.match(r));
     if (!sc) return { blocks: [say('好的。')] };
     const step = sc.steps[r.step] ?? [say('完成。')];
     return { blocks: typeof step === 'function' ? step(r) : step, slow: sc.slow };

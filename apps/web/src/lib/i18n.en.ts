@@ -1426,6 +1426,7 @@ export const EN: Record<string, string> = {
   "Claude 新建": "Created by Claude",
   "Claude：{text}": "Claude: {text}",
   "Code Agent 服务重启，审核中断": "Code Agent restarted; the review was interrupted",
+  "Code Agent 服务重启，运行中断": "Code Agent restarted; the run was interrupted",
   "MCP 说明": "MCP instructions",
   "[{0}] Claude Code 启动中（{1}，工作目录 {cwd}）": "[{0}] Starting Claude Code ({1}, working directory {cwd})",
   "[{0}] 进程已结束{1}": "[{0}] Process ended{1}",

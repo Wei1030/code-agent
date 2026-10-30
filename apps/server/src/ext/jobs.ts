@@ -14,9 +14,16 @@ import { load, save } from '../store';
 import { initRuntime, summary, upsert } from '../sessions/registry';
 import { closeProcess, onTurnEnd, sendTurn, startProcess } from '../sessions/live';
 import { acquire } from '../sessions/slots';
+import { validModel } from '../models';
 
 /** Session id → run id of job runs in progress. */
 const running = new Map<string, string>();
+
+// Runs in progress when the server stopped cannot go on.
+if (app.jobRuns.some((r) => r.status === 'queued' || r.status === 'running')) {
+  app.jobRuns = app.jobRuns.map((r) => (r.status === 'queued' || r.status === 'running' ? { ...r, status: 'error', endedAt: Date.now(), error: 'Code Agent 服务重启，运行中断' } : r));
+  save('slice:jobRuns', () => app.jobRuns);
+}
 const meta = load<{ lastAlive?: number; nextAt?: Record<string, number> }>('jobs-meta', {});
 const nextAt: Record<string, number> = meta.nextAt ?? {};
 
@@ -44,7 +51,7 @@ function runJob(jobId: string, vars: Record<string, string>, trigger: JobRun['tr
   const runId = randomUUID();
   const now = Date.now();
   upsert({ id: sid, workspaceId: ws.id, title: `作业 · ${job.name}`, firstPrompt: prompt, branch: ws.branch, createdAt: now, lastActive: now, tag: '作业', live: false, state: 'idle', forkedFrom: null, tokens: 0, jobId });
-  initRuntime(emptyRuntime(sid, { model: job.model, effort: job.effort, mode: job.mode }));
+  initRuntime(emptyRuntime(sid, { model: validModel(job.model), effort: job.effort, mode: job.mode }));
   set('jobRuns', [{ id: runId, jobId, trigger, startedAt: now, vars, status: 'queued' as const, turns: 0, tokens: 0, sessionId: sid }, ...app.jobRuns].slice(0, 500));
   running.set(sid, runId);
   void acquire(sid, async () => {
