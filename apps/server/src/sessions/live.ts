@@ -232,7 +232,8 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] Claude Code 启动中（${so.resume ? '恢复会话' : '新会话'}，工作目录 ${opts.cwd}）` });
   void pump(l).finally(() => endedResolve());
   const starts = (r.info?.starts ?? 0) + 1;
-  emit(sid, { t: 'settings', patch: { info: { ...r.info, startedAt: Date.now(), starts } } });
+  // Claude Code keeps the system prompt of a session's first start; a resumed one shows that one.
+  emit(sid, { t: 'settings', patch: { info: { ...r.info, startedAt: Date.now(), starts, ...(so.resume ? {} : { prompt: opts.prompt }) } } });
   l.ready = q.initializationResult().then((init) => {
     l.commands = init.commands ?? [];
     const pid = (init as { pid?: number }).pid;

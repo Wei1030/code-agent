@@ -47,6 +47,15 @@ export function describeRule(rule: string): string {
   return `${TOOL_LABEL[tool] ?? tool}：${spec}`;
 }
 
+/**
+ * The rules to write for one: a command rule goes in twice, for Bash and for PowerShell, because
+ * Claude Code runs commands with PowerShell on Windows without Git Bash and a rule names one tool.
+ */
+export function rulesFor(rule: string): string[] {
+  const { tool, spec } = parseRule(rule);
+  return tool === 'Bash' ? [rule, spec === null ? 'PowerShell' : `PowerShell(${spec})`] : [rule];
+}
+
 /** Build a rule from the structured editor's fields. */
 export function buildRule(kind: RuleKind, a: string, b = '', bashMode: 'prefix' | 'exact' | 'all' = 'prefix'): string {
   const v = a.trim();

@@ -463,6 +463,13 @@ function InfoTab({ rt }: { rt: SessionRuntime }) {
         <dt>MCP</dt><dd>{info.mcp?.length ? info.mcp.map((m) => <div key={m.name}>{m.name} <span className={m.status === 'connected' ? 'muted' : 'del-n'}>{t(MCP_STATUS[m.status] ?? m.status)}</span></div>) : '—'}</dd>
         {info.agents?.length ? <><dt>{t('子代理')}</dt><dd>{info.agents.join('、')}</dd></> : null}
         <dt>{t('进程')}</dt><dd>{sum?.live ? (info.startedAt ? t('{t} 启动 · 第 {n} 次', { t: relTime(info.startedAt), n: info.starts ?? 1 }) : t('运行中')) : t('没有运行（已保存）')}</dd>
+        {info.prompt?.text && <>
+          <dt>{info.prompt.custom ? t('自定义系统提示词') : t('附加的系统提示词')}</dt>
+          <dd>
+            <pre className="code-block session-prompt">{info.prompt.text}</pre>
+            <div className="hint">{t('会话开始时定下：Claude Code 一直沿用会话开始时的系统提示词，之后改配置方案也不会变。')}</div>
+          </dd>
+        </>}
       </dl>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
         <Button size="sm" icon="copy" onClick={() => copy(rt.id, t('会话 ID'))}>{t('复制会话 ID')}</Button>

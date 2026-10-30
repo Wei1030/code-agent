@@ -61,6 +61,48 @@ export function readJson(file: string): Record<string, unknown> {
   }
 }
 
+/** Claude Code's key for a folder in .claude.json: the normalized path, with / on Windows. */
+const projectKey = (dir: string) => (process.platform === 'win32' ? path.normalize(dir).replace(/\\/g, '/') : path.normalize(dir));
+
+/**
+ * Whether Claude Code trusts the folder, as its own check does: the folder or a folder above it
+ * accepted the trust dialog, looking no higher than the repository's root.
+ */
+export function isTrusted(dir: string, repoRoot: string | null): boolean {
+  const projects = (readJson(claudeJsonPath()).projects ?? {}) as Record<string, { hasTrustDialogAccepted?: boolean }>;
+  const stop = repoRoot ? projectKey(repoRoot).toLowerCase() : null;
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    if (projects[projectKey(d)]?.hasTrustDialogAccepted === true) return true;
+    if ((stop && projectKey(d).toLowerCase() === stop) || path.dirname(d) === d) return false;
+  }
+}
+
+/**
+ * Trust a folder for Claude Code, as accepting its trust dialog in the terminal does. .claude.json
+ * is Claude Code's own file: when it cannot be read as JSON (being written just now), it is left
+ * alone and the trust is not given.
+ */
+export async function trustFolder(dir: string) {
+  const file = claudeJsonPath();
+  let j: Record<string, unknown> = {};
+  for (let i = 0; existsSync(file); i++) {
+    try {
+      const text = readFileSync(file, 'utf8');
+      j = text.trim() ? (JSON.parse(text) as Record<string, unknown>) : {};
+      break;
+    } catch {
+      if (i === 4) throw new Error(`读不了 Claude Code 的配置文件 ${file}，没有改动它，请稍后再试`);
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+  const projects = (j.projects ?? {}) as Record<string, Record<string, unknown>>;
+  const key = projectKey(path.resolve(dir));
+  j.projects = { ...projects, [key]: { ...projects[key], hasTrustDialogAccepted: true } };
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(j, null, 2)}\n`);
+  renameSync(tmp, file);
+}
+
 /** Change a JSON file in place, keeping every key not touched. */
 export function editJson(file: string, fn: (j: Record<string, unknown>) => void) {
   const j = readJson(file);

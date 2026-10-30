@@ -180,6 +180,8 @@ async function forkAt(sid: string, beforeUserId?: string): Promise<string> {
     items, model: r.model, effort: r.effort, mode: r.mode, context: r.context,
     // A fork before a message has had only the turns before it.
     turn: beforeUserId ? items.filter((it) => it.kind === 'user').length : r.turn, tokens: r.tokens, readOnly: false,
+    // The fork goes on with the system prompt Claude Code recorded for the original.
+    info: { prompt: r.info?.prompt },
   }));
   if (resumable) void acquire(newId, () => startProcess(newId, { resume: true }));
   return newId;

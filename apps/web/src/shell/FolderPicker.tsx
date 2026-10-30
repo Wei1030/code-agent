@@ -8,6 +8,7 @@ import type { FsNode } from '../lib/catalog';
 import { api } from '../api';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
+import { askTrust } from '../lib/trust';
 
 const join = (parent: string, name: string) => (parent ? `${parent}${/[\\/]$/.test(parent) ? '' : parent.includes('/') && !parent.includes('\\') ? '/' : '\\'}${name}` : name);
 
@@ -64,6 +65,7 @@ export function FolderPicker() {
       useApp.getState().set({ folderPickerOpen: false });
       useApp.getState().toast(t('已添加工作区 {name}', { name: ws.name }), 'good');
       openWorkspace(ws.id);
+      if (!ws.trusted) askTrust(ws);
     } catch {
       // The server's message is shown as a toast.
     } finally {

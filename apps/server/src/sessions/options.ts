@@ -64,7 +64,7 @@ function languageLine(): string | null {
   return lang ? `Always respond to the user in ${lang}.` : null;
 }
 
-export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cwd: string } {
+export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cwd: string; prompt: { custom: boolean; text: string } } {
   const prof = app.profiles.find((p) => p.isDefault) ?? app.profiles[0];
   const r = rt(sid)!;
   const ws = workspaceOf(sid);
@@ -154,5 +154,6 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
     ...(ctx.resume ? { resume: sid } : { sessionId: sid }),
     ...ctx.extra,
   };
-  return { options, cwd };
+  const prompt = systemPrompt.type === 'custom' ? { custom: true, text: [systemPrompt.prompt].flat().join('\n\n') } : { custom: false, text: systemPrompt.append ?? '' };
+  return { options, cwd, prompt };
 }

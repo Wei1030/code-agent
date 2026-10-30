@@ -46,6 +46,8 @@ export interface Workspace {
   path: string;
   branch: string | null;
   lastActive: number;
+  /** Claude Code trusts the folder, so the settings committed in it (repository rules) apply. */
+  trusted: boolean;
 }
 
 export interface SessionSummary {
@@ -617,6 +619,11 @@ export interface SessionInfo {
   /** When the running process started and how many processes the session has had. */
   startedAt?: number;
   starts?: number;
+  /**
+   * What Code Agent put in the system prompt when the session started: text appended to Claude
+   * Code's own prompt, or a custom prompt in its place. Claude Code keeps that first prompt.
+   */
+  prompt?: { custom: boolean; text: string };
 }
 
 export interface SkillInfo {

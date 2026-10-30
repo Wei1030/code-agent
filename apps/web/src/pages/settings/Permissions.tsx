@@ -9,9 +9,10 @@ import { Icon } from '../../components/Icon';
 import { Button, Chip, Seg, Select } from '../../components/ui';
 import { useApp } from '../../store/app';
 import { NoWorkspace, useWorkspaceChoice } from '../../components/NoWorkspace';
-import { buildRule, describeRule, type RuleKind } from '../../lib/rules';
+import { buildRule, describeRule, parseRule, rulesFor, type RuleKind } from '../../lib/rules';
 import { uid } from '../../lib/util';
 import { useT } from '../../lib/i18n';
+import { askTrust } from '../../lib/trust';
 
 const BEHAVIORS = [
   { value: 'allow', label: '允许', desc: '直接执行，不再问你', tone: 'good' },
@@ -44,7 +45,7 @@ export function Permissions() {
   const file = scope === 'global' ? '~/.claude/settings.json' : `${ws?.path ?? ''}\\.claude\\settings.local.json`;
 
   const add = (behavior: Behavior, rule: string) => {
-    app.set({ rules: [...app.rules, { id: uid('r'), behavior, rule, scope, workspaceId: scope === 'workspace' ? wsId : undefined }] });
+    app.set({ rules: [...app.rules, ...rulesFor(rule).map((r) => ({ id: uid('r'), behavior, rule: r, scope, workspaceId: scope === 'workspace' ? wsId : undefined }))] });
     app.toast(t('已添加：{d}', { d: describeRule(rule) }), 'good');
   };
 
@@ -95,6 +96,13 @@ export function Permissions() {
                 <span className="grow" />
                 <span className="hint">{t('随代码提交，团队共享；这里只读')}</span>
               </div>
+              {ws && !ws.trusted && (
+                <div className="banner-warn" style={{ margin: '10px 12px 0' }}>
+                  <Icon name="warning" size={15} />
+                  <span className="grow">{t('Claude Code 还没有信任这个文件夹，这里的规则不会生效。')}</span>
+                  <Button size="sm" onClick={() => askTrust(ws)}>{t('信任这个文件夹')}</Button>
+                </div>
+              )}
               {repo.length ? <RuleList rules={repo} /> : <div className="empty">{t('这个仓库没有提交权限规则')}</div>}
             </div>
           )}
@@ -115,18 +123,26 @@ function RuleList({ rules, editable }: { rules: PermissionRule[]; editable?: boo
   if (rules.length === 0) return <div className="empty">{t('还没有规则。没有命中规则的调用按权限模式处理。')}</div>;
   const order: Behavior[] = ['deny', 'ask', 'allow'];
   const sorted = [...rules].sort((a, b) => order.indexOf(a.behavior) - order.indexOf(b.behavior));
+  // The Bash and PowerShell rule written for one command show as one row.
+  const groups = new Map<string, PermissionRule[]>();
+  for (const r of sorted) {
+    const { tool, spec } = parseRule(r.rule);
+    const key = tool === 'Bash' || tool === 'PowerShell' ? `${r.behavior} command ${spec ?? ''}` : r.id;
+    groups.set(key, [...(groups.get(key) ?? []), r]);
+  }
   return (
     <div className="rule-list">
-      {sorted.map((r) => {
-        const b = BEHAVIORS.find((x) => x.value === r.behavior)!;
+      {[...groups.values()].map((g) => {
+        const b = BEHAVIORS.find((x) => x.value === g[0].behavior)!;
+        const ids = new Set(g.map((r) => r.id));
         return (
-          <div key={r.id} className="rule-row">
+          <div key={g[0].id} className="rule-row">
             <Chip tone={b.tone}>{t(b.label)}</Chip>
             <div className="grow">
-              <div>{describeRule(r.rule)}</div>
-              <div className="mono muted" style={{ fontSize: 11.5 }}>{r.rule}</div>
+              <div>{describeRule((g.find((r) => parseRule(r.rule).tool === 'Bash') ?? g[0]).rule)}</div>
+              <div className="mono muted" style={{ fontSize: 11.5 }}>{g.map((r) => r.rule).join(' · ')}</div>
             </div>
-            {editable && <Button size="sm" variant="ghost" icon="trash" title={t('删除')} onClick={() => app.set({ rules: app.rules.filter((x) => x.id !== r.id) })} />}
+            {editable && <Button size="sm" variant="ghost" icon="trash" title={t('删除')} onClick={() => app.set({ rules: app.rules.filter((x) => !ids.has(x.id)) })} />}
           </div>
         );
       })}

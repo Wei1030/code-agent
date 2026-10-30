@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRule, describeRule, parseRule } from './rules';
+import { buildRule, describeRule, parseRule, rulesFor } from './rules';
 
 test('rules parse into tool and specifier', () => {
   assert.deepEqual(parseRule('Bash(npm test *)'), { tool: 'Bash', spec: 'npm test *' });
@@ -32,4 +32,10 @@ test('the structured editor builds the rule text', () => {
   assert.equal(buildRule('mcp', 'gh', ''), 'mcp__gh__*');
   assert.equal(buildRule('mcp', 'gh', 'create_issue'), 'mcp__gh__create_issue');
   assert.equal(buildRule('read', ''), 'Read');
+});
+
+test('a command rule is written for Bash and for PowerShell; other rules once (issue 10-30#15)', () => {
+  assert.deepEqual(rulesFor('Bash(npm run lint *)'), ['Bash(npm run lint *)', 'PowerShell(npm run lint *)']);
+  assert.deepEqual(rulesFor('Bash'), ['Bash', 'PowerShell']);
+  assert.deepEqual(rulesFor('Read(src/**)'), ['Read(src/**)']);
 });

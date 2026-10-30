@@ -43,6 +43,8 @@ export interface ServerApi {
   setState(patch: Partial<AppSlices>): void;
   addWorkspace(path: string): Workspace;
   removeWorkspace(id: string): void;
+  /** Trust the folder for Claude Code, as its trust dialog in the terminal does. */
+  trustWorkspace(id: string): void;
   listDir(path: string | null): FsNode[];
   listFiles(workspaceId: string): FsNode[];
   listCommands(sid: string): CommandInfo[];

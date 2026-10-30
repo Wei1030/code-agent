@@ -180,6 +180,28 @@ test('session info: version, process, directory, model (FR-SES-17)', async () =>
   assert.ok(finished(env.c, sid) === 1);
 });
 
+test('session info shows what Code Agent put in the system prompt; a resumed session and a fork keep the first (FR-SES-17)', async () => {
+  env.model.script(/^提示词一$/, [[say('好')]]);
+  env.model.script(/^提示词二$/, [[say('好')]]);
+  const sid = await env.start('提示词一');
+  await env.turns(sid);
+  const first = (await env.rt(sid)).info?.prompt;
+  assert.equal(first?.custom, false);
+  assert.match(first?.text ?? '', /Always respond to the user in/);
+  assert.ok(env.model.sent(/^提示词一$/)[0].system.includes(first!.text), 'what was sent');
+  const prev = env.c.slices.profiles;
+  await env.c.call('setState', { profiles: prev.map((p) => ({ ...p, promptMode: 'append', promptText: 'MARK-LATER' })) });
+  await env.c.call('stop', sid);
+  await until(() => env.c.sessions.get(sid)?.live === false, 'saved');
+  await env.c.call('resume', sid);
+  await env.c.call('send', sid, '提示词二', {});
+  await env.turns(sid, 2);
+  assert.deepEqual((await env.rt(sid)).info?.prompt, first, 'the resumed session keeps its first prompt');
+  const fork = await env.c.call('forkAt', sid);
+  assert.deepEqual((await env.rt(fork)).info?.prompt, first, 'the fork goes on with the original\'s');
+  await env.c.call('setState', { profiles: prev });
+});
+
 test('the file preview reads files of the session\'s own folders only; binary and very long files are flagged (FR-FILE-02)', async () => {
   env.model.script(/文件预览/, [[say('好')]]);
   const sid = await env.start('文件预览');

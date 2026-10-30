@@ -61,7 +61,17 @@ test('permission rules: added with the structured editor, written to the setting
   await p.eval(`(${field}).classList.add('__rule')`);
   await p.type('.__rule', 'npm run lint');
   await p.click('.settings-main .btn', '添加');
-  await until(() => JSON.parse(readFileSync(path.join(env.world.config, 'settings.json'), 'utf8')).permissions?.allow?.some((r: string) => /npm run lint/.test(r)), 'written');
+  const allow = () => JSON.parse(readFileSync(path.join(env.world.config, 'settings.json'), 'utf8')).permissions?.allow as string[] | undefined;
+  await until(() => allow()?.includes('PowerShell(npm run lint *)'), 'written');
+  assert.ok(allow()!.includes('Bash(npm run lint *)'), 'for Bash and PowerShell (issue 10-30#15)');
+  assert.equal(await p.eval(`[...document.querySelectorAll('.rule-row')].filter((r) => r.textContent.includes('npm run lint')).length`), 1, 'shown as one rule');
+  // The repository's own rules need the folder trusted; the page says so and trusts it on request (issue 10-30#12).
+  await p.click('button', '单个工作区');
+  await p.waitEl('.banner-warn', '还没有信任这个文件夹');
+  await p.click('.banner-warn .btn', '信任这个文件夹');
+  await p.click('.modal .btn.primary', '信任');
+  await p.gone('.banner-warn', '还没有信任这个文件夹');
+  assert.equal(env.c.slices.workspaces.find((w) => w.id === env.ws)?.trusted, true);
   noPageErrors(p);
   await p.close();
 });

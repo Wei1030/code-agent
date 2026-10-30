@@ -34,7 +34,7 @@ export function Hooks() {
 
   const create = () => {
     const r: HookRule = {
-      id: uid('hk'), name: t('新规则'), event, matcher: isToolEvent(event) ? 'Bash' : '', action: actionsFor(event)[0],
+      id: uid('hk'), name: t('新规则'), event, matcher: isToolEvent(event) ? 'Bash|PowerShell' : '', action: actionsFor(event)[0],
       text: '', timeout: 10, async: false, enabled: false, scope: 'global',
       cond: condFieldsFor(event).length ? { field: condFieldsFor(event)[0], op: 'glob', value: '' } : undefined,
     };
