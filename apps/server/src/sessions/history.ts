@@ -9,7 +9,7 @@ import { getSessionInfo, getSessionMessages, listSessions, type SessionMessage }
 import type { Item, SessionRuntime, ToolItem } from '@code-agent/shared/types';
 import { emptyRuntime } from '@code-agent/shared/runtime';
 import { app } from '../state';
-import { addItem, emit, initRuntime, patchSummary, rt, summary, upsert } from './registry';
+import { addItem, allSummaries, conversationOf, emit, initRuntime, patchSummary, rt, summary, upsert } from './registry';
 import { cwdOf } from './options';
 import { toolDetail, toolName, toolResult } from './describe';
 import { CONTEXT_MARK, live, onProcessEnd } from './live';
@@ -28,12 +28,17 @@ export async function scanExternal() {
     } catch {
       continue;
     }
+    // Conversations a session went on under after a /clear are that session, not new ones.
+    const owner = new Map(allSummaries().flatMap((x) => (x.conversations ?? []).map((c) => [c, x.id] as const)));
     for (const s of list) {
-      const known = summary(s.sessionId);
+      const id = owner.get(s.sessionId) ?? s.sessionId;
+      const known = summary(id);
       if (known) {
+        // What a session left behind when it cleared its conversation has nothing new.
+        if (conversationOf(id) !== s.sessionId) continue;
         if (known.live || known.draft || s.lastModified <= (known.transcriptAt ?? known.lastActive)) continue;
         const title = s.customTitle ? short(s.customTitle, 40) : known.title;
-        patchSummary(s.sessionId, { lastActive: Math.max(known.lastActive, s.lastModified), ...(title !== known.title ? { title } : {}) });
+        patchSummary(id, { lastActive: Math.max(known.lastActive, s.lastModified), ...(title !== known.title ? { title } : {}) });
         continue;
       }
       upsert({
@@ -132,7 +137,7 @@ export async function importTranscript(sid: string): Promise<SessionRuntime | un
   let msgs;
   let info;
   try {
-    [msgs, info] = await Promise.all([getSessionMessages(sid, { dir: cwd }), getSessionInfo(sid, { dir: cwd })]);
+    [msgs, info] = await Promise.all([getSessionMessages(conversationOf(sid), { dir: cwd }), getSessionInfo(conversationOf(sid), { dir: cwd })]);
   } catch {
     return undefined;
   }
@@ -197,9 +202,9 @@ async function sync(sid: string) {
   const r = rt(sid);
   if (!sum || !r || sum.draft || live(sid)) return;
   const cwd = cwdOf(sid);
-  const info = await getSessionInfo(sid, { dir: cwd });
+  const info = await getSessionInfo(conversationOf(sid), { dir: cwd });
   if (!info || info.lastModified <= (sum.transcriptAt ?? 0)) return;
-  const part = unseen(r.items, await getSessionMessages(sid, { dir: cwd }));
+  const part = unseen(r.items, await getSessionMessages(conversationOf(sid), { dir: cwd }));
   if (part) {
     const have = itemIds(r.items);
     const items = toItems(part.msgs, cwd).filter((x) => !have.has(x.id));
@@ -216,5 +221,5 @@ async function sync(sid: string) {
 /** Code Agent's own process wrote the transcript last: what it has is what Code Agent shows. */
 onProcessEnd((sid) => {
   if (summary(sid)?.draft) return;
-  void getSessionInfo(sid, { dir: cwdOf(sid) }).then((info) => info && patchSummary(sid, { transcriptAt: info.lastModified }), () => undefined);
+  void getSessionInfo(conversationOf(sid), { dir: cwdOf(sid) }).then((info) => info && patchSummary(sid, { transcriptAt: info.lastModified }), () => undefined);
 });

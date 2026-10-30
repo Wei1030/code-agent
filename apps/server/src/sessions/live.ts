@@ -8,13 +8,13 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { getSessionInfo, query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
+import { getSessionMessages, query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type {
   AgentRun, Attachment, BgTask, FileChange, Item, PeerOrigin, PendingRequest, RequestBrief, SessionRef, Task, ToolItem,
 } from '@code-agent/shared/types';
 import { app, update } from '../state';
 import { broadcast } from '../hub';
-import { addItem, emit, findItem, patchItem, patchSummary, raw, rt, summary } from './registry';
+import { addItem, conversationOf, emit, findItem, patchItem, patchSummary, raw, rt, summary } from './registry';
 import { InputQueue } from './input';
 import { agentRow, READ_ONLY, toolDetail, toolName, toolResult } from './describe';
 import { buildOptions, cwdOf } from './options';
@@ -227,7 +227,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   // A session Claude Code never ran (its first message still waited for a running slot when the
   // server restarted) has no conversation to resume: it starts as a new one under its own id.
   let resume = so.resume;
-  if (resume && !(await getSessionInfo(sid, { dir: cwdOf(sid) }).catch(() => undefined))) {
+  if (resume && !(await getSessionMessages(conversationOf(sid), { dir: cwdOf(sid), limit: 1 }).catch(() => [])).length) {
     resume = false;
     if (r.items.some((it) => it.kind === 'text')) addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'warn', text: 'Claude Code 里找不到这个会话的对话记录，作为新对话开始：之前的内容 Claude 看不到。' });
   }
@@ -974,6 +974,10 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const tools = (m.tools as string[] | undefined)?.length ?? 0;
       const mcp = (m.mcp_servers as Array<{ name: string; status: string }> | undefined) ?? [];
       raw(sid, 'system/init', `${String(m.model)} · ${tools} 个工具 · ${mcp.length} 个 MCP · ${String(m.permissionMode)}`, m);
+      // After /clear (or a plan approved with a cleared context) Claude Code goes on under another
+      // session id: resuming, forking and reading the transcript follow it.
+      const cur = String(m.session_id ?? '');
+      if (cur && cur !== conversationOf(sid)) patchSummary(sid, { conversations: [...(summary(sid)?.conversations ?? []), cur] });
       emit(sid, { t: 'settings', patch: { info: {
         ...rt(sid)?.info, version: String(m.claude_code_version ?? ''), cwd: String(m.cwd ?? ''), apiModel: String(m.model ?? ''),
         outputStyle: String(m.output_style ?? ''), tools, agents: (m.agents as string[] | undefined) ?? [], mcp: mcp.map((x) => ({ name: x.name, status: x.status })),

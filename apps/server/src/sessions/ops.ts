@@ -8,7 +8,7 @@ import { emptyRuntime } from '@code-agent/shared/runtime';
 import { register } from '../hub';
 import { app } from '../state';
 import { load, save } from '../store';
-import { addItem, allSummaries, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
+import { addItem, allSummaries, conversationOf, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
 import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onTurnEnd, refreshContext, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
 import { cwdOf } from './options';
@@ -180,21 +180,21 @@ async function forkAt(sid: string, beforeUserId?: string): Promise<string> {
   let newId: string;
   let resumable = true;
   if (beforeUserId) {
-    const msgs = await getSessionMessages(sid, { dir });
+    const msgs = await getSessionMessages(conversationOf(sid), { dir });
     const at = msgs.findIndex((x) => x.uuid === beforeUserId);
     const prev = at > 0 ? msgs[at - 1] : undefined;
-    if (prev) newId = (await forkSession(sid, { dir, upToMessageId: prev.uuid, title })).sessionId;
+    if (prev) newId = (await forkSession(conversationOf(sid), { dir, upToMessageId: prev.uuid, title })).sessionId;
     else {
       // Forking before the first message is a new, empty conversation.
       newId = randomUUID();
       resumable = false;
     }
   } else {
-    newId = (await forkSession(sid, { dir, title })).sessionId;
+    newId = (await forkSession(conversationOf(sid), { dir, title })).sessionId;
   }
   const s: SessionSummary = {
     ...sum, id: newId, title, live: false, state: 'idle', forkedFrom: sum.title, createdAt: Date.now(), lastActive: Date.now(), draft: !resumable,
-    peerUnread: 0, waiting: false, jobId: undefined, createdBy: undefined,
+    peerUnread: 0, waiting: false, jobId: undefined, createdBy: undefined, conversations: undefined, resume: undefined,
   };
   upsert(s);
   const items = r.items.slice(0, Math.max(0, idx)).map((it) => ({ ...it }));
@@ -386,19 +386,20 @@ register({
   preciseCount: (sid) => refreshContext(sid, true),
   rename: async (sid, title) => {
     patchSummary(sid, { title });
-    await renameSession(sid, title, { dir: cwdOf(sid) }).catch(() => undefined);
+    await renameSession(conversationOf(sid), title, { dir: cwdOf(sid) }).catch(() => undefined);
   },
   tag: async (sid, value) => {
     patchSummary(sid, { tag: value });
-    await tagSession(sid, value, { dir: cwdOf(sid) }).catch(() => undefined);
+    await tagSession(conversationOf(sid), value, { dir: cwdOf(sid) }).catch(() => undefined);
   },
   remove: async (sid) => {
     dropQueue(sid);
     const dir = cwdOf(sid);
     const wasDraft = summary(sid)?.draft;
+    const ids = [sid, ...(summary(sid)?.conversations ?? [])];
     await closeProcess(sid);
     dropSession(sid);
-    if (!wasDraft) await deleteSession(sid, { dir }).catch(() => undefined);
+    if (!wasDraft) for (const id of ids) await deleteSession(id, { dir }).catch(() => undefined);
     void pump();
   },
   markRead: (sid) => patchSummary(sid, { peerUnread: 0 }),

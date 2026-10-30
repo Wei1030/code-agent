@@ -40,6 +40,11 @@ export function summary(id: string): SessionSummary | undefined {
   return summaries.get(id);
 }
 
+/** The Claude Code session id the session runs on now: its own until a /clear moved it on. */
+export function conversationOf(id: string): string {
+  return summaries.get(id)?.conversations?.at(-1) ?? id;
+}
+
 export function allSummaries(): SessionSummary[] {
   return [...summaries.values()];
 }

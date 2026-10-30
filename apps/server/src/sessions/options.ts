@@ -10,7 +10,7 @@ import { LOGS_DIR } from '../paths';
 import { systemClaude } from '../claude/files';
 import { envFor, reasoning, resolveModel } from '../models';
 import { deniedAgents } from '../ext/agents';
-import { rt, summary } from './registry';
+import { conversationOf, rt, summary } from './registry';
 
 export interface BuildCtx {
   resume: boolean;
@@ -146,7 +146,7 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
     stderr: ctx.stderr,
     ...(app.runtime.debugLog ? { debug: true, debugFile: path.join(LOGS_DIR, `${sid}.log`) } : {}),
     ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
-    ...(ctx.resume ? { resume: sid } : { sessionId: sid }),
+    ...(ctx.resume ? { resume: conversationOf(sid) } : { sessionId: conversationOf(sid) }),
     ...ctx.extra,
   };
   const prompt = systemPrompt.type === 'custom' ? { custom: true, text: [systemPrompt.prompt].flat().join('\n\n') } : { custom: false, text: systemPrompt.append ?? '' };

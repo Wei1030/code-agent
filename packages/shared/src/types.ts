@@ -87,6 +87,11 @@ export interface SessionSummary {
   requests?: RequestBrief[];
   /** It carries on by itself at a set time. */
   resume?: Resume;
+  /**
+   * The Claude Code session ids it went on under after its own, the last one current: after /clear
+   * (or a plan approved with a cleared context) Claude Code continues under a new id.
+   */
+  conversations?: string[];
 }
 
 /**

@@ -1,5 +1,6 @@
 // The side of a session's work: task list, subagents, background tasks, file checkpoints and
-// rewind, context, compaction and clearing, session info and the debug log
+// rewind, context, compaction and clearing (and the conversation a clear goes on in), session info
+// and the debug log
 // (FR-TODO-01, FR-AGT-04, FR-BG-01..05, FR-CKPT-01..05, FR-CTX-01..03, FR-SES-17, FR-OBS-02,
 // FR-TOOL-06/09/11, FR-COST-05, FR-FILE-02).
 import { test, after, before } from 'node:test';
@@ -167,6 +168,44 @@ test('context usage after a turn, the precise count, compaction with instruction
   const rt = await env.rt(sid);
   assert.equal(rt.items.length, 1, 'only the divider is left');
   assert.equal(rt.tasks.length, 0);
+});
+
+test('after clearing, the session goes on in the new conversation: a resume, a fork and the folder scan follow it (issue 10-31#8)', async () => {
+  env.model.script(/^记住暗号 ALPHA$/, [[say('记住了 ALPHA')]]);
+  const sid = await env.start('记住暗号 ALPHA');
+  await env.turns(sid);
+  await env.c.call('clearConversation', sid);
+  const conv = await until(() => env.c.sessions.get(sid)?.conversations?.[0], 'gone on under a new conversation');
+  assert.notEqual(conv, sid);
+  env.model.script(/清空后的第一句$/, [[say('清空后记住了 BRAVO')]]);
+  await env.c.call('send', sid, '清空后的第一句', {});
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'text' && i.text === '清空后记住了 BRAVO'), 'answered after clearing');
+
+  await env.c.call('stop', sid);
+  await until(() => env.c.sessions.get(sid)?.live === false, 'saved');
+  env.model.script(/恢复后的第一句$/, [[say('恢复了')]]);
+  await env.c.call('resume', sid);
+  await until(() => env.c.sessions.get(sid)?.live, 'resumed');
+  await env.c.call('send', sid, '恢复后的第一句', {});
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'text' && i.text === '恢复了'), 'answered after resuming');
+  const resumed = JSON.stringify(env.model.sent(/恢复后的第一句$/)[0].body.messages);
+  assert.match(resumed, /清空后记住了 BRAVO/, 'the conversation after the clear');
+  assert.doesNotMatch(resumed, /记住了 ALPHA/, 'not the one before it');
+
+  env.model.script(/分叉后的第一句$/, [[say('分叉了')]]);
+  const fork = await env.c.call('forkAt', sid);
+  await until(() => env.c.sessions.get(fork)?.live, 'the fork runs');
+  assert.equal(env.c.sessions.get(fork)?.conversations, undefined, 'a fork has its own conversation');
+  await env.c.call('send', fork, '分叉后的第一句', {});
+  await until(async () => (await env.rt(fork)).items.some((i) => i.kind === 'text' && i.text === '分叉了'), 'the fork answered');
+  const forked = JSON.stringify(env.model.sent(/分叉后的第一句$/)[0].body.messages);
+  assert.match(forked, /清空后记住了 BRAVO/);
+  assert.doesNotMatch(forked, /记住了 ALPHA/);
+
+  // The folder scan (run when the workspaces change) does not list the new conversation on its own.
+  await env.c.call('addWorkspace', env.world.repo('scan-after-clear'));
+  await sleep(3000);
+  assert.ok(!env.c.sessions.has(conv), 'not listed as an outside session');
 });
 
 test('session info: version, process, directory, model (FR-SES-17)', async () => {
