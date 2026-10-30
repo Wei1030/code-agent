@@ -12,7 +12,7 @@ import { openBrowser } from './open';
 import { allowedOrigin, attach, onHello, register, caller } from './hub';
 import { app, clientSet } from './state';
 import { flush } from './store';
-import { allSummaries } from './sessions/registry';
+import { allSummaries, summary } from './sessions/registry';
 import './sessions/ops';
 import { sessionsOnBoot } from './sessions/ops';
 import { scanExternal } from './sessions/history';
@@ -24,7 +24,7 @@ import { probeMcp, reloadMcp } from './ext/mcp';
 import { recheckPlugins, reloadSkills } from './ext/skills';
 import { reloadAgents } from './ext/agents';
 import './ext/instructions';
-import './sessions/extras';
+import { sessionFile } from './sessions/extras';
 import { startScheduler } from './ext/jobs';
 import './peer';
 import './review';
@@ -53,6 +53,32 @@ onWorkspacesChanged(() => {
   void probeMcp();
 });
 
+const IMAGES: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+};
+
+/** A picture of a session's own folders, for the chat (Markdown images) and the file preview. */
+function sessionImage(req: http.IncomingMessage, res: http.ServerResponse) {
+  const u = new URL(req.url ?? '/', 'http://x');
+  const sid = u.searchParams.get('sid') ?? '';
+  const p = u.searchParams.get('path') ?? '';
+  const type = IMAGES[path.extname(p).toLowerCase()];
+  let file: string;
+  try {
+    if (!type || !summary(sid)) throw new Error('not an image of this session');
+    file = sessionFile(sid, p);
+  } catch {
+    res.statusCode = 404;
+    res.end();
+    return;
+  }
+  res.setHeader('content-type', type);
+  // An SVG opened on its own runs no script.
+  res.setHeader('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'");
+  res.setHeader('cache-control', 'no-cache');
+  createReadStream(file).pipe(res);
+}
+
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.ico': 'image/x-icon', '.json': 'application/json', '.woff2': 'font/woff2',
@@ -71,6 +97,10 @@ async function main() {
   const dist = process.env.CODE_AGENT_WEB_DIST ?? path.join(WEB, 'dist');
   server.on('request', (req, res) => {
     res.setHeader('x-code-agent-home', HOME_TAG);
+    if (req.url?.startsWith('/files?')) {
+      sessionImage(req, res);
+      return;
+    }
     if (vite) {
       vite.middlewares(req, res, () => {
         res.statusCode = 404;

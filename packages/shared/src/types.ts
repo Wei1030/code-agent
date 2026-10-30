@@ -184,6 +184,8 @@ export interface ToolItem {
   /** Why the call was allowed, e.g. "已由你批准". */
   provenance?: string;
   output?: ToolOutput;
+  /** Images in the result (a read picture, a screenshot from an MCP tool), as data URLs. */
+  images?: string[];
   seconds?: number;
   right?: string;
   /** Running in the background. */
@@ -414,8 +416,17 @@ export interface SessionRuntime {
   turn: number;
   tokens: number;
   info?: SessionInfo;
+  /** The board recorder checking the last turn, or why that check failed. */
+  boardCheck?: BoardCheck | null;
   /** Sent to the web app: the items before the ones it has (a transcript comes a page at a time). */
   earlier?: EarlierItems;
+}
+
+export interface BoardCheck {
+  /** The model's label. */
+  model: string;
+  startedAt: number;
+  error?: string;
 }
 
 /** What comes before the loaded part of a transcript: how many items, and its prompts. */
@@ -441,7 +452,7 @@ export type SessionEvent =
   | { t: 'raw'; type: string; summary: string; json: unknown }
   | { t: 'stderr'; line: string }
   | { t: 'status'; status: TransientStatus | null }
-  | { t: 'settings'; patch: Partial<Pick<SessionRuntime, 'model' | 'effort' | 'mode' | 'readOnly' | 'turn' | 'tokens' | 'info'>> };
+  | { t: 'settings'; patch: Partial<Pick<SessionRuntime, 'model' | 'effort' | 'mode' | 'readOnly' | 'turn' | 'tokens' | 'info' | 'boardCheck'>> };
 
 // ------------------------------------------------------------------ settings
 

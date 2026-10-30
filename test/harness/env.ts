@@ -83,7 +83,7 @@ async function ready(world: World, model: FakeModel, server: Server, opts: EnvOp
   await c.call('setState', {
     profiles: c.slices.profiles.map((p) => ({ ...p, model: M1, effort: 'high' as Effort })),
     reviewProfile: { ...c.slices.reviewProfile, model: M1, effort: 'high' },
-    boardSettings: { ...c.slices.boardSettings, recorder: false, recorderModel: M2 },
+    boardSettings: { ...c.slices.boardSettings, recorderModel: M2 },
     maxRunning: opts.maxRunning ?? 8,
   });
   const repo = world.repo('main', opts.files);

@@ -1,6 +1,7 @@
-/** Markdown as Claude writes it: headings, lists, code blocks, tables, quotes, links, and board ids as links. */
+/** Markdown as Claude writes it: headings, lists, code blocks, tables, quotes, links, images, and board ids as links. */
 import { Fragment, type ReactNode } from 'react';
 import { linkify } from './BoardLink';
+import { imageSrc, Thumb } from './Thumb';
 import { guessLanguage, highlight, languageOf } from '../lib/highlight';
 
 type Block =
@@ -88,19 +89,22 @@ function parse(src: string): Block[] {
   return out;
 }
 
-/** Inline: `code`, **bold**, *italic*, [links](url), bare URLs and board ids. */
-export function inline(text: string, wsId?: string): ReactNode {
+/** Inline: `code`, **bold**, *italic*, ![images](src), [links](url), bare URLs and board ids. */
+export function inline(text: string, wsId?: string, sid?: string): ReactNode {
   const parts: ReactNode[] = [];
-  const re = /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([^*]+?)\*\*|__([^_]+?)__|(?<![\w*])\*(?!\s)([^*\n]+?)\*(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|\n/g;
+  const re = /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([^*]+?)\*\*|__([^_]+?)__|(?<![\w*])\*(?!\s)([^*\n]+?)\*(?!\w)|!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|\n/g;
   let last = 0;
   let k = 0;
   for (let m = re.exec(text); m; m = re.exec(text)) {
     if (m.index > last) parts.push(<Fragment key={k++}>{linkify(text.slice(last, m.index), wsId)}</Fragment>);
     if (m[2] !== undefined) parts.push(<code key={k++}>{m[2].replace(/^ (.*) $/, '$1')}</code>);
-    else if (m[3] !== undefined || m[4] !== undefined) parts.push(<b key={k++}>{inline(m[3] ?? m[4], wsId)}</b>);
-    else if (m[5] !== undefined) parts.push(<i key={k++}>{inline(m[5], wsId)}</i>);
-    else if (m[6] !== undefined) parts.push(<a key={k++} href={m[7]} target="_blank" rel="noreferrer">{inline(m[6], wsId)}</a>);
-    else if (m[8] !== undefined) parts.push(<a key={k++} href={m[8]} target="_blank" rel="noreferrer">{m[8]}</a>);
+    else if (m[3] !== undefined || m[4] !== undefined) parts.push(<b key={k++}>{inline(m[3] ?? m[4], wsId, sid)}</b>);
+    else if (m[5] !== undefined) parts.push(<i key={k++}>{inline(m[5], wsId, sid)}</i>);
+    else if (m[7] !== undefined) {
+      const src = imageSrc(m[7], sid);
+      parts.push(src ? <Thumb key={k++} src={src} alt={m[6]} /> : <Fragment key={k++}>{m[0]}</Fragment>);
+    } else if (m[8] !== undefined) parts.push(<a key={k++} href={m[9]} target="_blank" rel="noreferrer">{inline(m[8], wsId, sid)}</a>);
+    else if (m[10] !== undefined) parts.push(<a key={k++} href={m[10]} target="_blank" rel="noreferrer">{m[10]}</a>);
     else parts.push(<br key={k++} />);
     last = m.index + m[0].length;
   }
@@ -108,42 +112,42 @@ export function inline(text: string, wsId?: string): ReactNode {
   return parts;
 }
 
-function render(blocks: Block[], wsId?: string): ReactNode {
+function render(blocks: Block[], wsId?: string, sid?: string): ReactNode {
   return blocks.map((b, i) => {
     switch (b.t) {
       case 'code':
         return <pre key={i} className="md-code" data-lang={b.lang || undefined}><code dangerouslySetInnerHTML={{ __html: highlight(b.text, languageOf(b.lang) ?? guessLanguage(b.text)) }} /></pre>;
       case 'h': {
         const Tag = `h${Math.min(6, b.level + 2)}` as 'h3';
-        return <Tag key={i} className="md-h">{inline(b.text, wsId)}</Tag>;
+        return <Tag key={i} className="md-h">{inline(b.text, wsId, sid)}</Tag>;
       }
       case 'hr':
         return <hr key={i} />;
       case 'quote':
-        return <blockquote key={i}>{render(parse(b.text), wsId)}</blockquote>;
+        return <blockquote key={i}>{render(parse(b.text), wsId, sid)}</blockquote>;
       case 'table':
         return (
           <div key={i} className="md-table"><table>
-            <thead><tr>{b.head.map((c, j) => <th key={j} style={{ textAlign: b.align[j] }}>{inline(c, wsId)}</th>)}</tr></thead>
-            <tbody>{b.rows.map((r, j) => <tr key={j}>{b.head.map((_, x) => <td key={x} style={{ textAlign: b.align[x] }}>{inline(r[x] ?? '', wsId)}</td>)}</tr>)}</tbody>
+            <thead><tr>{b.head.map((c, j) => <th key={j} style={{ textAlign: b.align[j] }}>{inline(c, wsId, sid)}</th>)}</tr></thead>
+            <tbody>{b.rows.map((r, j) => <tr key={j}>{b.head.map((_, x) => <td key={x} style={{ textAlign: b.align[x] }}>{inline(r[x] ?? '', wsId, sid)}</td>)}</tr>)}</tbody>
           </table></div>
         );
       case 'list': {
         const items = b.items.map((it, j) => (
           <li key={j} className={it.task ? 'task' : undefined}>
             {it.task && <input type="checkbox" checked={it.done} readOnly />}
-            {inline(it.text, wsId)}
-            {it.sub && render(parse(it.sub), wsId)}
+            {inline(it.text, wsId, sid)}
+            {it.sub && render(parse(it.sub), wsId, sid)}
           </li>
         ));
         return b.ordered ? <ol key={i} start={b.start}>{items}</ol> : <ul key={i}>{items}</ul>;
       }
       default:
-        return <p key={i}>{inline(b.text, wsId)}</p>;
+        return <p key={i}>{inline(b.text, wsId, sid)}</p>;
     }
   });
 }
 
-export function Markdown({ text, wsId, className }: { text: string; wsId?: string; className?: string }) {
-  return <div className={className ?? 'md'}>{render(parse(text), wsId)}</div>;
+export function Markdown({ text, wsId, sid, className }: { text: string; wsId?: string; sid?: string; className?: string }) {
+  return <div className={className ?? 'md'}>{render(parse(text), wsId, sid)}</div>;
 }

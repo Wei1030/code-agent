@@ -801,7 +801,7 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
       status: denied ? 'denied' : isError ? 'error' : 'ok', seconds, backgroundable: false,
       // Neither a rule we know nor the user allowed it: Claude Code decided it needs no approval.
       ...(hookWhy ? { provenance: hookWhy, right: undefined } : !item.provenance && !denied && !track.name.startsWith('mcp__workspace__') ? { provenance: '无需审批' } : {}),
-      ...(r.output ? { output: r.output } : {}), ...(r.right !== undefined ? { right: r.right } : {}),
+      ...(r.output ? { output: r.output } : {}), ...(r.right !== undefined ? { right: r.right } : {}), ...(r.images ? { images: r.images } : {}),
     };
     if (item.agent) {
       const text = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? (b.content as Block[]).map((x) => x.text ?? '').join('\n') : '';

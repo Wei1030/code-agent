@@ -108,6 +108,8 @@ export interface ServerApi {
   deleteItem(wsId: string, id: string): void;
   confirmItem(wsId: string, id: string): void;
   undoBoardRecord(sid: string, cardId: string): void;
+  /** Stop the board recorder checking a session's last turn; with turnOff, stop recording after every turn too. */
+  stopBoardCheck(sid: string, turnOff: boolean): void;
   findingToBoard(ticketId: string, findingId: string): string | null;
   importPreview(wsId: string, source: ImportSource, input: string): ImportRow[];
   applyImport(wsId: string, rows: ImportRow[]): string[];

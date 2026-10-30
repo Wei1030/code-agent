@@ -1,10 +1,11 @@
 // What the transcript shows: streaming text and thinking, tool cards, grouping, the turn footer,
 // banners and the retry status, paging of long transcripts, the changes panel (FR-OUT-01..09,
-// FR-TOOL-01..05/15, FR-FILE-01).
+// FR-TOOL-01..05/15, FR-FILE-01, FR-OUT-01 pictures).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import { setup, finished, type Env, EP } from '../harness/env';
 import { say, think, use, shell, httpError } from '../harness/fake-model';
 import { until } from '../harness/client';
@@ -153,4 +154,30 @@ test('a long transcript comes a page at a time, earlier pages on request (FR-SES
   const prompts = all.filter((i): i is Extract<Item, { kind: 'user' }> => i.kind === 'user').map((u) => u.text);
   assert.deepEqual(prompts, Array.from({ length: 45 }, (_, k) => `第 ${k + 1} 问`));
   assert.equal(before.earlier, undefined, 'nothing before the first page');
+});
+
+/** A 1×1 PNG. */
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+test('a picture Claude reads shows in its card; the server hands out the session\'s own pictures only (FR-OUT-01)', async () => {
+  writeFileSync(path.join(env.repo, 'logo.png'), PNG);
+  env.model.script(/看这张图/, [[use('Read', { file_path: '{cwd}/logo.png' })], [say('是一张很小的图')]]);
+  const sid = await env.start('看这张图');
+  await env.turns(sid);
+  const read = byTool((await env.rt(sid)).items, 'Read');
+  assert.equal(read.right, '图片');
+  assert.match(read.images?.[0] ?? '', /^data:image\/png;base64,/);
+  assert.ok(!read.output, 'no [图片] text for it');
+
+  const get = (q: string) => fetch(`${env.server.url}/files?${q}`);
+  const ok = await get(`sid=${sid}&path=logo.png`);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get('content-type'), 'image/png');
+  assert.deepEqual(Buffer.from(await ok.arrayBuffer()), PNG);
+  assert.equal((await get(`sid=${sid}&path=${encodeURIComponent(path.join(env.repo, 'logo.png'))}`)).status, 200, 'an absolute path inside');
+  const outside = env.world.repo('pictures-outside', {}, { git: false });
+  writeFileSync(path.join(outside, 'x.png'), PNG);
+  assert.equal((await get(`sid=${sid}&path=${encodeURIComponent(path.join(outside, 'x.png'))}`)).status, 404, 'outside the session\'s folders');
+  assert.equal((await get(`sid=${sid}&path=src/a.js`)).status, 404, 'not a picture');
+  assert.equal((await get(`sid=nope&path=logo.png`)).status, 404, 'no such session');
 });

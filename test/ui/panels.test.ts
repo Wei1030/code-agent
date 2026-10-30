@@ -1,17 +1,23 @@
 // What the panels show and do in the browser: home's workspace cards and adding a folder, session
 // states in the lists, a question's option previews, and the inspector's file preview, changes and
-// event list (FR-WS-01, FR-WS-05, FR-SES-12, FR-ASK-03, FR-FILE-01, FR-FILE-02, FR-OBS-01).
+// event list, the board check, pictures (FR-WS-01, FR-WS-05, FR-SES-12, FR-ASK-03, FR-FILE-01, FR-FILE-02,
+// FR-OBS-01, FR-OUT-01).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { writeFileSync } from 'node:fs';
 import { setupUi, noPageErrors, type UiEnv } from '../harness/ui';
-import { say, use, shell, sleepCmd } from '../harness/fake-model';
+import { M2 } from '../harness/env';
+import { say, use, shell, sleepCmd, hang } from '../harness/fake-model';
 import { until } from '../harness/client';
 import type { Page } from '../harness/browser';
 
 let env: UiEnv;
 before(async () => { env = await setupUi({ files: { 'a.txt': 'one\ntwo\nthree\nfour\n' } }); });
 after(() => env?.close());
+
+/** A 1×1 PNG. */
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
 /** Open an inspector tab by its rail label. */
 const tab = (p: Page, label: string) => p.eval(`[...document.querySelectorAll('.ins-rail-btn')].find((b) => b.querySelector('span')?.textContent.trim() === ${JSON.stringify(label)}).click()`);
@@ -129,6 +135,48 @@ test('inspector: the info tab shows what Code Agent put in the system prompt (FR
   await tab(p, '信息');
   await p.waitEl('.session-prompt h4', '附加的系统提示词');
   assert.match(await p.text('.session-prompt pre'), /Always respond to the user in/);
+  noPageErrors(p);
+  await p.close();
+});
+
+test('the board check floats over the chat while it runs: shrink, settings, stop (custom feature 看板)', async () => {
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: M2 } });
+  env.model.failModel('model-two', hang);
+  env.model.script(/^悬浮分析$/, [[say('这一轮说了足够多的内容，后台识别会来检查它要不要更新看板。')]]);
+  const sid = await env.start('悬浮分析');
+  await env.turns(sid);
+  const p = await env.page(`/s/${sid}`);
+  await p.waitEl('.board-check', 'model-two 正在分析本轮对话是否需要更新看板');
+  await p.click('.board-check .btn[title="缩小"]');
+  await p.waitEl('.board-check.small', '看板分析中');
+  await p.click('.board-check.small');
+  await p.waitEl('.board-check-foot');
+  await p.click('.board-check .btn[title="看板设置"]');
+  await p.waitEl('.modal', '每轮对话结束后自动记录');
+  await p.click('.modal .btn', '完成');
+  await p.click('.board-check-foot .btn', '停止分析');
+  await p.gone('.board-check');
+  assert.equal(env.c.slices.boardSettings.recorder, true, 'only this check stopped');
+  env.model.failModel('model-two', null);
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: false } });
+  noPageErrors(p);
+  await p.close();
+});
+
+test('pictures show in the chat: yours, a tool\'s and one Claude points to; a click shows it full size (FR-OUT-01, FR-IN-04)', async () => {
+  writeFileSync(path.join(env.repo, 'diagram.png'), PNG);
+  env.model.script(/^看图/, [[use('Read', { file_path: '{cwd}/diagram.png' })], [say('这是示意图：![示意图](diagram.png)')]]);
+  const sid = await env.start('看图', { send: { attachments: [{ id: 'img1', kind: 'image', name: 'shot.png', meta: '1 KB', content: `data:image/png;base64,${PNG.toString('base64')}` }] } });
+  await env.turns(sid);
+  const p = await env.page(`/s/${sid}`);
+  await p.waitEl('.umsg .atts img.thumb');
+  await p.waitFor(`[...document.querySelectorAll('.atext img.thumb')].some((i) => i.src.includes('/files?sid=') && i.complete && i.naturalWidth > 0)`, 'the picture Claude points to, loaded');
+  await p.click('.steps .steps-head');
+  await p.waitEl('.steps-body .thumbs img.thumb');
+  await p.click('.umsg .atts img.thumb');
+  await p.waitEl('.img-view img');
+  await p.press('Escape');
+  await p.gone('.img-view');
   noPageErrors(p);
   await p.close();
 });

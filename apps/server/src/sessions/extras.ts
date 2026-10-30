@@ -28,13 +28,19 @@ const inside = (file: string, dir: string) => {
 
 const MAX_BYTES = 1024 * 1024;
 
-/** Only files in the session's own directories: its working directory, its workspace, its extra dirs. */
-function readWorkspaceFile(sid: string, p: string) {
+/** A file of the session's own directories (its working directory, its workspace, its extra dirs), or why not. */
+export function sessionFile(sid: string, p: string): string {
   const cwd = cwdOf(sid);
   const file = path.resolve(cwd, p);
   const roots = [cwd, workspaceOf(sid)?.path, ...app.dirs.filter((d) => d.scope === 'global' || d.workspaceId === summary(sid)?.workspaceId || d.sessionId === sid).map((d) => d.path)].filter(Boolean) as string[];
   if (!roots.some((r) => inside(file, r))) throw new Error('这个文件不在会话的工作目录里');
   if (!existsSync(file) || !statSync(file).isFile()) throw new Error(`文件不存在：${p}`);
+  return file;
+}
+
+function readWorkspaceFile(sid: string, p: string) {
+  const cwd = cwdOf(sid);
+  const file = sessionFile(sid, p);
   const size = statSync(file).size;
   const buf = readFileSync(file).subarray(0, MAX_BYTES);
   const binary = buf.subarray(0, 8000).includes(0);

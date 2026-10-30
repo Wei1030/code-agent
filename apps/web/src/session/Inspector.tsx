@@ -13,6 +13,7 @@ import { MODE_INFO } from '../lib/catalog';
 import { highlightLines, languageOf } from '../lib/highlight';
 import { openPreview } from '../lib/preview';
 import { DiffLines } from './Transcript';
+import { sessionImageUrl, Thumb } from '../components/Thumb';
 
 const TABS: Array<{ value: InspectorTab; label: string; icon: string }> = [
   { value: 'tasks', label: '任务', icon: 'list' },
@@ -380,6 +381,8 @@ function EventsTab({ rt }: { rt: SessionRuntime }) {
   );
 }
 
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+
 /** The file opened from the conversation or the changes list, with the lines Claude read marked. */
 function FileTab({ rt }: { rt: SessionRuntime }) {
   const t = useT();
@@ -412,9 +415,11 @@ function FileTab({ rt }: { rt: SessionRuntime }) {
         </span>
       </h4>
       {error && <div className="banner-warn"><Icon name="warning" size={15} />{error}</div>}
-      {file?.binary && <div className="empty">{t('这是二进制文件，不显示内容。')}</div>}
-      {file?.truncated && <div className="hint">{t('文件太大，只显示前 1 MB。')}</div>}
-      {file && !file.binary && (
+      {file && IMAGE_FILE.test(file.path) ? (
+        <div className="file-image"><Thumb src={sessionImageUrl(rt.id, p.path)} alt={file.path} /></div>
+      ) : file?.binary && <div className="empty">{t('这是二进制文件，不显示内容。')}</div>}
+      {file?.truncated && !IMAGE_FILE.test(file.path) && <div className="hint">{t('文件太大，只显示前 1 MB。')}</div>}
+      {file && !file.binary && !IMAGE_FILE.test(file.path) && (
         <div className="file-view mono">
           {lines.map((html, i) => {
             const n = i + 1;

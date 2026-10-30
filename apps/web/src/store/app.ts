@@ -79,6 +79,8 @@ interface AppState {
   /** The file shown in the inspector's 文件 tab (and the lines to mark). */
   preview: { sid: string; path: string; from?: number; to?: number } | null;
   folderPickerOpen: boolean;
+  /** The board check in a session is shown as a small badge. */
+  boardCheckSmall: boolean;
   inboxOpen: boolean;
   /** Text pushed into a session's composer (suggestions, fork-and-edit). */
   fill: { sid: string; text: string; n: number } | null;
@@ -132,7 +134,7 @@ export const useApp = create<AppState>((set, get) => ({
   peer: { inbound: 'parity', maxHops: 6 },
   maxRunning: 4,
   board: [],
-  boardSettings: { recorder: true, recorderModel: 'haiku', recorderEffort: 'low' },
+  boardSettings: { recorder: false, recorderModel: 'haiku', recorderEffort: 'low' },
   reviews: [],
   reviewChecks: {},
   reviewProfile: { model: 'opus', effort: 'high', tools: [], claudeMd: true, extraPrompt: '' },
@@ -154,6 +156,7 @@ export const useApp = create<AppState>((set, get) => ({
   inspector: { open: true, width: 340, tab: 'tasks', eventsSub: 'events' },
   preview: null,
   folderPickerOpen: false,
+  boardCheckSmall: false,
   inboxOpen: false,
   fill: null,
 

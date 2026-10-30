@@ -2,8 +2,8 @@
 // Claude, import from pasted text and GitHub, Markdown export (custom feature 看板).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, type Env } from '../harness/env';
-import { say, use } from '../harness/fake-model';
+import { setup, M2, type Env } from '../harness/env';
+import { say, use, hang, httpError } from '../harness/fake-model';
 import { until, sleep } from '../harness/client';
 import type { Item } from '@code-agent/shared/types';
 
@@ -47,7 +47,8 @@ test('ids count per kind; edits are logged; delete removes', async () => {
 });
 
 test('the recorder records after a turn, unconfirmed; undo restores; confirm accepts', async () => {
-  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true } });
+  assert.equal(env.c.slices.boardSettings.recorder, false, 'off until the user turns it on');
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: 'haiku' } });
   recorderOps = [{ op: 'create', kind: 'issue', title: '自动记下的问题', body: '对话里确认过', status: 'confirmed', priority: 'high', note: '确认的缺陷' }];
   env.model.script(/确认一个缺陷/, [[say('确认了：退款金额少算一分钱，原因是四舍五入。')]]);
   const sid = await env.start('确认一个缺陷');
@@ -56,6 +57,7 @@ test('the recorder records after a turn, unconfirmed; undo restores; confirm acc
   assert.equal(item.unconfirmed, true);
   const card = await until(async () => (await env.rt(sid)).items.find((i) => i.kind === 'board') as Extract<Item, { kind: 'board' }> | undefined, 'board card in the transcript');
   assert.equal(card.by, 'recorder');
+  assert.equal(card.model, `后台识别 · ${env.c.slices.models[0].label} · 思考低`, 'haiku is not offered without the login: the first model there is runs it, and the card says so');
   await env.c.call('undoBoardRecord', sid, card.id);
   await until(() => !board().some((b) => b.title === '自动记下的问题'), 'undone');
   assert.equal(((await env.rt(sid)).items.find((i) => i.id === card.id) as Extract<Item, { kind: 'board' }>).undone, true);
@@ -66,6 +68,42 @@ test('the recorder records after a turn, unconfirmed; undo restores; confirm acc
   const note = await until(() => board().find((b) => b.title === '要确认的笔记'), 'second record');
   await env.c.call('confirmItem', env.ws, note.id);
   await until(() => board().find((b) => b.id === note.id)?.unconfirmed === false, 'confirmed');
+});
+
+test('a check in progress shows in its session; stopping ends it with nothing recorded; stopping for good turns the recorder off (custom feature 看板)', async () => {
+  recorderOps = [{ op: 'create', kind: 'note', title: '停掉就不该记', body: 'x', note: 'x' }];
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: M2 } });
+  env.model.failModel('model-two', hang);
+  env.model.script(/^停止分析/, [[say('这一轮说了足够多的内容，后台识别会来检查它要不要更新看板。')]]);
+  const sid = await env.start('停止分析一');
+  await env.turns(sid);
+  const check = await until(async () => (await env.rt(sid)).boardCheck, 'the check shows');
+  assert.equal(check.model, 'model-two');
+  await env.c.call('stopBoardCheck', sid, false);
+  await until(async () => (await env.rt(sid)).boardCheck === null, 'gone once stopped');
+  assert.equal(env.c.slices.boardSettings.recorder, true);
+
+  await env.c.call('send', sid, '停止分析二', {});
+  await env.turns(sid, 2);
+  await until(async () => (await env.rt(sid)).boardCheck, 'the next check shows');
+  await env.c.call('stopBoardCheck', sid, true);
+  await until(async () => (await env.rt(sid)).boardCheck === null, 'gone');
+  assert.equal(env.c.slices.boardSettings.recorder, false, 'and no more checks');
+  assert.ok(!board().some((b) => b.title === '停掉就不该记'));
+  env.model.failModel('model-two', null);
+});
+
+test('a check that fails says why in its session for a while (custom feature 看板)', async () => {
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: M2 } });
+  env.model.failModel('model-two', httpError(400, 'invalid_request_error', 'the endpoint said no'));
+  env.model.script(/^分析失败$/, [[say('这一轮说了足够多的内容，后台识别会来检查它要不要更新看板。')]]);
+  const sid = await env.start('分析失败');
+  await env.turns(sid);
+  const failed = await until(async () => (await env.rt(sid)).boardCheck?.error ? (await env.rt(sid)).boardCheck : null, 'the failure shows', 60_000);
+  assert.match(failed!.error!, /\S/);
+  await until(async () => (await env.rt(sid)).boardCheck === null, 'then goes', 20_000);
+  env.model.failModel('model-two', null);
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: false, recorderModel: M2 } });
 });
 
 test('the recorder stays off when switched off, and for interrupted turns', async () => {

@@ -135,7 +135,7 @@ export function Board() {
       </div>
       {dialog === 'new' && <NewItemDialog wsId={wsId} kind={kind} onClose={() => setDialog(null)} onCreated={(it) => { setView('open'); setKind(it.kind); pick(it.id); }} />}
       {dialog === 'import' && <ImportDialog wsId={wsId} onClose={() => setDialog(null)} onDone={(first) => { if (first) { const it = useApp.getState().board.find((x) => x.workspaceId === wsId && x.id === first); if (it) { setView('open'); setKind(it.kind); pick(it.id); } } }} />}
-      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'settings' && <BoardSettingsDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }
@@ -405,27 +405,34 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
   );
 }
 
-function SettingsDialog({ onClose }: { onClose: () => void }) {
+/** The board's settings: the recorder and the model it runs on. Also opened from a session's board check. */
+export function BoardSettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const s = useApp((x) => x.boardSettings);
   const models = useApp((x) => x.models);
-  const recorder = models.find((m) => m.id === s.recorderModel);
+  const provider = useApp((x) => x.provider);
+  // The server runs a model that is not offered (a Claude model without the login) on the first one there is.
+  const effective = models.some((m) => m.id === s.recorderModel) ? s.recorderModel : models[0]?.id ?? '';
+  const recorder = models.find((m) => m.id === effective);
+  const usable = provider.loggedIn || models.some((m) => m.endpoint);
   const set = (p: Partial<typeof s>) => useApp.getState().set({ boardSettings: { ...s, ...p } });
   return (
     <Modal title={t('看板设置')} width={560} onClose={onClose} footer={<Button variant="primary" onClick={onClose}>{t('完成')}</Button>}>
       <div className="col" style={{ gap: 14 }}>
         <div>
-          <Toggle on={s.recorder} onChange={(v) => set({ recorder: v })} label={t('每轮对话结束后自动记录')} />
+          <Toggle on={s.recorder} disabled={!usable && !s.recorder} onChange={(v) => set({ recorder: v })} label={t('每轮对话结束后自动记录')} />
+          {!usable && <div className="hint" style={{ marginTop: 4, color: 'var(--warn)' }}>{t('没有可用的模型：先在终端里登录 Claude Code，或在「模型服务与账号」里添加兼容端点。')}</div>}
           <div className="hint" style={{ marginTop: 4, lineHeight: 1.6 }}>{t('只记你拍板的决定、确认过的问题和完成的工作，讨论中的想法不记；优先更新已有条目。直接写进看板并标为「待确认」，对话里可以一键撤销。')}</div>
         </div>
         <Field label={t('后台识别用的模型')} hint={t('自动记录和导入时整理条目都用它。在后台运行，不拖慢会话；选便宜的模型、较低的思考强度就够了。')}>
           <div className="row" style={{ gap: 8 }}>
-            <Select value={s.recorderModel} className="w-240" icon="cpu"
+            <Select value={effective} className="w-240" icon="cpu"
               onChange={(v) => set({ recorderModel: v, recorderEffort: effortFor(models, v, s.recorderEffort, 'lowest') })}
               options={modelOptions(models, t)} />
             <Select<Effort> value={s.recorderEffort} className="w-240" icon="bulb" renderValue={(o) => <>{t('思考')} · {o?.label}</>} onChange={(v) => set({ recorderEffort: v })}
               disabled={!takesEffort(recorder)} options={effortOptions(recorder, s.recorderEffort, t)} />
           </div>
+          {effective !== s.recorderModel && recorder && <div className="hint" style={{ marginTop: 4 }}>{t('选的模型现在不可用，改用 {m}。', { m: recorder.label })}</div>}
         </Field>
         <ul className="plain-list">
           <li>{t('每个会话里，Claude 都有四个看板工具：搜索、查看、新建、修改。你说「记到看板」，它就会先查重再记。')}</li>

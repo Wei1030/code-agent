@@ -10,17 +10,18 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { BoardItem, BoardKind, BoardSource, BoardStatus, Item } from '@code-agent/shared/types';
+import type { BoardCheck, BoardItem, BoardKind, BoardSource, BoardStatus, Item } from '@code-agent/shared/types';
 import type { ImportRow, ImportSource } from '@code-agent/shared/api';
 import { CLOSED, FIRST_STATUS, PREFIX, STATUSES, STATUS_LABEL } from '@code-agent/shared/board';
 import { EFFORT_LABEL } from '@code-agent/shared/catalog';
 import { app, set } from './state';
 import { register } from './hub';
 import { load, save } from './store';
-import { addItem, patchItem, rt, summary } from './sessions/registry';
+import { addItem, emit, patchItem, rt, summary } from './sessions/registry';
 import { onTurnEnd } from './sessions/live';
 import { addWorkspaceTools } from './peer';
 import { oneShot } from './oneshot';
+import { validModel } from './models';
 
 const run = promisify(execFile);
 
@@ -174,9 +175,15 @@ addWorkspaceTools((sid) => [
 
 // ------------------------------------------------------------------ recorder
 
+/** The model the recorder runs on: the one chosen, or the first there is when it is not offered. */
+function recorderModel() {
+  const id = validModel(app.boardSettings.recorderModel);
+  return { id, label: app.models.find((m) => m.id === id)?.label ?? id };
+}
+
 function recorderLabel() {
   const s = app.boardSettings;
-  return `后台识别 · ${app.models.find((m) => m.id === s.recorderModel)?.label ?? s.recorderModel} · 思考${EFFORT_LABEL[s.recorderEffort] ?? s.recorderEffort}`;
+  return `后台识别 · ${recorderModel().label} · 思考${EFFORT_LABEL[s.recorderEffort] ?? s.recorderEffort}`;
 }
 
 /** The turn that just ended, condensed: user text, Claude's text, one line per tool call. */
@@ -239,10 +246,19 @@ function candidates(ws: string, text: string): BoardItem[] {
   return items.sort((a, b) => score(b) - score(a)).slice(0, 40);
 }
 
+/** A check running per session: shown in the session while it runs, stopped from there. */
+const checks = new Map<string, AbortController>();
+const chains = new Map<string, Promise<void>>();
+const showCheck = (sid: string, boardCheck: BoardCheck | null) => emit(sid, { t: 'settings', patch: { boardCheck } });
+
+/** A model that can run: an endpoint's, or Claude's with the login. */
+const canRun = (id: string) => !!app.models.find((m) => m.id === id)?.endpoint || app.provider.loggedIn;
+
 async function recordTurn(sid: string, userId: string) {
   const ws = wsOf(sid);
   const turn = turnText(sid, userId);
-  if (!ws || turn.length < 40) return;
+  const model = recorderModel();
+  if (!app.boardSettings.recorder || !ws || turn.length < 40 || !canRun(model.id)) return;
   const s = app.boardSettings;
   const known = candidates(ws, turn);
   const prompt = [
@@ -256,12 +272,26 @@ async function recordTurn(sid: string, userId: string) {
     `Turn:\n${turn}`,
   ].join('\n\n');
   let ops: RecorderOps;
+  const abort = new AbortController();
+  checks.set(sid, abort);
+  const check: BoardCheck = { model: model.label, startedAt: Date.now() };
+  showCheck(sid, check);
   try {
-    ops = await oneShot<RecorderOps>({ prompt, schema: RECORDER_SCHEMA, model: s.recorderModel, effort: s.recorderEffort, workspaceId: ws });
+    ops = await oneShot<RecorderOps>({ prompt, schema: RECORDER_SCHEMA, model: s.recorderModel, effort: s.recorderEffort, workspaceId: ws, signal: abort.signal });
   } catch (e) {
-    console.error('[board] recorder failed:', e instanceof Error ? e.message : e);
+    if (abort.signal.aborted) {
+      showCheck(sid, null);
+      return;
+    }
+    // Shown for a while in the session, then gone.
+    const failed = { ...check, error: e instanceof Error ? e.message : String(e) };
+    showCheck(sid, failed);
+    setTimeout(() => { if (rt(sid)?.boardCheck === failed) showCheck(sid, null); }, 10_000);
     return;
+  } finally {
+    checks.delete(sid);
   }
+  showCheck(sid, null);
   if (!summary(sid)) return;
   const tr = tracker();
   const changes: Array<{ itemId: string; action: 'created' | 'updated'; text: string }> = [];
@@ -291,9 +321,16 @@ async function recordTurn(sid: string, userId: string) {
 onTurnEnd((sid, info) => {
   const sum = summary(sid);
   if (!app.boardSettings.recorder || !info.ok || info.interrupted || !sum || sum.jobId) return;
-  // In the background: it never holds up the session.
-  setTimeout(() => void recordTurn(sid, info.userId), 500);
+  // In the background: it never holds up the session. One check at a time per session.
+  const next = (chains.get(sid) ?? Promise.resolve()).then(() => new Promise((r) => setTimeout(r, 500))).then(() => recordTurn(sid, info.userId));
+  chains.set(sid, next);
+  void next.finally(() => { if (chains.get(sid) === next) chains.delete(sid); });
 });
+
+function stopBoardCheck(sid: string, turnOff: boolean) {
+  if (turnOff) set('boardSettings', { ...app.boardSettings, recorder: false });
+  checks.get(sid)?.abort();
+}
 
 // ------------------------------------------------------------------ review findings
 
@@ -425,6 +462,7 @@ register({
   deleteItem,
   confirmItem: (wsId, id) => updateItem(wsId, id, { unconfirmed: false }, '已确认'),
   undoBoardRecord,
+  stopBoardCheck,
   findingToBoard,
   importPreview,
   applyImport,

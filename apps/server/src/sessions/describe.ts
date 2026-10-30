@@ -140,14 +140,14 @@ export function proposedDiff(name: string, input: Input, cwd: string): { path: s
   return { path: rel(cwd, abs), lines: diffTexts(before, after).diff };
 }
 
-/** Text of a tool_result content. */
-export function resultText(content: unknown): string {
+/** Text of a tool_result content; images as [图片] unless they are shown as images. */
+export function resultText(content: unknown, imagesShown = false): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content.map((c) => {
       if (!c || typeof c !== 'object') return '';
       const o = c as { type?: string; text?: unknown };
-      if (o.type === 'image') return '[图片]';
+      if (o.type === 'image') return imagesShown ? '' : '[图片]';
       return 'text' in o ? str(o.text) : '';
     }).join('\n');
   }
@@ -156,11 +156,33 @@ export function resultText(content: unknown): string {
 
 const clip = (text: string, n = 4000) => (text.length > n ? `${text.slice(0, n)}…` : text);
 
+/** Images of a tool_result content as data URLs: a few, none of them huge (they are kept with the transcript). */
+export function resultImages(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const out: string[] = [];
+  for (const c of content as Array<{ type?: string; source?: { type?: string; media_type?: string; data?: string }; data?: string; mimeType?: string }>) {
+    if (c?.type !== 'image') continue;
+    const data = c.source?.type === 'base64' ? c.source.data : c.data;
+    const mime = c.source?.media_type ?? c.mimeType;
+    if (data && mime?.startsWith('image/') && data.length <= 4_000_000) out.push(`data:${mime};base64,${data}`);
+    if (out.length === 4) break;
+  }
+  return out;
+}
+
 /** Output, right-hand note and file change of a finished tool call. */
 export function toolResult(name: string, input: Input, content: unknown, structured: unknown, isError: boolean, cwd: string): {
+  output?: ToolOutput; right?: string; images?: string[]; change?: { path: string; kind: 'created' | 'modified'; diff: string[]; add: number; del: number };
+} {
+  const images = isError ? [] : resultImages(content);
+  if (images.length) return { ...toolResultText(name, input, content, structured, isError, cwd, true), images };
+  return toolResultText(name, input, content, structured, isError, cwd, false);
+}
+
+function toolResultText(name: string, input: Input, content: unknown, structured: unknown, isError: boolean, cwd: string, withImages: boolean): {
   output?: ToolOutput; right?: string; change?: { path: string; kind: 'created' | 'modified'; diff: string[]; add: number; del: number };
 } {
-  const text = resultText(content);
+  const text = resultText(content, withImages);
   const s = (structured && typeof structured === 'object' ? structured : {}) as Record<string, unknown>;
   if (isError) return { output: text ? { type: 'text', text: clip(text) } : undefined, right: '失败' };
   if (name === 'Bash' || name === 'PowerShell') {
@@ -168,6 +190,7 @@ export function toolResult(name: string, input: Input, content: unknown, structu
     return { output: out.trim() ? { type: 'code', lines: lines(out, 200) } : undefined, right: s.backgroundTaskId ? '已转到后台' : s.interrupted ? '已中断' : undefined };
   }
   if (name === 'Read') {
+    if (withImages) return { right: '图片' };
     const f = s.file as { numLines?: number } | undefined;
     return { right: `${f?.numLines ?? text.split('\n').length} 行` };
   }

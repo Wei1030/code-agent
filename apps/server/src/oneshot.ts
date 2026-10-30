@@ -20,6 +20,8 @@ export interface OneShot {
   allowedTools?: string[];
   workspaceId?: string;
   timeoutMs?: number;
+  /** Stops the run (it then rejects). */
+  signal?: AbortSignal;
 }
 
 export async function oneShot<T>(o: OneShot): Promise<T> {
@@ -30,6 +32,8 @@ export async function oneShot<T>(o: OneShot): Promise<T> {
   const exe = app.provider.executable === 'system' ? systemClaude() : undefined;
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), o.timeoutMs ?? 180_000);
+  if (o.signal?.aborted) abort.abort();
+  o.signal?.addEventListener('abort', () => abort.abort());
   try {
     const q = query({
       prompt: o.prompt,

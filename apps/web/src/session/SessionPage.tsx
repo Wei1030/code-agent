@@ -17,6 +17,7 @@ import { Composer } from './Composer';
 import { Inspector } from './Inspector';
 import { RewindDialog } from './RewindDialog';
 import { ReviewButton, ReviewDecisionPanel, ReviewRecord } from './Review';
+import { BoardCheckPanel } from './BoardCheck';
 
 export function SessionPage() {
   const { id = '' } = useParams();
@@ -71,6 +72,7 @@ export function SessionPage() {
       <div className="scenter">
         <SessionHeader sum={sum} rt={rt} />
         <TranscriptPane rt={rt} sum={sum} onFork={onFork} onRewind={onRewind} />
+        {rt.boardCheck && <BoardCheckPanel sid={id} check={rt.boardCheck} />}
         <div className="dock">
           <div className="dock-inner">
             {receipt > 0 && rt.queue.length > 0 && <InterruptReceipt sid={id} count={rt.queue.length} onDone={() => setReceipt(0)} />}

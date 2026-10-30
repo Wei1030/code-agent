@@ -106,7 +106,7 @@ function toItems(msgs: SessionMessage[], cwd: string): Item[] {
         const t = tools.get(b.tool_use_id);
         if (!t) continue;
         const r = toolResult(t.name, t.input, b.content, undefined, !!b.is_error, cwd);
-        Object.assign(t.item, { status: b.is_error ? 'error' : 'ok', ...(r.output ? { output: r.output } : {}), ...(r.right ? { right: r.right } : {}) });
+        Object.assign(t.item, { status: b.is_error ? 'error' : 'ok', ...(r.output ? { output: r.output } : {}), ...(r.right ? { right: r.right } : {}), ...(r.images ? { images: r.images } : {}) });
       }
     } else if (m.type === 'assistant') {
       const content = contentOf(m);

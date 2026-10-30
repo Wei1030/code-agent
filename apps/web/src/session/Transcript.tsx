@@ -14,6 +14,7 @@ import { BoardLink, linkify } from '../components/BoardLink';
 import { Markdown } from '../components/Markdown';
 import { openPreview } from '../lib/preview';
 import { highlightLines, languageOf } from '../lib/highlight';
+import { Thumb } from '../components/Thumb';
 
 const TOOL_ICON: Record<string, string> = {
   Bash: 'terminal', PowerShell: 'terminal', Read: 'file', Write: 'file', Edit: 'pencil', Grep: 'search', Glob: 'search',
@@ -106,7 +107,9 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
           {(it.attachments.length > 0 || !!it.refs?.length) && (
             <div className="atts">
               {it.refs?.map((r) => <span key={r.sessionId} className="chip"><Icon name="chat" size={12} /><SessionLink r={r} /></span>)}
-              {it.attachments.map((a) => <Chip key={a.id} icon={a.kind === 'image' ? 'image' : a.kind === 'paste' ? 'copy' : 'file'}>{a.name} · {a.meta}</Chip>)}
+              {it.attachments.map((a) => (a.kind === 'image' && a.content?.startsWith('data:image/')
+                ? <Thumb key={a.id} src={a.content} alt={a.name} />
+                : <Chip key={a.id} icon={a.kind === 'image' ? 'image' : a.kind === 'paste' ? 'copy' : 'file'}>{a.name} · {a.meta}</Chip>))}
             </div>
           )}
           {!rt.readOnly && (
@@ -121,7 +124,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
     case 'text':
       return (
         <div className="atext">
-          <Markdown text={it.text} wsId={wsId} />
+          <Markdown text={it.text} wsId={wsId} sid={rt.id} />
           {it.streaming && <span className="caret" />}
           {it.aborted && <span className="aborted-tag">{t('（已中断）')}</span>}
         </div>
@@ -281,8 +284,10 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
   const t = useT();
   const wsId = useApp((s) => s.sessions.find((x) => x.id === sid)?.workspaceId ?? '');
   const canBackground = !!tool.backgroundable && tool.status === 'running' && !tool.background;
-  const hasBody = !!tool.output || !!tool.agent || !!tool.denialMessage || canBackground || !!tool.background || !!tool.rows?.length;
-  const [open, setOpen] = useState(tool.tool !== 'Read');
+  const hasBody = !!tool.output || !!tool.images?.length || !!tool.agent || !!tool.denialMessage || canBackground || !!tool.background || !!tool.rows?.length;
+  // Reads start folded, unless they brought a picture; once the user folds or opens a card, that holds.
+  const [chosen, setOpen] = useState<boolean | null>(null);
+  const open = chosen ?? (tool.tool !== 'Read' || !!tool.images?.length);
   const nav = useNavigate();
   return (
     <div className={cx('tcard', tool.status === 'waiting' && 'waiting', tool.status === 'denied' && 'denied')}>
@@ -326,6 +331,7 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
           )}
           {tool.output?.type === 'code' && <pre className="code-block" dangerouslySetInnerHTML={{ __html: highlightLines(tool.output.lines.join('\n'), languageOf(tool.file?.path)).join('\n') }} />}
           {tool.output?.type === 'text' && <div className="ink2">{tool.output.text}</div>}
+          {!!tool.images?.length && <div className="thumbs">{tool.images.map((src, i) => <Thumb key={i} src={src} />)}</div>}
           {!!tool.rows?.length && (
             <div className="nested">
               {tool.rows.map((r, i) => (

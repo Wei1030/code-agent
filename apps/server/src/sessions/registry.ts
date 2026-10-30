@@ -132,7 +132,7 @@ export function rt(id: string): SessionRuntime | undefined {
   const rows = db.prepare('SELECT data FROM items WHERE session = ? ORDER BY seq').all(id) as Array<{ data: string }>;
   // A turn cut off by a restart is no longer running.
   const items = rows.map((x) => closeOpen(JSON.parse(x.data) as Item));
-  r = emptyRuntime(id, { ...(JSON.parse(meta.meta) as Partial<SessionRuntime>), items, state: 'idle', request: null, status: null, readOnly: !sum?.live });
+  r = emptyRuntime(id, { ...(JSON.parse(meta.meta) as Partial<SessionRuntime>), items, state: 'idle', request: null, status: null, boardCheck: null, readOnly: !sum?.live });
   r.background = r.background.map((b) => (b.status === 'running' ? { ...b, status: 'stopped' as const } : b));
   runtimes.set(id, r);
   saved.set(id, items);
