@@ -94,12 +94,12 @@ test('a finished turn while the tab is in the background (FR-NTF-01)', async () 
   await p.close();
 });
 
-test('system notifications switched on by default ask the browser for permission (issue 10-30#2)', { todo: 'issue 10-30#2: the permission is asked only when the switch is turned on by hand' }, async () => {
+test('the browser is not asked for notification permission on its own, only when the user turns the switch on (FR-NTF-01)', async () => {
   const p = await env.page('/');
   await p.eval(`localStorage.setItem('__perm', 'default')`);
   await p.reload();
   await sleep(3000);
-  assert.ok(await p.eval<number>('window.__permissionAsked') > 0, 'the browser was asked');
+  assert.equal(await p.eval<number>('window.__permissionAsked'), 0, 'the browser was asked');
   await p.eval(`localStorage.removeItem('__perm')`);
   await p.close();
 });

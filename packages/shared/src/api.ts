@@ -150,7 +150,10 @@ export interface ServerApi {
   outputStyles(workspaceId?: string): OutputStyle[];
   /** The end of a session's debug log (when 保存调试日志 is on). */
   debugLog(sid: string): { path: string; exists: boolean; tail: string };
-  /** Restart the running sessions (once each is idle) so they pick up the 默认 profile; returns how many. */
+  /**
+   * Restart the running sessions (once each is idle) so they pick up the 默认 profile's tools and
+   * settings; Claude Code keeps the system prompt a session started with. Returns how many.
+   */
   applyProfileToRunning(): number;
 }
 

@@ -183,19 +183,22 @@ test('output styles: built-in, user and workspace ones are listed; the profile\'
   assert.doesNotMatch(JSON.stringify((await firstRequest({})).req.body), /MARK-STYLE-REVIEWER/, 'only with the style chosen');
 });
 
-test('a changed profile reaches running sessions once they are idle (FR-CFG-01, issue 10-30#17)', { todo: 'issue 10-30#17: Claude Code resends the system prompt it recorded first' }, async () => {
+// Claude Code keeps the system prompt it recorded first (test/contract/prompt.test.ts), so the
+// prompt text reaches new sessions only; the tools, model and settings reach running ones.
+test('applying a changed profile restarts running sessions once idle: the tools change, the conversation goes on (FR-CFG-01)', async () => {
   env.model.script(/换方案前/, [[say('好')]]);
   env.model.script(/换方案后/, [[say('好')]]);
   const sid = await env.start('换方案前');
   await env.turns(sid);
   const pid = (await env.rt(sid)).info?.pid;
   const prev = env.c.slices.profiles;
-  await env.c.call('setState', { profiles: prev.map((x) => ({ ...x, promptMode: 'append', promptText: 'MARK-APPLIED-TO-RUNNING' })) });
+  await env.c.call('setState', { profiles: prev.map((x) => ({ ...x, tools: x.tools.filter((t) => t !== 'Grep') })) });
   assert.ok((await env.c.call('applyProfileToRunning')) >= 1);
   await until(async () => { const info = (await env.rt(sid)).info; return info?.pid && info.pid !== pid; }, 'a new process', 60_000);
   await env.c.call('send', sid, '换方案后', {});
   await env.turns(sid, 2);
-  assert.match(env.model.sent(/换方案后/)[0].system, /MARK-APPLIED-TO-RUNNING/);
+  assert.ok(env.model.sent(/换方案前/)[0].tools.includes('Grep'));
+  assert.ok(!env.model.sent(/换方案后/)[0].tools.includes('Grep'), 'the tool switched off is gone');
   assert.ok(JSON.stringify(env.model.sent(/换方案后/)[0].body.messages).includes('换方案前'), 'the conversation goes on');
   await env.c.call('setState', { profiles: prev });
 });

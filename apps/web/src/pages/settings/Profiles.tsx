@@ -187,7 +187,7 @@ function DefaultEditor({ onDirty }: { onDirty: (d: boolean) => void }) {
       {dirty && <SaveBar onDiscard={() => setDraft(saved)} onSave={() => { app.saveProfile(draft); app.toast(t('已保存「默认」'), 'good'); setJustSaved(true); }} />}
       {!dirty && justSaved && running > 0 && (
         <div className="modal-foot" style={{ position: 'sticky', bottom: 0, background: 'var(--surface)', borderRadius: '0 0 10px 10px' }}>
-          <div className="left hint"><Icon name="info" size={14} /> {t('改动对新会话生效。{n} 个运行中的会话要重新启动 Claude Code 才会用上（对话会接着进行）。', { n: running })}</div>
+          <div className="left hint"><Icon name="info" size={14} /> {t('改动对新会话生效。{n} 个运行中的会话可以重新启动 Claude Code，用上新的工具和设置（对话会接着进行）；系统提示词和回复语言只对新会话生效。', { n: running })}</div>
           <Button onClick={() => setJustSaved(false)}>{t('以后再说')}</Button>
           <Button variant="primary" onClick={() => api.applyProfileToRunning().then((n) => { setJustSaved(false); app.toast(t('{n} 个会话会在空闲时重新启动', { n }), 'good'); })}>{t('应用到运行中的会话')}</Button>
         </div>
