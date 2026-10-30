@@ -892,8 +892,6 @@ export interface BoardSettings {
   /** Model and effort for the recorder and for import runs. */
   recorderModel: string;
   recorderEffort: Effort;
-  /** Give new sessions the titles and ids of the features in progress. */
-  startContext: boolean;
 }
 
 // ------------------------------------------------------------------ app state the server keeps

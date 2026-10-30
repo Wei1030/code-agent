@@ -151,7 +151,7 @@ export function onProcessEnd(fn: (sid: string) => void) {
 
 type HookFn = (sid: string, input: Record<string, unknown>) => Promise<HookJSONOutput | undefined> | HookJSONOutput | undefined;
 const hookFns = new Map<HookEvent, HookFn[]>();
-/** A hook Code Agent runs for every session (review guard, hook rules, board context…). */
+/** A hook Code Agent runs for every session: the user's hook rules. */
 export function addHook(event: HookEvent, fn: HookFn) {
   hookFns.set(event, [...(hookFns.get(event) ?? []), fn]);
 }

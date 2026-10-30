@@ -1,5 +1,5 @@
-// The workspace board: items and ids, the recorder and undo, Claude's board tools, the start context,
-// import from pasted text and GitHub, Markdown export (custom feature 看板).
+// The workspace board: items and ids, the recorder and undo, Claude's board tools and what they tell
+// Claude, import from pasted text and GitHub, Markdown export (custom feature 看板).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, type Env } from '../harness/env';
@@ -95,12 +95,19 @@ test('Claude\'s board tools: search, create, a wrong status refused (custom feat
   assert.equal(board().find((b) => b.id === 'I-1')?.status, 'open', 'an issue cannot be "doing"');
 });
 
-test('a new session is told the features in progress (custom feature 看板)', async () => {
-  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, startContext: true } });
-  env.model.script(/新会话开头/, [[say('好')]]);
-  await env.start('新会话开头');
-  await until(() => env.model.sent(/新会话开头/).length > 0, 'request');
-  assert.match(JSON.stringify(env.model.sent(/新会话开头/)[0].body), /F-1[^"]*分页/);
+test('the board needs nothing in the system prompt: its tools ask Claude to cite items by id (custom feature 看板)', async () => {
+  // With tool search off the workspace tools come with their descriptions in the first request.
+  const mb = env.c.slices.mcpBehavior;
+  await env.c.call('setState', { mcpBehavior: { ...mb, toolSearch: 'off' } });
+  env.model.script(/^看板说明$/, [[say('好')]]);
+  const sid = await env.start('看板说明');
+  await env.turns(sid);
+  await env.c.call('setState', { mcpBehavior: mb });
+  const req = env.model.sent(/^看板说明$/)[0];
+  assert.equal((await env.rt(sid)).info?.prompt?.text, 'Always respond to the user in Simplified Chinese.', 'Code Agent adds only the reply language');
+  assert.doesNotMatch(JSON.stringify(req.body), /Work in progress on the workspace board/, 'no features in progress at the start');
+  const search = (req.body.tools as Array<{ name: string; description?: string }>).find((t) => t.name === 'mcp__workspace__board_search');
+  assert.match(search?.description ?? '', /write its id/);
 });
 
 test('import pasted text: preview rows, apply creates; GitHub issues through gh; the same issue again is known', async () => {

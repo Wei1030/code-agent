@@ -19,7 +19,6 @@ import { register } from './hub';
 import { load, save } from './store';
 import { addItem, patchItem, rt, summary } from './sessions/registry';
 import { onTurnEnd } from './sessions/live';
-import { addPromptPart } from './sessions/options';
 import { addWorkspaceTools } from './peer';
 import { oneShot } from './oneshot';
 
@@ -132,18 +131,18 @@ function matches(x: BoardItem, q: string): boolean {
 const STATUS_ENUM = ['todo', 'doing', 'done', 'dropped', 'open', 'confirmed', 'fixing', 'fixed', 'wontfix', 'active', 'outdated'] as const;
 
 addWorkspaceTools((sid) => [
-  tool('board_search', 'Search the workspace board (features F-n, issues I-n, notes N-n). Empty query lists open items.', {
+  tool('board_search', 'Search the workspace board (features F-n, issues I-n, notes N-n). Empty query lists open items. When you mention an item, write its id (e.g. F-3): the user can click it.', {
     query: z.string().optional(), kind: z.enum(['feature', 'issue', 'note']).optional(), include_closed: z.boolean().optional(),
   }, async (a) => {
     const ws = wsOf(sid);
     const list = all().filter((x) => x.workspaceId === ws && (!a.kind || x.kind === a.kind) && (a.include_closed || !CLOSED.includes(x.status)) && (!a.query || matches(x, a.query)));
     return { content: [{ type: 'text' as const, text: list.length ? list.slice(0, 50).map(brief).join('\n') : 'No matching board items.' }] };
   }, { annotations: { readOnlyHint: true } }),
-  tool('board_get', 'Read one board item in full.', { id: z.string() }, async (a) => {
+  tool('board_get', 'Read one board item in full (the user may name it by id, e.g. F-3).', { id: z.string() }, async (a) => {
     const x = findBoardItem(wsOf(sid), a.id.toUpperCase());
     return { content: [{ type: 'text' as const, text: x ? full(x) : `No item ${a.id}.` }], ...(x ? {} : { isError: true }) };
   }, { annotations: { readOnlyHint: true } }),
-  tool('board_create', 'Create a board item when the user asks you to record something (a feature to build, a confirmed issue, a note on a decision). Search first to avoid duplicates.', {
+  tool('board_create', 'Create a board item: a feature to build, an issue, a note on a decision. Search first to avoid duplicates.', {
     kind: z.enum(['feature', 'issue', 'note']), title: z.string(), body: z.string().optional(), priority: z.enum(['high', 'normal', 'low']).optional(),
     tasks: z.array(z.string()).optional(),
   }, async (a) => {
@@ -172,17 +171,6 @@ addWorkspaceTools((sid) => [
     return { content: [{ type: 'text' as const, text: `Updated ${cur.id}.` }] };
   }),
 ]);
-
-addPromptPart(() => 'This workspace has a board of features (F-n), issues (I-n) and notes (N-n) kept by Code Agent. Use board_search / board_get when the user mentions an id or past decisions; create or update items only when the user asks or work on an item is finished. Cite items by id (e.g. F-3) so the user can click them.');
-
-// Sessions hear which features are in progress (when the user turned that on), in the system prompt
-// of their process: Claude Code does not call SessionStart hook callbacks (2.1.312).
-addPromptPart((sid) => {
-  if (!app.boardSettings.startContext) return null;
-  const ws = wsOf(sid);
-  const doing = all().filter((x) => x.workspaceId === ws && (x.status === 'doing' || x.status === 'fixing' || (x.kind === 'issue' && x.status === 'confirmed')));
-  return doing.length ? `Work in progress on the workspace board:\n${doing.slice(0, 15).map(brief).join('\n')}` : null;
-});
 
 // ------------------------------------------------------------------ recorder
 

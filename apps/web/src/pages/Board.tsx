@@ -427,10 +427,6 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               disabled={!takesEffort(recorder)} options={effortOptions(recorder, s.recorderEffort, t)} />
           </div>
         </Field>
-        <div>
-          <Toggle on={s.startContext} onChange={(v) => set({ startContext: v })} label={t('会话开始时告诉 Claude 进行中的功能')} />
-          <div className="hint" style={{ marginTop: 4, lineHeight: 1.6 }}>{t('只附上编号和标题，几十个 token。Claude 需要详情时自己用看板工具查。')}</div>
-        </div>
         <ul className="plain-list">
           <li>{t('每个会话里，Claude 都有四个看板工具：搜索、查看、新建、修改。你说「记到看板」，它就会先查重再记。')}</li>
           <li>{t('Claude 提到条目时会写编号，对话里的编号可以点，鼠标停在上面能看到摘要。')}</li>

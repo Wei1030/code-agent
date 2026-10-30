@@ -18,7 +18,7 @@ import { broadcast, register } from './hub';
 import { WORKTREES_DIR } from './paths';
 import { addItem, allSummaries, findItem, initRuntime, patchItem, patchSummary, raw, rt, summary, upsert } from './sessions/registry';
 import { addContext, decorateTool, findToolUse, inTurn, live, onSendTurn, onTurnEnd, sendTurn, startProcess, type Outgoing } from './sessions/live';
-import { addPromptPart, addSessionServers, workspaceOf } from './sessions/options';
+import { addSessionServers, workspaceOf } from './sessions/options';
 import { acquire } from './sessions/slots';
 import { enqueue, pumpQueue } from './sessions/ops';
 
@@ -370,12 +370,6 @@ decorateTool((_sid, name, input, item) => {
   if (op === 'create') item.detail = String(input.title ?? '');
   item.provenance = undefined;
 });
-
-addPromptPart(() => [
-  'You are one of possibly several Claude Code sessions in this workspace, run by Code Agent. The `workspace` MCP tools let you list the other sessions, read their conversations, check their status, send them messages and create new sessions.',
-  'Messages from other sessions arrive as peer messages; answer them like a colleague would. Receipts tell you when a session you messaged has handled it.',
-  'Use create_session for substantial parallel work the user may want to follow (worktree: true when it edits files alongside others); use built-in subagents for short side tasks.',
-].join(' '));
 
 register({
   releaseHeld,

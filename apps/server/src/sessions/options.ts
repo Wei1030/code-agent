@@ -32,12 +32,6 @@ const agentFactories: AgentFactory[] = [];
 export function addSessionAgents(fn: AgentFactory) {
   agentFactories.push(fn);
 }
-type PromptPart = (sid: string) => string | null;
-const promptParts: PromptPart[] = [];
-/** A line of Code Agent's own instructions appended to the system prompt. */
-export function addPromptPart(fn: PromptPart) {
-  promptParts.push(fn);
-}
 
 /** Built-in tool names behind each checkbox of the profile's tool list. */
 const TOOL_GROUPS: Record<string, string[]> = {
@@ -84,7 +78,8 @@ export function buildOptions(sid: string, ctx: BuildCtx): { options: Options; cw
   if (prof.sources.project) sources.push('project');
   if (prof.sources.local) sources.push('local');
 
-  const ours = [languageLine(), ...promptParts.map((f) => f(sid))].filter(Boolean).join('\n\n');
+  // Code Agent's only addition is the reply language; its tools explain themselves in their descriptions.
+  const ours = languageLine() ?? '';
   let systemPrompt: Options['systemPrompt'];
   if (prof.promptMode === 'custom') systemPrompt = { type: 'custom', prompt: [prof.promptText, ours].filter(Boolean).join('\n\n') };
   else if (prof.promptMode === 'minimal') systemPrompt = { type: 'custom', prompt: ['You are Claude, an AI assistant working in a software project. Use the tools available to help the user.', ours].filter(Boolean).join('\n\n') };
