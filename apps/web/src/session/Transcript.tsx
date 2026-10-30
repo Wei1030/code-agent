@@ -115,7 +115,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
           {!rt.readOnly && (
             <div className="hover-actions">
               <Button size="sm" icon="rewind" title={t('把文件回退到这条消息之前')} onClick={() => onRewind(it.id)}>{t('回退文件')}</Button>
-              <Button size="sm" icon="branch" title={t('新建一个会话，停在这条消息之前，并把这条消息放进输入框')} onClick={() => onFork(it.id)}>{t('从这里分叉')}</Button>
+              <Button size="sm" icon="branch" title={t('新建一个会话，停在这条消息之前')} onClick={() => onFork(it.id)}>{t('从这里分叉')}</Button>
             </div>
           )}
           <span className="sr-only">#{userN}</span>

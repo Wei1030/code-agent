@@ -259,7 +259,7 @@ export const SCREENS = [
     prepare: async (c) => { await openSession(c, c.ids.validate); await inspector(c, '检查点'); await c.click('.btn.sm', '回退到这里'); await c.sleep(1200); },
     marks: [
       { sel: '.modal', note: ['回退预览', '—', '列出会恢复或删除的文件和行数（先试运行，不会真的改）；之后的对话从这里截断。'] },
-      { sel: '.modal .btn.primary', note: ['回退', '点击', '回退文件和对话，被截掉的那条消息放回输入框；也可以选「分叉」保留原会话。'] },
+      { sel: '.modal .btn.primary', note: ['回退', '点击', '把文件回退到这条消息之前，对话保持不变；也可以选「分叉」：回退文件，并从这条消息之前开一个新会话。'] },
     ],
   },
   {

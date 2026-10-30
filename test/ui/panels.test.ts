@@ -85,6 +85,39 @@ test('question options with previews show them side by side, in a sandboxed fram
   await p.close();
 });
 
+test('text put into the input goes in once: what is typed since stays after another page; a fork from a message leaves its input empty (FR-ASK-01, FR-SES-11)', async () => {
+  const ask = { questions: [{ header: '方案', question: '用哪种方案？', multiSelect: false, options: [{ label: '甲', description: '甲方案' }, { label: '乙', description: '乙方案' }] }] };
+  env.model.script(/^用自己的话回答$/, [[use('AskUserQuestion', ask)], [say('好')]]);
+  const sid = await env.start('用自己的话回答');
+  await env.request(sid, 'question');
+  const p = await env.page(`/s/${sid}`);
+  await p.click('.link-btn', '跳过，直接在输入框里用自己的话回答');
+  await p.type('.c-input', '我打的草稿');
+  await p.click('nav button, nav a', '用量');
+  await p.waitFor(`location.pathname === '/usage'`, 'on the usage page');
+  await p.eval('history.back()');
+  await p.waitEl('.c-input');
+  assert.equal(await p.value('.c-input'), '我打的草稿', 'not put back to what was pushed');
+  await env.c.call('send', sid, '就用甲', {});
+  await env.turns(sid);
+
+  env.model.script(/^分叉前第一句$/, [[say('一')]]);
+  env.model.script(/^分叉前第二句$/, [[say('二')]]);
+  const a = await env.start('分叉前第一句');
+  await env.turns(a);
+  await env.c.call('send', a, '分叉前第二句', {});
+  await env.turns(a, 2);
+  await p.goto(`/s/${a}`);
+  await p.hover('.umsg', '分叉前第二句');
+  await p.click('.umsg .btn', '从这里分叉');
+  await p.waitFor(`location.pathname !== '/s/${a}'`, 'on the fork');
+  await p.waitEl('.toast', '已分叉：新会话停在这条消息之前');
+  await p.waitEl('.c-input');
+  assert.equal(await p.value('.c-input'), '', 'the message is not put into the input');
+  noPageErrors(p);
+  await p.close();
+});
+
 test('inspector: a file path in the conversation opens the file with the lines read marked; changes list the diff (FR-FILE-02, FR-FILE-01)', async () => {
   env.model.script(/看看文件/, [[use('Read', { file_path: '{cwd}/a.txt', offset: 2, limit: 2 })], [use('Edit', { file_path: '{cwd}/a.txt', old_string: 'four', new_string: 'FOUR' })], [say('看完也改了')]]);
   const sid = await env.start('看看文件', { mode: 'acceptEdits' });
@@ -149,7 +182,7 @@ test('inspector: after clearing, the info tab names the session id Claude Code g
   await p.waitEl('.ins-rail-btn');
   await tab(p, '信息');
   await p.waitEl('.kv dd', conv);
-  await p.waitEl('.kv .hint', sid);
+  assert.doesNotMatch(await p.text('.kv dd'), new RegExp(sid), 'the id before the clear is not shown');
   await p.waitEl('.hint', `claude --resume ${conv}`);
   noPageErrors(p);
   await p.close();

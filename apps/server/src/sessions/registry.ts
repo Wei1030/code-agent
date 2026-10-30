@@ -147,7 +147,8 @@ export function rt(id: string): SessionRuntime | undefined {
   return r;
 }
 
-function closeOpen(it: Item): Item {
+/** An item as it stands once its turn no longer runs (a restart, a fork of a running session). */
+export function closeOpen(it: Item): Item {
   if ((it.kind === 'text' || it.kind === 'thinking') && it.streaming) return { ...it, streaming: false };
   if (it.kind === 'tool' && (it.status === 'running' || it.status === 'waiting')) return { ...it, status: 'error', right: '已中断' };
   if (it.kind === 'toolgroup') return { ...it, tools: it.tools.map((t) => closeOpen(t) as typeof t) };

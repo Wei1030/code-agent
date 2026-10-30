@@ -55,11 +55,9 @@ export function SessionPage() {
   if (!rt) return <div className="session-layout"><SessionColumn current={sum} /><div className="scenter"><div className="loading-block"><span className="spinner" />{t('正在载入会话…')}</div></div></div>;
 
   const onFork = async (userId: string) => {
-    const msg = rt.items.find((x) => x.id === userId);
     const newId = await api.forkAt(id, userId);
     nav(`/s/${newId}`);
-    if (msg?.kind === 'user') setTimeout(() => useApp.getState().fillComposer(newId, msg.text), 0);
-    useApp.getState().toast(t('已分叉：新会话停在这条消息之前，消息已放进输入框'), 'good');
+    useApp.getState().toast(t('已分叉：新会话停在这条消息之前'), 'good');
   };
   const onRewind = (userId: string) => {
     const n = promptsOf(rt).findIndex((x) => x.id === userId) + 1;

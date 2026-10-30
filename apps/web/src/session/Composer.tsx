@@ -91,11 +91,13 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
     storeText(sid, text);
   }, [sid, text, atts, refs]);
 
-  // Text pushed from elsewhere (fork-and-edit, "answer in your own words").
+  // Text pushed from elsewhere ("answer in your own words").
   const fill = app.fill;
   useEffect(() => {
     if (!fill || fill.sid !== sid) return;
     setText(fill.text);
+    // Once: coming back to the page must not put it back over what was typed since.
+    useApp.getState().set({ fill: null });
     requestAnimationFrame(() => {
       ta.current?.focus();
       ta.current?.setSelectionRange(fill.text.length, fill.text.length);

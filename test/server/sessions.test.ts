@@ -6,7 +6,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { getSessionInfo } from '@anthropic-ai/claude-agent-sdk';
 import { setup, finished, type Env } from '../harness/env';
-import { say, use } from '../harness/fake-model';
+import { say, use, shell } from '../harness/fake-model';
 import { until } from '../harness/client';
 import type { Item } from '@code-agent/shared/types';
 
@@ -129,14 +129,34 @@ test('fork the whole session, or before a message with the rest left out (FR-SES
   assert.deepEqual(users(pItems).map((u) => u.text), ['分叉一号']);
   assert.deepEqual(texts(pItems), ['一号回答']);
   assert.equal((await env.rt(part)).turn, 1, 'the fork has had one turn');
+  // Its tokens are those of the turns it took over; its context is read once it runs.
+  const firstTurn = (items.find((i) => i.kind === 'footer') as Extract<Item, { kind: 'footer' }>).tokens;
+  assert.equal((await env.rt(part)).tokens, firstTurn);
+  assert.equal(env.c.sessions.get(part)?.tokens, firstTurn);
+  assert.ok(firstTurn < (await env.rt(sid)).tokens);
   // It continues from there: Claude Code sees the first exchange only.
   await until(() => env.c.sessions.get(part)?.live, 'fork resumed');
+  await until(() => env.c.evs(part, 'context').length > 0, 'the fork\'s own context read');
   env.model.script(/分叉三号/, [[say('三号回答')]]);
   await env.c.call('send', part, '分叉三号', {});
   await until(async () => texts((await env.rt(part)).items).includes('三号回答'), 'fork answers');
   const sent = JSON.stringify(env.model.sent(/分叉三号/)[0].body.messages);
   assert.match(sent, /分叉一号/);
   assert.doesNotMatch(sent, /分叉二号/);
+});
+
+test('a fork takes the conversation, not the state of the original: no request waiting, no card left running (FR-SES-10)', async () => {
+  env.model.script(/^等批准时分叉$/, [shell('node -e "console.log(1)"'), [say('跑完了')]]);
+  const sid = await env.start('等批准时分叉');
+  const req = await env.request(sid, 'approval');
+  await until(() => env.c.sessions.get(sid)?.requests?.length, 'the original waits on the user');
+  const fork = await env.c.call('forkAt', sid);
+  const f = await until(() => env.c.sessions.get(fork), 'the fork');
+  assert.equal(f.requests, undefined, 'nothing waits on the user in the fork');
+  const cards = (await env.rt(fork)).items.flatMap((i) => (i.kind === 'tool' ? [i] : i.kind === 'toolgroup' ? i.tools : []));
+  assert.ok(cards.every((c) => c.status !== 'waiting' && c.status !== 'running'), 'its copied cards are not running');
+  await env.c.call('respondApproval', sid, req.id, { behavior: 'deny' });
+  await env.turns(sid);
 });
 
 test('export gives the conversation as Markdown (FR-SES-15)', async () => {

@@ -458,7 +458,7 @@ function InfoTab({ rt }: { rt: SessionRuntime }) {
   return (
     <>
       <dl className="kv">
-        <dt>{t('会话 ID')}</dt><dd className="mono">{ccId}{ccId !== rt.id && <div className="hint">{t('清空对话后 Claude Code 换了新的会话 ID；在 Code Agent 里它仍是这个会话（{id}）。', { id: rt.id })}</div>}</dd>
+        <dt>{t('会话 ID')}</dt><dd className="mono">{ccId}</dd>
         <dt>{t('工作目录')}</dt><dd className="mono">{cwd}</dd>
         {sum?.worktree && <><dt>{t('工作树分支')}</dt><dd className="mono">{sum.worktree}</dd></>}
         <dt>{t('模型')}</dt><dd>{model ? `${model.label} · ${model.endpoint ? t('{e}（兼容端点）', { e: model.desc }) : t('Claude 订阅')}` : rt.model}{info.apiModel && <div className="hint mono">{info.apiModel}</div>}</dd>

@@ -8,7 +8,7 @@ import { emptyRuntime } from '@code-agent/shared/runtime';
 import { register } from '../hub';
 import { app } from '../state';
 import { load, save } from '../store';
-import { addItem, allSummaries, conversationOf, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
+import { addItem, allSummaries, closeOpen, conversationOf, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
 import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onTurnEnd, refreshContext, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
 import { cwdOf } from './options';
@@ -192,20 +192,26 @@ async function forkAt(sid: string, beforeUserId?: string): Promise<string> {
   } else {
     newId = (await forkSession(conversationOf(sid), { dir, title })).sessionId;
   }
+  // A turn still running in the original is not running in the fork.
+  const items = r.items.slice(0, Math.max(0, idx)).map((it) => closeOpen({ ...it }));
+  // What the copied turns used, as the original counted them.
+  const tokens = items.reduce((n, it) => n + (it.kind === 'footer' ? it.tokens : 0), 0);
   const s: SessionSummary = {
     ...sum, id: newId, title, live: false, state: 'idle', forkedFrom: sum.title, createdAt: Date.now(), lastActive: Date.now(), draft: !resumable,
     peerUnread: 0, waiting: false, jobId: undefined, createdBy: undefined, conversations: undefined, resume: undefined,
+    // Its own: nothing waits on the user, its transcript is the one just written, Code Agent made it.
+    requests: undefined, transcriptAt: Date.now(), tag: sum.tag === '外部' ? null : sum.tag, tokens,
   };
   upsert(s);
-  const items = r.items.slice(0, Math.max(0, idx)).map((it) => ({ ...it }));
   initRuntime(emptyRuntime(newId, {
-    items, model: r.model, effort: r.effort, mode: r.mode, context: r.context,
+    items, model: r.model, effort: r.effort, mode: r.mode, ...(resumable ? { context: r.context } : {}),
     // A fork before a message has had only the turns before it.
-    turn: beforeUserId ? items.filter((it) => it.kind === 'user').length : r.turn, tokens: r.tokens, readOnly: false,
+    turn: beforeUserId ? items.filter((it) => it.kind === 'user').length : r.turn, tokens, readOnly: false,
     // The fork goes on with the system prompt Claude Code recorded for the original.
     info: { prompt: r.info?.prompt },
   }));
-  if (resumable) void acquire(newId, () => startProcess(newId, { resume: true }));
+  // The context shown is the original's until the fork's own is read: a fork before a message has less.
+  if (resumable) void acquire(newId, () => startProcess(newId, { resume: true }), () => void refreshContext(newId));
   return newId;
 }
 
