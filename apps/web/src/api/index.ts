@@ -174,6 +174,8 @@ interface Local {
   createDraft(workspaceId: string): string;
   /** Load a session's transcript into the store if it is not there yet. */
   openSession(sid: string): Promise<void>;
+  /** Load it from the server again, whether it is in the store or not. */
+  reloadSession(sid: string): Promise<void>;
   /** The session to open for a workspace: latest running, else its unsent one, else latest saved. */
   latestSession(workspaceId: string): string | null;
   runningWork(sid: string): RunningWork;
@@ -195,6 +197,11 @@ const local: Local = {
     useSessions.getState().init(emptyRuntime(id, { model: prof.model, effort: prof.effort, mode: prof.mode }));
     void call('createDraft', [ws.id, id]);
     return id;
+  },
+  reloadSession(sid) {
+    return call<ReturnType<typeof emptyRuntime> | null>('openSession', [sid]).then((rt) => {
+      if (rt) useSessions.getState().init(rt);
+    });
   },
   openSession(sid) {
     if (useSessions.getState().runtimes[sid]) return Promise.resolve();

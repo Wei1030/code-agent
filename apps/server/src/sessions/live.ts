@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type {
-  AgentRun, Attachment, BgTask, FileChange, Item, PeerOrigin, PendingRequest, SessionRef, Task, ToolItem,
+  AgentRun, Attachment, BgTask, FileChange, Item, PeerOrigin, PendingRequest, RequestBrief, SessionRef, Task, ToolItem,
 } from '@code-agent/shared/types';
 import { app, update } from '../state';
 import { broadcast } from '../hub';
@@ -271,7 +271,7 @@ async function pump(l: Live) {
   emit(sid, { t: 'state', state: 'idle' });
   emit(sid, { t: 'settings', patch: { readOnly: true } });
   emit(sid, { t: 'stderr', line: `[${new Date().toISOString()}] 进程已结束${crashed ? `：${crashed}` : ''}` });
-  patchSummary(sid, { live: false, state: 'idle' });
+  patchSummary(sid, { live: false, state: 'idle', requests: undefined });
   // Session-only extra directories end with the process.
   if (app.dirs.some((d) => d.sessionId === sid)) update('dirs', (ds) => ds.filter((d) => d.sessionId !== sid));
   if (crashed) {
@@ -433,6 +433,14 @@ function showAsks(l: Live) {
   const head = l.asks[0] ?? null;
   emit(l.sid, { t: 'request', request: head, more: Math.max(0, l.asks.length - 1) });
   emit(l.sid, { t: 'state', state: head ? 'requires_action' : l.turn ? 'running' : 'idle' });
+  patchSummary(l.sid, { requests: l.asks.length ? l.asks.map(brief) : undefined });
+}
+
+function brief(r: PendingRequest): RequestBrief {
+  if (r.kind === 'approval') return { id: r.id, kind: r.kind, title: r.title, detail: `${r.tool} · ${r.command ?? r.diff?.path ?? r.blockedPath ?? ''}`, since: r.since };
+  if (r.kind === 'question') return { id: r.id, kind: r.kind, title: 'Claude 有问题要问你', detail: r.questions[0]?.question, since: r.since };
+  if (r.kind === 'elicitation') return { id: r.id, kind: r.kind, title: `${r.server} 需要你提供信息`, detail: r.message, since: r.since };
+  return { id: r.id, kind: r.kind, title: '计划等你审阅', since: r.since };
 }
 
 export function waitForUser<T>(l: Live, req: PendingRequest): Promise<T> {

@@ -3,7 +3,6 @@ import { NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Button, ConfirmHost, Popover, Select, Toasts, Toggle, UserAvatar } from '../components/ui';
 import { useApp } from '../store/app';
-import { useSessions } from '../store/sessions';
 import { useT } from '../lib/i18n';
 import { relTime } from '../lib/format';
 import { cx } from '../lib/util';
@@ -201,7 +200,6 @@ function ApprovalsInbox() {
   const t = useT();
   const nav = useNavigate();
   const currentId = useMatch('/s/:id')?.params.id;
-  const runtimes = useSessions((s) => s.runtimes);
   const sessions = useApp((s) => s.sessions);
   const held = useApp((s) => s.held);
   const allReviews = useApp((s) => s.reviews);
@@ -211,12 +209,11 @@ function ApprovalsInbox() {
   const open = useApp((s) => s.inboxOpen);
   const setOpen = (v: boolean) => useApp.getState().set({ inboxOpen: v });
   const ref = useRef<HTMLButtonElement>(null);
-  const pending = Object.values(runtimes)
-    .filter((r) => r.request)
-    .map((r) => ({ rt: r, sum: sessions.find((s) => s.id === r.id) }))
-    .filter((x) => x.sum)
-    .sort((a, b) => a.rt.request!.since - b.rt.request!.since);
-  const count = pending.reduce((n, p) => n + 1 + (p.rt.moreRequests ?? 0), 0) + held.length + decisions.length;
+  // Every session's waiting requests come with the session list, opened here or not.
+  const pending = sessions
+    .filter((s) => s.requests?.length)
+    .sort((a, b) => a.requests![0].since - b.requests![0].since);
+  const count = pending.reduce((n, s) => n + s.requests!.length, 0) + held.length + decisions.length;
   useEffect(() => {
     document.title = count > 0 ? `(${count}) Code Agent` : 'Code Agent';
   }, [count]);
@@ -229,20 +226,17 @@ function ApprovalsInbox() {
       <Popover anchor={ref.current} open={open} onClose={() => setOpen(false)} placement="bottom-end" className="inbox">
         <h4>{t('等你处理')} {count > 0 && <span className="chip crit">{count}</span>}</h4>
         {count === 0 && <div className="empty"><b>{t('没有待处理的请求')}</b>{t('审批、提问、计划审阅、待放行的会话消息和要你决定的代码审核会出现在这里')}</div>}
-        {pending.map(({ rt, sum }) => {
-          const req = rt.request!;
-          const what = req.kind === 'approval' ? `${req.tool} · ${req.command ?? req.diff?.path ?? req.blockedPath ?? ''}`
-            : req.kind === 'question' ? t('Claude 有问题要问你')
-              : req.kind === 'elicitation' ? t('{s} 需要你提供信息', { s: req.server })
-                : t('计划待审阅');
+        {pending.map((sum) => {
+          const [req, ...rest] = sum.requests!;
           return (
-            <div key={rt.id} className={cx('inbox-item', rt.id === currentId && 'current')} onClick={() => { setOpen(false); api.openSession(rt.id); nav(`/s/${rt.id}`); }}>
+            // The session is loaded again from the server, so its docked panel shows what is really waiting.
+            <div key={sum.id} className={cx('inbox-item', sum.id === currentId && 'current')} onClick={() => { setOpen(false); void api.reloadSession(sum.id); nav(`/s/${sum.id}`); }}>
               <Icon name={{ approval: 'shield', question: 'chat', elicitation: 'plug', plan: 'list' }[req.kind]} size={16} className="ink2" />
               <div className="grow">
-                <div className="t ellipsis">{sum!.title}</div>
-                <div className="d ellipsis">{what}</div>
-                {(rt.moreRequests ?? 0) > 0 && <div className="d">{t('后面还有 {n} 个请求', { n: rt.moreRequests ?? 0 })}</div>}
-                <div className="w">{rt.id === currentId ? t('正在查看') : t('已等待 {t}', { t: relTime(req.since).replace('刚刚', '不到 1 分钟') })}</div>
+                <div className="t ellipsis">{sum.title}</div>
+                <div className="d ellipsis">{t(req.title)}{req.detail ? ` · ${req.detail}` : ''}</div>
+                {rest.length > 0 && <div className="d">{t('后面还有 {n} 个请求', { n: rest.length })}</div>}
+                <div className="w">{sum.id === currentId ? t('正在查看') : t('已等待 {t}', { t: relTime(req.since).replace('刚刚', '不到 1 分钟') })}</div>
               </div>
             </div>
           );

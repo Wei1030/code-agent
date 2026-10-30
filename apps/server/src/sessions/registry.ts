@@ -12,7 +12,7 @@ import { db, later, tx } from '../store';
 const summaries = new Map<string, SessionSummary>(
   (db.prepare('SELECT summary FROM sessions').all() as Array<{ summary: string }>)
     .map((r) => JSON.parse(r.summary) as SessionSummary)
-    .map((s) => [s.id, { ...s, live: false, state: 'idle', waiting: false }]),
+    .map((s) => [s.id, { ...s, live: false, state: 'idle', waiting: false, requests: undefined }]),
 );
 const runtimes = new Map<string, SessionRuntime>();
 let rawSeq = 0;

@@ -80,6 +80,20 @@ export interface SessionSummary {
   peerUnread?: number;
   /** Waiting for a free slot: the running-session limit is reached and no running session is idle. */
   waiting?: boolean;
+  /**
+   * What Claude Code waits on the user for, oldest first: the same list the session's docked panel
+   * works through, so the inbox shows every session's requests whether or not it was opened here.
+   */
+  requests?: RequestBrief[];
+}
+
+/** One waiting request in a few words, for the inbox. */
+export interface RequestBrief {
+  id: string;
+  kind: PendingRequest['kind'];
+  title: string;
+  detail?: string;
+  since: number;
 }
 
 /** A session in the same workspace, as other sessions and the composer refer to it. */
