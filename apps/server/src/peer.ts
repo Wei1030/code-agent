@@ -147,19 +147,27 @@ onTurnEnd((sid, info) => {
   });
 });
 
-function releaseHeld(id: string) {
-  const env = heldEnv.get(id);
+/**
+ * The held message's envelope; after a server restart only the list entry is left, which still
+ * says who sent what to whom (the receipt and the sender's card are not followed any more).
+ */
+function takeHeld(id: string): Envelope | undefined {
+  const h = app.held.find((x) => x.id === id);
+  const env = heldEnv.get(id) ?? (h ? { from: h.from.sessionId, to: h.to.sessionId, text: h.text, kind: 'message' as const, hops: 0, notify: false } : undefined);
   heldEnv.delete(id);
-  update('held', (h) => h.filter((x) => x.id !== id));
+  update('held', (all) => all.filter((x) => x.id !== id));
+  return env;
+}
+
+function releaseHeld(id: string) {
+  const env = takeHeld(id);
   if (!env || !summary(env.to) || !summary(env.from)) return;
   // Letting it through counts as the user's go-ahead: the chain starts over.
   patchPeer(env.from, env.toolId, { delivery: handOver({ ...env, hops: 0 }) });
 }
 
 function rejectHeld(id: string) {
-  const env = heldEnv.get(id);
-  heldEnv.delete(id);
-  update('held', (h) => h.filter((x) => x.id !== id));
+  const env = takeHeld(id);
   if (!env || !rt(env.from)) return;
   const toTitle = summary(env.to)?.title ?? '';
   patchPeer(env.from, env.toolId, { delivery: 'rejected' });
