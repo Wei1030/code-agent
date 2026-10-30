@@ -147,6 +147,7 @@ export function processEnv(endpoint?: EndpointTarget): Record<string, string | u
   if (r.otel) {
     env.CLAUDE_CODE_ENABLE_TELEMETRY = '1';
     if (r.otelEndpoint) env.OTEL_EXPORTER_OTLP_ENDPOINT = r.otelEndpoint;
+    env.OTEL_EXPORTER_OTLP_PROTOCOL = r.otelProtocol;
     if (r.otelMetrics) env.OTEL_METRICS_EXPORTER = 'otlp';
     if (r.otelLogs) env.OTEL_LOGS_EXPORTER = 'otlp';
     if (r.otelTraces) { env.OTEL_TRACES_EXPORTER = 'otlp'; env.CLAUDE_CODE_ENHANCED_TELEMETRY_BETA = '1'; }

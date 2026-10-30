@@ -931,6 +931,8 @@ export interface RuntimeSettings {
   debugLog: boolean;
   otel: boolean;
   otelEndpoint: string;
+  /** How the collector at otelEndpoint takes OTLP: Claude Code exports nothing without it. */
+  otelProtocol: 'grpc' | 'http/protobuf' | 'http/json';
   otelMetrics: boolean;
   otelLogs: boolean;
   otelTraces: boolean;

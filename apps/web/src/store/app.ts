@@ -143,7 +143,7 @@ export const useApp = create<AppState>((set, get) => ({
     configDir: 'default', customDir: '', executable: 'bundled', loggedIn: false, plan: '', envConflict: false, endpoints: [],
   },
   env: [],
-  runtime: { debugLog: false, otel: false, otelEndpoint: '', otelMetrics: false, otelLogs: false, otelTraces: false, otelPrompts: false, otelTools: false },
+  runtime: { debugLog: false, otel: false, otelEndpoint: '', otelProtocol: 'http/protobuf', otelMetrics: false, otelLogs: false, otelTraces: false, otelPrompts: false, otelTools: false },
   models: MODELS,
   usage: { fiveHour: null, weekly: null, checkedAt: null, days: {} },
   connection: 'online',

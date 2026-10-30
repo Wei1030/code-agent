@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { api } from '../../api';
 import { relTime } from '../../lib/format';
-import type { Endpoint, EnvVar } from '../../api/types';
+import type { Endpoint, EnvVar, RuntimeSettings } from '../../api/types';
 import { COMMON_ENV } from '../../lib/catalog';
 import { Icon } from '../../components/Icon';
 import { Button, Chip, Field, Radio, Seg, Select, Status, Toggle } from '../../components/ui';
@@ -262,7 +262,16 @@ function Runtime() {
         </div>
         {r.otel && (
           <div style={{ marginTop: 12 }}>
-            <Field label={t('OTLP 端点')}><input className="input mono" placeholder="http://localhost:4318" value={r.otelEndpoint} onChange={(e) => set({ otelEndpoint: e.target.value })} /></Field>
+            <div className="row" style={{ gap: 12, alignItems: 'flex-end' }}>
+              <div className="grow"><Field label={t('OTLP 端点')}><input className="input mono" placeholder={r.otelProtocol === 'grpc' ? 'http://localhost:4317' : 'http://localhost:4318'} value={r.otelEndpoint} onChange={(e) => set({ otelEndpoint: e.target.value })} /></Field></div>
+              <Field label={t('协议')}>
+                <Select<RuntimeSettings['otelProtocol']> value={r.otelProtocol} onChange={(v) => set({ otelProtocol: v })} width={200} className="w-180" options={[
+                  { value: 'http/protobuf', label: 'HTTP · protobuf', desc: t('端口通常是 4318') },
+                  { value: 'http/json', label: 'HTTP · JSON', desc: t('端口通常是 4318') },
+                  { value: 'grpc', label: 'gRPC', desc: t('端口通常是 4317') },
+                ]} />
+              </Field>
+            </div>
             <div className="row" style={{ gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
               <Toggle on={r.otelMetrics} onChange={(v) => set({ otelMetrics: v })} label={t('指标')} />
               <Toggle on={r.otelLogs} onChange={(v) => set({ otelLogs: v })} label={t('日志')} />

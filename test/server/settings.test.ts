@@ -1,11 +1,13 @@
 // Settings reach Claude Code: the 默认 profile option by option, instruction files, permission
 // rules and extra directories from the rules page, model services and endpoints, environment
 // variables, usage (FR-CFG-01/02/04, FR-PROMPT-01..05, FR-PERM-08, FR-WS-02, FR-MOD-01/03,
-// FR-AUTH-01..04, FR-I18N-05, FR-COST-03).
+// FR-AUTH-01..04, FR-I18N-05, FR-COST-03, FR-TODO-02, FR-OBS-03).
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { setup, EP, M1, M2, type Env } from '../harness/env';
 import { say, use, shell, httpError } from '../harness/fake-model';
 import { until } from '../harness/client';
@@ -160,6 +162,63 @@ test('environment variables of the settings and of the server reach the commands
   const sid = await env.start('看环境变量', { mode: 'bypassPermissions' });
   await env.turns(sid);
   assert.match(JSON.stringify(env.model.sent(/看环境变量/).at(-1)!.body.messages), /from-settings\|from-server-env/);
+});
+
+test('profile: the task tools are given when switched on, left out when off (FR-TODO-02)', async () => {
+  const on = await firstRequest({});
+  assert.ok(on.req.tools.includes('TaskCreate'));
+  const off = await firstRequest({ tools: env.c.slices.profiles[0].tools.filter((t) => t !== 'TaskCreate') });
+  assert.ok(!off.req.tools.some((t) => /^Task(Create|Update|Get|List)$|^TodoWrite$/.test(t)), off.req.tools.join(', '));
+});
+
+test('output styles: built-in, user and workspace ones are listed; the profile\'s style reaches Claude (FR-PROMPT-04)', async () => {
+  env.world.write(path.join(env.world.config, 'output-styles', 'brief.md'), '---\nname: Brief\ndescription: Short answers\n---\n\nAnswer in one line.\n');
+  env.world.write(path.join(env.repo, '.claude', 'output-styles', 'reviewer.md'), '---\nname: Reviewer\ndescription: Like a reviewer\n---\n\nMARK-STYLE-REVIEWER: point out risks first.\n');
+  const styles = await env.c.call('outputStyles', env.ws);
+  assert.deepEqual(styles.filter((s) => s.source !== 'builtin').map((s) => [s.name, s.source]), [['Brief', 'global'], ['Reviewer', 'workspace']]);
+  assert.ok(styles.some((s) => s.name === 'Explanatory' && s.source === 'builtin'));
+  // Claude Code sends the style as a system message of the conversation.
+  const { req } = await firstRequest({ outputStyle: 'Reviewer' });
+  assert.match(JSON.stringify(req.body.messages), /MARK-STYLE-REVIEWER/);
+  assert.doesNotMatch(JSON.stringify((await firstRequest({})).req.body), /MARK-STYLE-REVIEWER/, 'only with the style chosen');
+});
+
+test('a changed profile reaches running sessions once they are idle (FR-CFG-01, issue 10-30#17)', { todo: 'issue 10-30#17: Claude Code resends the system prompt it recorded first' }, async () => {
+  env.model.script(/换方案前/, [[say('好')]]);
+  env.model.script(/换方案后/, [[say('好')]]);
+  const sid = await env.start('换方案前');
+  await env.turns(sid);
+  const pid = (await env.rt(sid)).info?.pid;
+  const prev = env.c.slices.profiles;
+  await env.c.call('setState', { profiles: prev.map((x) => ({ ...x, promptMode: 'append', promptText: 'MARK-APPLIED-TO-RUNNING' })) });
+  assert.ok((await env.c.call('applyProfileToRunning')) >= 1);
+  await until(async () => { const info = (await env.rt(sid)).info; return info?.pid && info.pid !== pid; }, 'a new process', 60_000);
+  await env.c.call('send', sid, '换方案后', {});
+  await env.turns(sid, 2);
+  assert.match(env.model.sent(/换方案后/)[0].system, /MARK-APPLIED-TO-RUNNING/);
+  assert.ok(JSON.stringify(env.model.sent(/换方案后/)[0].body.messages).includes('换方案前'), 'the conversation goes on');
+  await env.c.call('setState', { profiles: prev });
+});
+
+test('OpenTelemetry: with export switched on, a collector at the address receives Claude Code\'s logs and metrics (FR-OBS-03)', async () => {
+  const got: string[] = [];
+  const collector = createServer((req, res) => { got.push(`${req.method} ${req.url} ${req.headers['content-type']}`); req.resume(); req.on('end', () => res.writeHead(200, { 'content-type': 'application/json' }).end('{}')); });
+  await new Promise<void>((r) => collector.listen(0, '127.0.0.1', r));
+  const prev = { runtime: env.c.slices.runtime, env: env.c.slices.env };
+  await env.c.call('setState', {
+    runtime: { ...prev.runtime, otel: true, otelEndpoint: `http://127.0.0.1:${(collector.address() as AddressInfo).port}`, otelMetrics: true, otelLogs: true, otelTraces: false, otelPrompts: false, otelTools: false },
+    env: [...prev.env, { id: 'o1', key: 'OTEL_LOGS_EXPORT_INTERVAL', value: '500', note: '' }, { id: 'o2', key: 'OTEL_METRIC_EXPORT_INTERVAL', value: '1000', note: '' }],
+  });
+  env.model.script(/遥测导出/, [[say('好')]]);
+  const sid = await env.start('遥测导出');
+  await env.turns(sid);
+  try {
+    await until(() => got.some((g) => /^POST \/v1\/logs/.test(g)) && got.some((g) => /^POST \/v1\/metrics/.test(g)), 'logs and metrics at the collector', 30_000);
+    assert.ok(got.every((g) => g.endsWith('application/x-protobuf')), `the default protocol: ${got.join(', ')}`);
+  } finally {
+    await env.c.call('setState', prev);
+    collector.close();
+  }
 });
 
 test('usage: tokens per day, workspace and model are recorded (FR-COST-03)', async () => {
