@@ -6,6 +6,8 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { query, type HookCallbackMatcher, type HookEvent, type HookJSONOutput, type Options, type Query, type SDKMessage, type SDKUserMessage, type SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type {
   AgentRun, Attachment, BgTask, FileChange, Item, PeerOrigin, PendingRequest, RequestBrief, SessionRef, Task, ToolItem,
@@ -88,6 +90,8 @@ export interface Live {
   ready: Promise<void>;
   /** Called once when the process has ended. */
   ended: Promise<void>;
+  /** The process id Claude Code reported once it started. */
+  pid?: number;
 }
 
 const lives = new Map<string, Live>();
@@ -232,6 +236,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   l.ready = q.initializationResult().then((init) => {
     l.commands = init.commands ?? [];
     const pid = (init as { pid?: number }).pid;
+    l.pid = pid;
     if (pid) emit(sid, { t: 'settings', patch: { info: { ...rt(sid)?.info, pid } } });
     void q.supportedAgents().then((list) => import('../ext/agents').then((m) => m.noteAgents(list))).catch(() => undefined);
     raw(sid, 'control_response/initialize', `Claude Code ${init.claude_code_version ?? ''} · ${l.commands.length} 个命令`, { claude_code_version: init.claude_code_version, pid: (init as { pid?: number }).pid, models: init.models?.length });
@@ -281,10 +286,28 @@ async function pump(l: Live) {
 }
 
 /** End the process; the session is saved and can be resumed. */
+const run = promisify(execFile);
+
+/**
+ * On Windows what a command started outlives Claude Code when its process is closed: the shells
+ * end, not the programs they ran (issue 10-30#16). While it still runs, end the process trees under
+ * it, when a turn or a background task may have commands going.
+ */
+async function endCommands(l: Live) {
+  const r = rt(l.sid);
+  // Only this process's own id: the one saved from an earlier process may belong to another by now.
+  const pid = l.pid;
+  if (process.platform !== 'win32' || !pid || (!l.turn && !r?.background.some((b) => b.status === 'running'))) return;
+  const kids = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ParentProcessId=${pid}").ProcessId`], { windowsHide: true })
+    .then((o) => o.stdout.split(/\s+/).filter(Boolean), () => [] as string[]);
+  await Promise.all(kids.map((k) => run('taskkill', ['/pid', k, '/T', '/F'], { windowsHide: true }).catch(() => undefined)));
+}
+
 export async function closeProcess(sid: string) {
   const l = lives.get(sid);
   if (!l) return;
   l.closing = true;
+  await endCommands(l);
   l.input.close();
   try {
     l.q.close();

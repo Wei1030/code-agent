@@ -31,6 +31,11 @@ export class Client {
         this.take(m);
         if (m.t === 'hello') resolve();
       });
+      // A server that went away fails the calls waiting on it instead of leaving the test hanging.
+      this.ws.on('close', () => {
+        for (const w of this.waiting.values()) w.rej(new Error('the server closed the connection'));
+        this.waiting.clear();
+      });
     });
     return this;
   }
@@ -58,6 +63,7 @@ export class Client {
     // Like the web app's store: a client's own change applies here at once (the server does not echo it back).
     if (method === 'setState') Object.assign(this.slices, args[0]);
     return new Promise((res, rej) => {
+      if (this.ws.readyState !== WebSocket.OPEN) return rej(new Error('not connected to the server'));
       this.id += 1;
       this.waiting.set(this.id, { res: res as (v: unknown) => void, rej });
       this.ws.send(JSON.stringify({ t: 'call', id: this.id, method, args }));

@@ -8,7 +8,7 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { setup, finished, type Env } from '../harness/env';
 import { say, use, shell, sleepCmd } from '../harness/fake-model';
-import { until } from '../harness/client';
+import { until, sleep } from '../harness/client';
 import type { Item } from '@code-agent/shared/types';
 
 let env: Env;
@@ -84,6 +84,19 @@ test('"all to the background" moves what runs in the foreground and the turn goe
   await env.turns(sid);
   assert.ok((await env.rt(sid)).background.some((b) => b.status === 'running'));
   await env.c.call('stop', sid);
+});
+
+test('saving a session ends the commands it was running, in the foreground and the background (issue 10-30#16)', async () => {
+  const late = (tag: string) => `node -e "setTimeout(() => require('fs').writeFileSync('late-${tag}.txt', 'x'), 8000)"`;
+  env.model.script(/^保存时还在跑$/, [(r) => [...shell(late('bg'), { run_in_background: true })(r)], shell(late('fg')), [say('好')]]);
+  const sid = await env.start('保存时还在跑', { mode: 'bypassPermissions' });
+  await until(async () => { const r = await env.rt(sid); return r.background.some((b) => b.status === 'running') && r.items.some((i) => i.kind === 'tool' && i.status === 'running' && !i.background); }, 'both running', 30_000);
+  await sleep(2000);
+  await env.c.call('stop', sid);
+  await until(() => env.c.sessions.get(sid)?.live === false, 'saved');
+  await sleep(9000);
+  assert.equal(existsSync(path.join(env.repo, 'late-fg.txt')), false, 'the foreground command was still running');
+  assert.equal(existsSync(path.join(env.repo, 'late-bg.txt')), false, 'the background command was still running');
 });
 
 test('moving a running command to the background lets the turn go on (FR-BG-03)', async () => {

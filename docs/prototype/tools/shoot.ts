@@ -132,10 +132,7 @@ async function loadScreens(n = 0): Promise<Screen[]> {
   return (await import(`${pathToFileURL(path.join(here, 'screens.mjs')).href}?v=${n}`)).SCREENS as Screen[];
 }
 
-/**
- * The demo's long command (scripts/bench.js) can outlive the run: Claude Code on Windows ends the
- * shell of a command it stops, not the node it started. Left running, it holds the demo folder.
- */
+/** A run cut short (Ctrl+C, a crash) can leave the demo's long command (scripts/bench.js) holding the demo folder. */
 function endLeftovers() {
   if (process.platform !== 'win32') return;
   try {
