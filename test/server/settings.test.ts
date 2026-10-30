@@ -148,12 +148,14 @@ test('switching to a model of another endpoint restarts the process and keeps th
   assert.match(JSON.stringify(req.body.messages), /换模型前/);
 });
 
-test('removing an endpoint model moves settings that named it (FR-AUTH-01)', async () => {
+test('removing an endpoint model moves the profile that named it; the board recorder keeps its choice (FR-AUTH-01)', async () => {
   const p = env.c.slices.provider;
-  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorderModel: M2 } });
+  const prev = env.c.slices.profiles;
+  await env.c.call('setState', { profiles: prev.map((x) => ({ ...x, model: M2 })), boardSettings: { ...env.c.slices.boardSettings, recorderModel: M2 } });
   await env.c.call('setState', { provider: { ...p, endpoints: p.endpoints.map((e) => ({ ...e, models: e.models.filter((m) => m.name !== 'model-two') })) } });
-  await until(() => env.c.slices.boardSettings.recorderModel === M1, 'recorder moved to a model that exists');
-  await env.c.call('setState', { provider: p });
+  await until(() => env.c.slices.profiles.every((x) => x.model === M1), 'the profile moved to a model that exists');
+  assert.equal(env.c.slices.boardSettings.recorderModel, M2, 'its checks fail and say so instead');
+  await env.c.call('setState', { provider: p, profiles: prev });
 });
 
 test('environment variables of the settings and of the server reach the commands Claude runs (FR-CFG-04)', async () => {

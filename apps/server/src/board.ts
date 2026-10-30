@@ -21,7 +21,6 @@ import { addItem, emit, patchItem, rt, summary } from './sessions/registry';
 import { onTurnEnd } from './sessions/live';
 import { addWorkspaceTools } from './peer';
 import { oneShot } from './oneshot';
-import { validModel } from './models';
 
 const run = promisify(execFile);
 
@@ -175,10 +174,11 @@ addWorkspaceTools((sid) => [
 
 // ------------------------------------------------------------------ recorder
 
-/** The model the recorder runs on: the one chosen, or the first there is when it is not offered. */
+/** The model chosen for the recorder; whether it can run now (offered, and Claude's only with the login). */
 function recorderModel() {
-  const id = validModel(app.boardSettings.recorderModel);
-  return { id, label: app.models.find((m) => m.id === id)?.label ?? id };
+  const id = app.boardSettings.recorderModel;
+  const m = app.models.find((x) => x.id === id);
+  return { id, label: m?.label ?? (id.replace(/^ep:[^:]+:/, '') || '看板分析'), usable: !!m && (!!m.endpoint || app.provider.loggedIn) };
 }
 
 function recorderLabel() {
@@ -251,14 +251,11 @@ const checks = new Map<string, AbortController>();
 const chains = new Map<string, Promise<void>>();
 const showCheck = (sid: string, boardCheck: BoardCheck | null) => emit(sid, { t: 'settings', patch: { boardCheck } });
 
-/** A model that can run: an endpoint's, or Claude's with the login. */
-const canRun = (id: string) => !!app.models.find((m) => m.id === id)?.endpoint || app.provider.loggedIn;
-
 async function recordTurn(sid: string, userId: string) {
   const ws = wsOf(sid);
   const turn = turnText(sid, userId);
   const model = recorderModel();
-  if (!app.boardSettings.recorder || !ws || turn.length < 40 || !canRun(model.id)) return;
+  if (!app.boardSettings.recorder || !ws || turn.length < 40) return;
   const s = app.boardSettings;
   const known = candidates(ws, turn);
   const prompt = [
@@ -277,6 +274,7 @@ async function recordTurn(sid: string, userId: string) {
   const check: BoardCheck = { model: model.label, startedAt: Date.now() };
   showCheck(sid, check);
   try {
+    if (!model.usable) throw new Error(model.id ? '看板设置里选的模型现在不可用，请换一个' : '还没有选看板分析用的模型');
     ops = await oneShot<RecorderOps>({ prompt, schema: RECORDER_SCHEMA, model: s.recorderModel, effort: s.recorderEffort, workspaceId: ws, signal: abort.signal });
   } catch (e) {
     if (abort.signal.aborted) {

@@ -48,7 +48,7 @@ test('ids count per kind; edits are logged; delete removes', async () => {
 
 test('the recorder records after a turn, unconfirmed; undo restores; confirm accepts', async () => {
   assert.equal(env.c.slices.boardSettings.recorder, false, 'off until the user turns it on');
-  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: 'haiku' } });
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true } });
   recorderOps = [{ op: 'create', kind: 'issue', title: '自动记下的问题', body: '对话里确认过', status: 'confirmed', priority: 'high', note: '确认的缺陷' }];
   env.model.script(/确认一个缺陷/, [[say('确认了：退款金额少算一分钱，原因是四舍五入。')]]);
   const sid = await env.start('确认一个缺陷');
@@ -57,7 +57,7 @@ test('the recorder records after a turn, unconfirmed; undo restores; confirm acc
   assert.equal(item.unconfirmed, true);
   const card = await until(async () => (await env.rt(sid)).items.find((i) => i.kind === 'board') as Extract<Item, { kind: 'board' }> | undefined, 'board card in the transcript');
   assert.equal(card.by, 'recorder');
-  assert.equal(card.model, `后台识别 · ${env.c.slices.models[0].label} · 思考低`, 'haiku is not offered without the login: the first model there is runs it, and the card says so');
+  assert.equal(card.model, '后台识别 · model-two · 思考低', 'the card names the model');
   await env.c.call('undoBoardRecord', sid, card.id);
   await until(() => !board().some((b) => b.title === '自动记下的问题'), 'undone');
   assert.equal(((await env.rt(sid)).items.find((i) => i.id === card.id) as Extract<Item, { kind: 'board' }>).undone, true);
@@ -104,6 +104,24 @@ test('a check that fails says why in its session for a while (custom feature 看
   await until(async () => (await env.rt(sid)).boardCheck === null, 'then goes', 20_000);
   env.model.failModel('model-two', null);
   await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: false, recorderModel: M2 } });
+});
+
+test('a model that cannot run fails the check, saying so; with none chosen it takes the first usable one (custom feature 看板)', async () => {
+  // Without the Claude login Haiku is not offered: nothing runs in its place.
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: 'haiku' } });
+  env.model.script(/^模型不可用$/, [[say('这一轮说了足够多的内容，后台识别会来检查它要不要更新看板。')]]);
+  const sid = await env.start('模型不可用');
+  await env.turns(sid);
+  const failed = await until(async () => (await env.rt(sid)).boardCheck?.error, 'the check fails');
+  assert.match(failed!, /选的模型现在不可用/);
+  assert.equal((await env.rt(sid)).boardCheck?.model, 'haiku');
+  assert.ok(!env.model.requests.some((r) => r.tools.includes('StructuredOutput') && /模型不可用/.test(r.prompt)), 'no other model ran it');
+
+  // A new install has no model chosen: it takes Haiku on the subscription, else the first endpoint model.
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: false, recorderModel: '' } });
+  await env.c.call('setState', { provider: { ...env.c.slices.provider } });
+  await until(() => env.c.slices.boardSettings.recorderModel === env.c.slices.models[0].id, 'the first endpoint model');
+  await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorderModel: M2 } });
 });
 
 test('the recorder stays off when switched off, and for interrupted turns', async () => {

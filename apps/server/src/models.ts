@@ -38,7 +38,13 @@ function dropGoneModels() {
   const profiles = app.profiles.map((p) => ({ ...p, model: fix(p.model) }));
   if (profiles.some((p, i) => p.model !== app.profiles[i].model)) set('profiles', profiles);
   if (fix(app.reviewProfile.model) !== app.reviewProfile.model) set('reviewProfile', { ...app.reviewProfile, model: fix(app.reviewProfile.model) });
-  if (fix(app.boardSettings.recorderModel) !== app.boardSettings.recorderModel) set('boardSettings', { ...app.boardSettings, recorderModel: fix(app.boardSettings.recorderModel) });
+  // The board recorder keeps its model: when it is gone, a check fails and says so. Not chosen yet
+  // (a new install), it takes Haiku on the subscription, else the first endpoint model.
+  if (!app.boardSettings.recorderModel) {
+    const usable = app.models.filter((m) => m.endpoint || app.provider.loggedIn);
+    const pick = usable.find((m) => m.id === 'haiku') ?? usable[0];
+    if (pick) set('boardSettings', { ...app.boardSettings, recorderModel: pick.id });
+  }
   const jobs = app.jobs.map((j) => ({ ...j, model: fix(j.model) }));
   if (jobs.some((j, i) => j.model !== app.jobs[i].model)) set('jobs', jobs);
 }

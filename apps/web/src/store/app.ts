@@ -134,7 +134,7 @@ export const useApp = create<AppState>((set, get) => ({
   peer: { inbound: 'parity', maxHops: 6 },
   maxRunning: 4,
   board: [],
-  boardSettings: { recorder: false, recorderModel: 'haiku', recorderEffort: 'low' },
+  boardSettings: { recorder: false, recorderModel: '', recorderEffort: 'low' },
   reviews: [],
   reviewChecks: {},
   reviewProfile: { model: 'opus', effort: 'high', tools: [], claudeMd: true, extraPrompt: '' },
