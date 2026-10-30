@@ -130,6 +130,11 @@ export async function send(sid: string, text: string, opts: SendOptions = {}) {
     else enqueue(sid, m, priority);
     return;
   }
+  // Between turns of something that holds the queue (a review in progress) it waits too.
+  if (blockers.some((f) => f(sid))) {
+    enqueue(sid, m, opts.priority === 'later' ? 'later' : 'next');
+    return;
+  }
   sendTurn(sid, m);
 }
 

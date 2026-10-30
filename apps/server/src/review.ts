@@ -74,8 +74,9 @@ export function activeTicket(sid: string): ReviewTicket | undefined {
 }
 
 addBusyCheck((sid) => !!activeTicket(sid));
-// Queued user messages wait while Code Agent runs the checks or the reviewer between turns.
-addQueueBlocker((sid) => activeTicket(sid)?.status === 'checking' || activeTicket(sid)?.status === 'reviewing');
+// The user's messages wait until the review ends: while Code Agent runs the checks or the
+// reviewer, and between the author's turns (the session is idle there for a moment).
+addQueueBlocker((sid) => RUNNING.includes(activeTicket(sid)?.status as ReviewTicket['status']));
 
 function notify(sid: string, kind: 'request' | 'background', title: string, body: string, tone: 'good' | 'warn') {
   broadcast({ t: 'notify', n: { kind, sid, title, body, tone, action: kind === 'request' ? '去处理' : '查看' } });
@@ -288,6 +289,13 @@ function roundPrompt(t: ReviewTicket, n: number): string {
   ].filter(Boolean).join('\n\n');
 }
 
+/** The repository's CLAUDE.md files, for a reviewer that reads them without loading project settings. */
+function projectInstructions(cwd: string): string {
+  const files = ['CLAUDE.md', path.join('.claude', 'CLAUDE.md')].map((f) => path.join(cwd, f)).filter((f) => existsSync(f));
+  // i18n-ignore: the prompt Claude reads.
+  return files.map((f) => `Project instructions (${path.relative(cwd, f)}):\n${readFileSync(f, 'utf8').trim()}`).join('\n\n');
+}
+
 const REVIEWER_ROLE = 'You are a code reviewer. You never change anything: read files with Read, Grep and Glob, and run only read-only shell commands (git diff/log/show/status, ls, cat, grep, find; on Windows the shell tool is PowerShell). Anything else is refused.';
 
 async function runReviewer(id: string, n: number, attempt = 1) {
@@ -319,12 +327,12 @@ async function runReviewer(id: string, n: number, attempt = 1) {
       options: {
         cwd, model: model.name, ...reasoning(model, t.effort),
         // Read-only by Claude Code itself: no tool that edits, and in "don't ask" mode a command runs only
-        // when Claude Code judges it read-only. The user's own allow rules (user and local settings) are
-        // not loaded, so none of them lets the reviewer change anything.
+        // when Claude Code judges it read-only. No settings file is loaded, so no allow rule (the user's,
+        // or one committed in the repository) lets the reviewer change anything; CLAUDE.md comes in the prompt.
         tools: ['Read', 'Glob', 'Grep', 'Bash', 'PowerShell', ...extra], allowedTools: ['Read', 'Glob', 'Grep', ...extra],
         permissionMode: 'dontAsk', persistSession: false,
-        settingSources: prof.claudeMd ? ['project'] : [],
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: REVIEWER_ROLE },
+        settingSources: [],
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: [REVIEWER_ROLE, prof.claudeMd ? projectInstructions(cwd) : ''].filter(Boolean).join('\n\n') },
         outputFormat: { type: 'json_schema', schema: VERDICT_SCHEMA },
         env: envFor(t.model), abortController: abort, ...(exe ? { pathToClaudeCodeExecutable: exe } : {}),
       },
