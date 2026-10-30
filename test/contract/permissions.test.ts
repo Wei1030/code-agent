@@ -5,6 +5,7 @@
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { query, type CanUseTool, type Options, type PermissionUpdate } from '@anthropic-ai/claude-agent-sdk';
 import { makeWorld, type World } from '../harness/world';
 import { FakeModel, say, use, shell, plan, type Step } from '../harness/fake-model';
@@ -114,6 +115,27 @@ test('a repository\'s committed allow rules apply only in a trusted folder; loca
   world.write(path.join(l, '.claude', 'settings.local.json'), { permissions: { allow: ['Bash(npm test)', 'PowerShell(npm test)'] } });
   const local = await run([shell('npm test'), [say('好')]], {}, l);
   assert.equal(local.asks.length, 0, 'local rules need no trust');
+});
+
+test('an untrusted folder\'s committed settings: what widens permissions is ignored, deny rules, env and hooks apply (issue 10-30#12)', async () => {
+  const r = world.repo('untrusted-settings', { 'secret.txt': 'secret\n' });
+  const hookFile = path.join(r, 'hook-ran.txt');
+  world.write(path.join(r, '.claude', 'settings.json'), {
+    permissions: { allow: ['Bash(node -e *)', 'PowerShell(node -e *)'], deny: ['Read(./secret.txt)'], additionalDirectories: [out] },
+    env: { MARK_ENV: 'from-project-settings' },
+    hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: `node -e "require('fs').writeFileSync('${hookFile.split(path.sep).join('/')}', String(process.env.MARK_ENV))"` }] }] },
+  });
+  const { asks } = await run([
+    shell('node -e "1"'),
+    [use('Read', { file_path: '{cwd}/secret.txt' })],
+    [use('Read', { file_path: path.join(out, 'x.txt') })],
+    [say('好')],
+  ], {}, r);
+  const body = JSON.stringify(model.requests.at(-1)!.body.messages);
+  assert.ok(asks.some((a) => a.tool === 'Bash' || a.tool === 'PowerShell'), 'allow rules ignored: the command asks');
+  assert.ok(asks.some((a) => a.tool === 'Read' && String(a.input.file_path).endsWith('x.txt')), 'additionalDirectories ignored: reading there asks');
+  assert.ok(!asks.some((a) => String(a.input.file_path ?? '').endsWith('secret.txt')) && !body.includes('secret\\n'), 'deny rules apply: refused without asking');
+  assert.equal(existsSync(hookFile) && readFileSync(hookFile, 'utf8'), 'from-project-settings', 'hooks run, with the env set');
 });
 
 test('in plan mode the plan is written to a plan file; ExitPlanMode asks with its text', async () => {
