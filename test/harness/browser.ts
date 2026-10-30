@@ -25,7 +25,7 @@ window.__find = (sel, text, nth = 0) => {
 window.__texts = (sel) => [...document.querySelectorAll(sel)].map((e) => e.textContent.trim());
 window.__notifications = [];
 window.__permissionAsked = 0;
-window.__perm = 'granted';
+window.__perm = localStorage.getItem('__perm') || 'granted';
 class FakeNotification {
   constructor(title, opts) { this.title = title; this.opts = opts || {}; window.__notifications.push(this); }
   close() { this.closed = true; }
@@ -40,7 +40,8 @@ document.hasFocus = () => !window.__away;
 Object.defineProperty(document, 'hidden', { get: () => window.__away });
 window.__sockets = [];
 const RealWS = window.WebSocket;
-window.WebSocket = class extends RealWS { constructor(...a) { super(...a); window.__sockets.push(this); } };
+window.__blockWS = false;
+window.WebSocket = class extends RealWS { constructor(url, ...a) { super(window.__blockWS ? 'ws://127.0.0.1:9/' : url, ...a); window.__sockets.push(this); } };
 `;
 
 interface Pending { res: (m: any) => void }
@@ -193,9 +194,13 @@ export class Page {
     await sleep(80);
   }
 
-  /** Drop the app's WebSocket connections, as if the network went away. */
-  cutConnection() {
-    return this.eval(`window.__sockets.forEach((s) => s.close()); window.__sockets.length`);
+  /** Drop the app's WebSocket connections, as if the network went away; `stay` keeps it away until online(). */
+  cutConnection(stay = false) {
+    return this.eval(`window.__blockWS = ${stay}; window.__sockets.forEach((s) => s.close()); window.__sockets.length`);
+  }
+
+  online() {
+    return this.eval(`window.__blockWS = false`);
   }
 
   /** Make the tab look like it is in the background (no focus, hidden). */
