@@ -25,6 +25,11 @@ const scrollTo = async ({ eval: ev, sleep }, text, offset = 70) => {
   await sleep(400);
 };
 const openSession = async (ctx, id) => { await ctx.go(`/s/${id}`); await ctx.sleep(900); };
+/** Open the collapsed thinking-and-tool-call lines of the transcript (all of them). */
+const openSteps = async ({ eval: ev, sleep }) => {
+  await ev(`document.querySelectorAll('.steps:not(.open) > .steps-head').forEach((h) => h.click())`);
+  await sleep(400);
+};
 
 export const SCREENS = [
   // ================================================================ overview
@@ -109,18 +114,28 @@ export const SCREENS = [
   // ================================================================ a session
   {
     id: 'P04', group: '会话页', title: '会话 — 对话', status: 'done',
-    summary: '一轮完成的工作：思考、读文件、任务清单、改文件的差异、运行命令，最后的回答和本轮统计。',
+    summary: '一轮完成的工作：Claude 的回答之间，思考和工具调用各收成一行；最后是本轮统计。右侧检查器进入会话时是收起的，这里点开了「任务」。',
     frs: ['FR-OUT-01', 'FR-OUT-02', 'FR-OUT-03', 'FR-OUT-04', 'FR-OUT-05', 'FR-TOOL-01', 'FR-TOOL-02', 'FR-TOOL-03', 'FR-TODO-01'],
     prepare: async (c) => { await openSession(c, c.ids.validate); await inspector(c, '任务'); await scrollTo(c, 'top'); },
     marks: [
       { sel: '.umsg', note: ['你的消息', '悬停', '靠右显示；悬停出现「从这里回退」「从这里分叉」（P10）。'] },
-      { sel: '.thinking', note: ['思考', '点击展开', '折叠时一行摘要和用时，展开看全文。'] },
-      { sel: '.tgroup', note: ['连续的读取', '点击展开', '连续的只读调用（读文件、搜索）合成一组。'] },
-      { sel: '.tcard', text: 'src/orders.js', nth: 0, note: ['工具卡片', '点击展开', '工具名、参数摘要、用时、审批来源（规则 / 你批准 / 无需审批）；展开看输出。改文件的卡片直接显示差异。'] },
+      { sel: '.steps-head', nth: 0, note: ['思考与工具调用', '点击展开', '两次回答之间的思考和工具调用合成一行，默认收起：显示思考和调用的次数、用到的工具；有没成功的调用或等待审批时标出来，正在进行时显示 Claude 在做什么。展开见 P04b。'] },
       { sel: '.footer-line', note: ['本轮统计', '—', '第几轮、用时、工具调用次数、token；没有调用 API 的轮次不显示。'] },
       { sel: '.task', note: ['任务清单', '—', 'Claude 用任务工具拆分工作时，检查器「任务」页实时显示进度。'] },
       { sel: '.btn', text: '提交审核', note: ['提交审核', '点击', '把这个会话还没审核过的改动交给独立的审核者（P27）。'] },
       { sel: '.edit[title="重命名"]', note: ['标题', '点击铅笔', '重命名；下方显示工作区、分支和已用 token。'] },
+    ],
+  },
+  {
+    id: 'P04b', group: '会话页', title: '会话 — 展开思考与工具调用', status: 'done',
+    summary: '点开收起的那一行：按顺序显示思考和每次工具调用，和以前一样。',
+    frs: ['FR-OUT-02', 'FR-OUT-03', 'FR-TOOL-01', 'FR-TOOL-02', 'FR-TOOL-03'],
+    prepare: async (c) => { await openSession(c, c.ids.validate); await scrollTo(c, 'top'); await openSteps(c); },
+    marks: [
+      { sel: '.steps-body', nth: 0, note: ['展开后', '再点一次收起', '左侧一条竖线标出这一行包含的内容。'] },
+      { sel: '.thinking', note: ['思考', '点击展开', '折叠时一行摘要和用时，展开看全文。'] },
+      { sel: '.tgroup', note: ['连续的读取', '点击展开', '连续的只读调用（读文件、搜索）合成一组。'] },
+      { sel: '.tcard', text: 'src/orders.js', nth: 0, note: ['工具卡片', '点击展开', '工具名、参数摘要、用时、审批来源（规则 / 你批准 / 无需审批）；展开看输出。改文件的卡片直接显示差异。'] },
     ],
   },
   {
@@ -160,7 +175,7 @@ export const SCREENS = [
     frs: ['FR-PERM-03', 'FR-PERM-04', 'FR-PERM-05', 'FR-PERM-06', 'FR-PERM-07'],
     prepare: async (c) => { await openSession(c, c.ids.approval); },
     marks: [
-      { sel: '.tcard', text: 'npm install express@5', note: ['等待中的调用', '—', '对话里对应的卡片标为「等待审批」。'] },
+      { sel: '.steps-head .chip', text: '等待审批', note: ['等待中的调用', '—', '对话里这一轮的思考与工具调用那一行标出「等待审批」，展开能看到对应的卡片。'] },
       { sel: '.dpanel-head', note: ['审批面板', '—', '要做什么、为什么需要审批（没有匹配的规则 / 当前模式）；「SDK 原文」展开 Claude Code 给的原始说明。'] },
       { sel: '.dpanel *', text: '仅允许这一次', note: ['怎么处理', '选择', '仅这一次 / 允许并以后不再询问（写成权限规则，可选这个会话、这个工作区或所有工作区，见 P21）/ 修改命令后允许 / 拒绝并告诉 Claude 该怎么做。'] },
       { sel: '.btn.danger-outline', text: '拒绝并停止本轮', note: ['拒绝', '点击', '可以附一句原因告诉 Claude；「拒绝并停止本轮」同时中断这一轮。'] },
@@ -197,8 +212,9 @@ export const SCREENS = [
     id: 'P09', group: '会话页', title: '子代理与后台任务', status: 'done',
     summary: '交给子代理的工作以卡片显示过程；转入后台的命令在检查器「后台」页继续运行。',
     frs: ['FR-AGT-04', 'FR-BG-01', 'FR-BG-02', 'FR-BG-03', 'FR-BG-04', 'FR-TOOL-06'],
-    prepare: async (c) => { await openSession(c, c.ids.bg); await inspector(c, '后台'); await scrollTo(c, '梳理 src 模块结构'); },
+    prepare: async (c) => { await openSession(c, c.ids.bg); await inspector(c, '后台'); await openSteps(c); await scrollTo(c, '梳理 src 模块结构'); },
     marks: [
+      { sel: '.ins-body .tabs', note: ['进行中 / 已完成 / 未完成', '切换', '后台任务按状态分三页，默认「进行中」；每页按时间从新到旧排。'] },
       { sel: '.tcard', text: '梳理 src 模块结构', note: ['子代理卡片', '点击展开', '子代理类型、任务、它的每一步工具调用和用量；运行中可以停止。'] },
       { sel: '.tcard', text: 'npm run bench', note: ['后台命令', '—', '在后台运行的命令不阻塞这一轮。'] },
       { sel: '.btn', text: '把当前工作转入后台', note: ['转入后台', '点击', '把正在前台运行的命令或子代理转入后台，Claude 继续别的事。'] },
@@ -245,7 +261,7 @@ export const SCREENS = [
     frs: ['FR-OUT-07', 'FR-SES-14'],
     prepare: async (c) => { await openSession(c, c.ids.running); await closeInspector(c); await scrollTo(c, 'end'); },
     marks: [
-      { sel: '.tcard', text: 'bench', note: ['运行中的调用', '可转入后台', '运行中的命令显示已用时间，可以转入后台。'] },
+      { sel: '.steps-head .now', note: ['正在做的事', '点击展开', '还在进行的那一行显示 Claude 正在运行的命令；展开后运行中的卡片显示已用时间，可以转入后台。'] },
       { sel: '.status-line', note: ['状态行', '—', '「Claude 正在工作…」，接口重试时显示原因和倒计时。'] },
       { sel: '.btn', text: '中断', note: ['中断', '点击', '停在当前位置。'] },
     ],
@@ -273,7 +289,7 @@ export const SCREENS = [
     id: 'P27', group: '会话页', title: '代码审核 — 审核循环', status: 'done',
     summary: '提交审核后：Code Agent 先跑验证命令，再由独立的只读审核者审改动；打回时 Claude 逐条修改或说明，然后自动进入下一轮，最多 5 轮。',
     frs: ['自定义功能：代码审核'],
-    prepare: async (c) => { await openSession(c, c.ids.validate); await closeInspector(c); await scrollTo(c, '代码审核 · 第 1 轮', 10); },
+    prepare: async (c) => { await openSession(c, c.ids.validate); await closeInspector(c); await openSteps(c); await scrollTo(c, '代码审核 · 第 1 轮', 10); },
     marks: [
       { sel: '.transcript *', text: '代码审核 · 第 1 轮', note: ['轮次分隔', '—', '每一轮：全局审核（前 3 轮看整个改动）或增量审核。'] },
       { sel: '.tcard', text: '验证', note: ['验证', '展开', '验证命令由 Code Agent 直接运行，不经过 Claude；没通过就把失败输出交给 Claude 修。'] },
@@ -306,7 +322,7 @@ export const SCREENS = [
     id: 'P28', group: '会话页', title: '会话协作', status: 'done',
     summary: '同一工作区的会话能互相查看、发消息、开新会话；这里 Claude 开了一个在独立工作树里干活的会话，并收到它的回执。',
     frs: ['自定义功能：会话协作', 'FR-OUT-10'],
-    prepare: async (c) => { await openSession(c, c.ids.peer); await closeInspector(c); await scrollTo(c, 'top'); },
+    prepare: async (c) => { await openSession(c, c.ids.peer); await closeInspector(c); await openSteps(c); await scrollTo(c, 'top'); },
     marks: [
       { sel: '.tcard', text: '新建会话', note: ['新建会话', '点击会话名', 'Claude 用工作区工具开的会话，写明标题、是否用独立工作树；点击跳过去。'] },
       { sel: '.transcript *', text: '处理完了你的消息', note: ['回执', '—', '对方处理完后发回的回执，标明来自哪个会话。'] },
@@ -499,7 +515,7 @@ export const SCREENS = [
     after: async (c) => { await c.call('setState', { prefs: { ...c.slices().prefs, uiLanguage: 'zh-CN' } }); },
     marks: [
       { sel: '.lang-btn', note: ['界面语言', '点击', '跟随浏览器 / 简体中文 / English，切换后立即生效，不用刷新。'] },
-      { sel: '.tgroup', note: ['翻译范围', '—', '界面文字和服务端生成的提示都已翻译，带名称和数字的也一样；对话内容和 Claude 的回答不受影响（回复语言另在「语言与地区」设置）。'] },
+      { sel: '.steps-head', nth: 0, note: ['翻译范围', '—', '界面文字和服务端生成的提示都已翻译，带名称和数字的也一样；对话内容和 Claude 的回答不受影响（回复语言另在「语言与地区」设置）。'] },
     ],
   },
   // ================================================================ added in v0.3
@@ -518,7 +534,7 @@ export const SCREENS = [
     id: 'P33', group: '会话页', title: '文件预览', status: 'done',
     summary: '点对话里工具卡片上的文件路径，或变更列表里的预览按钮，在检查器「文件」页看文件内容。',
     frs: ['FR-FILE-02'],
-    prepare: async (c) => { await openSession(c, c.ids.validate); await scrollTo(c, 'top'); await c.click('.tcard .detail.link', 'src/orders.js'); await c.sleep(1200); },
+    prepare: async (c) => { await openSession(c, c.ids.validate); await openSteps(c); await scrollTo(c, 'top'); await c.click('.tcard .detail.link', 'src/orders.js'); await c.sleep(1200); },
     marks: [
       { sel: '.tcard .detail.link', text: 'src/orders.js', note: ['文件路径', '点击', '读、改、写文件的卡片上路径可以点；读文件的卡片会标出读的那几行。变更列表里每个文件也有预览按钮。'] },
       { sel: '.ins-rail-btn', text: '文件', note: ['「文件」页', '—', '显示最近打开的文件。'] },
@@ -529,7 +545,7 @@ export const SCREENS = [
     id: 'P36', group: '会话页', title: '代码高亮', status: 'done',
     summary: '回答里的代码块、改动差异和文件预览按语言着色。',
     frs: ['FR-OUT-01'],
-    prepare: async (c) => { await openSession(c, c.ids.validate); await closeInspector(c); await scrollTo(c, 'function validateItems', 260); },
+    prepare: async (c) => { await openSession(c, c.ids.validate); await closeInspector(c); await openSteps(c); await scrollTo(c, 'function validateItems', 260); },
     marks: [
       { sel: '.md-code', note: ['代码块', '—', '按代码块标注的语言着色；没标注时自动判断，判断不出就不着色。'] },
       { sel: '.diff', note: ['差异', '—', '改动差异按文件类型着色，+/- 标记保持原样。'] },

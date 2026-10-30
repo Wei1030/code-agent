@@ -11,6 +11,7 @@ import { addItem, allSummaries, dropSession, emit, initRuntime, patchItem, patch
 import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onTurnEnd, refreshContext, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
 import { cwdOf } from './options';
+import { lastPage, pageBefore } from './page';
 import { oneProcess, resolveModel, validModel } from '../models';
 
 /** Full messages behind the queue entries the UI shows. */
@@ -202,10 +203,12 @@ register({
   },
   openSession: async (sid) => {
     const h = await import('./history');
-    if (!rt(sid)) return (await h.importTranscript(sid)) ?? null;
-    await h.syncTranscript(sid);
-    return rt(sid) ?? null;
+    if (!rt(sid)) await h.importTranscript(sid);
+    else await h.syncTranscript(sid);
+    const r = rt(sid);
+    return r ? lastPage(r) : null;
   },
+  earlierItems: (sid, beforeId) => pageBefore(rt(sid)?.items ?? [], beforeId),
   send,
   updateQueued: (sid, id, p) => {
     const r = rt(sid);

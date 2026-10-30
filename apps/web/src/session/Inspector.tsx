@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SessionRuntime } from '../api/types';
 import { api } from '../api';
+import { promptsOf } from '../store/sessions';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Modal, Tabs } from '../components/ui';
 import { useApp, type InspectorTab } from '../store/app';
@@ -117,8 +118,20 @@ function TasksTab({ rt }: { rt: SessionRuntime }) {
   );
 }
 
+type BgView = 'running' | 'completed' | 'unfinished';
+/** The background tab's view per session while the page is open; 进行中 the first time. */
+const bgViews = new Map<string, BgView>();
+
 function BackgroundTab({ rt }: { rt: SessionRuntime }) {
   const t = useT();
+  const [view, setViewState] = useState<BgView>(bgViews.get(rt.id) ?? 'running');
+  const setView = (v: BgView) => { bgViews.set(rt.id, v); setViewState(v); };
+  // Newest first: by when it ended, or started while it runs.
+  const byView = (v: BgView) => rt.background
+    .filter((b) => (v === 'running' ? b.status === 'running' : v === 'completed' ? b.status === 'completed' : b.status === 'failed' || b.status === 'stopped'))
+    .sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt));
+  const shown = byView(view);
+  const none = { running: '没有进行中的后台任务', completed: '没有已完成的后台任务', unfinished: '没有未完成的后台任务' } as const;
   const canBackground = rt.items.some((it) => it.kind === 'tool' && it.backgroundable && it.status === 'running');
   const kindLabel = { agent: '子代理', bash: '命令', workflow: '工作流', monitor: '监控' } as const;
   const statusTone = { running: 'accent', completed: 'good', failed: 'crit', stopped: 'outline' } as const;
@@ -135,8 +148,17 @@ function BackgroundTab({ rt }: { rt: SessionRuntime }) {
         <Button size="sm" icon="layers" disabled={!canBackground} onClick={() => api.backgroundAll(rt.id)}>{t('把当前工作转入后台')}</Button>
         <span className="hint">{canBackground ? t('长时间运行的命令会继续执行，Claude 可以先做别的') : t('当前没有可转入后台的工作')}</span>
       </div>
-      {rt.background.length === 0 && <div className="empty"><b>{t('没有后台任务')}</b>{t('后台子代理、后台命令和监控会显示在这里。')}</div>}
-      {rt.background.map((b) => (
+      {rt.background.length === 0 ? <div className="empty"><b>{t('没有后台任务')}</b>{t('后台子代理、后台命令和监控会显示在这里。')}</div> : (
+        <div className="row" style={{ marginBottom: 10 }}>
+          <Tabs value={view} onChange={setView} items={[
+            { value: 'running', label: t('进行中'), count: byView('running').length },
+            { value: 'completed', label: t('已完成'), count: byView('completed').length },
+            { value: 'unfinished', label: t('未完成'), count: byView('unfinished').length },
+          ]} />
+        </div>
+      )}
+      {rt.background.length > 0 && shown.length === 0 && <div className="empty"><b>{t(none[view])}</b></div>}
+      {shown.map((b) => (
         <div key={b.id} className="bg-card">
           <Icon name={b.kind === 'agent' ? 'agent' : b.kind === 'bash' ? 'terminal' : 'layers'} size={18} className="muted" />
           <div className="grow">
@@ -190,13 +212,12 @@ function ChangesTab({ rt }: { rt: SessionRuntime }) {
 
 function CheckpointsTab({ rt, onRewind }: { rt: SessionRuntime; onRewind: (userId: string) => void }) {
   const t = useT();
-  const users = rt.items.flatMap((it, i) => (it.kind === 'user' ? [{ it, i }] : []));
+  const users = promptsOf(rt);
   if (users.length === 0) return <div className="empty"><b>{t('还没有检查点')}</b>{t('每条你发送的消息都是一个检查点，可以把文件回退到它之前。')}</div>;
   return (
     <>
       <div className="hint" style={{ marginBottom: 10 }}>{t('每条消息之前都会保存文件快照。回退只恢复文件，对话可以保留，也可以从那里分叉。')}</div>
-      {users.map(({ it }, n) => {
-        if (it.kind !== 'user') return null;
+      {users.map((it, n) => {
         const changed = rt.changes.filter((c) => c.afterUserId === it.id).length;
         return (
           <div key={it.id} className="cp">

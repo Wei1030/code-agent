@@ -20,18 +20,76 @@ const TOOL_ICON: Record<string, string> = {
   WebFetch: 'globe', WebSearch: 'globe', Agent: 'agent', AskUserQuestion: 'chat', EnterPlanMode: 'list', ExitPlanMode: 'list', Skill: 'spark',
 };
 
+/** What Claude does between two replies: thinking and tool calls. */
+type Step = Extract<Item, { kind: 'thinking' | 'tool' | 'toolgroup' }>;
+const isStep = (it: Item): it is Step => it.kind === 'thinking' || it.kind === 'tool' || it.kind === 'toolgroup';
+
+/** Items in order, the steps between two replies (or anything else) taken together. */
+function blocks(items: Item[]): Array<Item | Step[]> {
+  const out: Array<Item | Step[]> = [];
+  for (const it of items) {
+    const last = out[out.length - 1];
+    if (!isStep(it)) out.push(it);
+    else if (Array.isArray(last)) last.push(it);
+    else out.push([it]);
+  }
+  return out;
+}
+
 export function Transcript({ rt, onRewind, onFork }: { rt: SessionRuntime; onRewind: (userId: string) => void; onFork: (userId: string) => void }) {
   const wsId = useApp((s) => s.sessions.find((x) => x.id === rt.id)?.workspaceId ?? '');
-  let userN = 0;
+  // Prompts before the loaded page count too.
+  let userN = rt.earlier?.users.length ?? 0;
+  const list = blocks(rt.items);
   return (
     <>
-      {rt.items.map((it) => {
-        if (it.kind === 'user') userN += 1;
-        return <ItemView key={it.id} it={it} rt={rt} wsId={wsId} userN={userN} onRewind={onRewind} onFork={onFork} />;
+      {list.map((b, i) => {
+        if (Array.isArray(b)) return <Steps key={`steps:${b[0].id}`} steps={b} rt={rt} wsId={wsId} live={i === list.length - 1 && rt.state === 'running'} />;
+        if (b.kind === 'user') userN += 1;
+        return <ItemView key={b.id} it={b} rt={rt} wsId={wsId} userN={userN} onRewind={onRewind} onFork={onFork} />;
       })}
     </>
   );
 }
+
+const toolName = (tool: string) => (tool.startsWith('mcp__') ? tool.split('__').slice(2).join('__') || tool : tool);
+
+/**
+ * Thinking and tool calls up to Claude's next reply: one line saying how many, until opened.
+ * While they are still going on, the line says what Claude is doing.
+ */
+function Steps({ steps, rt, wsId, live }: { steps: Step[]; rt: SessionRuntime; wsId: string; live: boolean }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const tools = steps.flatMap((x) => (x.kind === 'tool' ? [x] : x.kind === 'toolgroup' ? x.tools : []));
+  const thoughts = steps.filter((x) => x.kind === 'thinking').length;
+  const names = [...new Set(tools.map((x) => toolName(x.tool)))];
+  const failed = tools.filter((x) => x.status === 'error' || x.status === 'denied').length;
+  const waiting = tools.some((x) => x.status === 'waiting');
+  const last = steps[steps.length - 1];
+  const running = [...tools].reverse().find((x) => x.status === 'running');
+  const now = !live ? '' : last.kind === 'thinking' && last.streaming ? t('正在思考…') : running ? `${toolName(running.tool)} ${running.detail}` : '';
+  const counts = [thoughts ? t('思考 {n} 次', { n: thoughts }) : '', tools.length ? t('工具调用 {n} 次', { n: tools.length }) : ''].filter(Boolean).join(' · ');
+  return (
+    <div className={cx('steps', open && 'open')}>
+      <div className="steps-head" onClick={() => setOpen(!open)}>
+        <Icon name={open ? 'chevDown' : 'chevRight'} size={14} />
+        <span className="counts">{counts}</span>
+        {names.slice(0, 4).map((n) => <Chip key={n} mono>{n}</Chip>)}
+        {names.length > 4 && <span className="more">+{names.length - 4}</span>}
+        {waiting && <Chip tone="warn">{t('等待审批')}</Chip>}
+        {failed > 0 && <Chip tone="crit">{t('{n} 次未成功', { n: failed })}</Chip>}
+        {now && <span className="now"><span className="spinner" />{now}</span>}
+      </div>
+      {open && (
+        <div className="steps-body">
+          {steps.map((it) => <ItemView key={it.id} it={it} rt={rt} wsId={wsId} userN={0} onRewind={noop} onFork={noop} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+const noop = () => undefined;
 
 function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: SessionRuntime; wsId: string; userN: number; onRewind: (id: string) => void; onFork: (id: string) => void }) {
   const t = useT();
@@ -288,7 +346,7 @@ function PlainToolCard({ tool, sid }: { tool: ToolItem; sid: string }) {
           )}
           {tool.background && (
             <div className="actions">
-              <Button size="sm" onClick={() => { useApp.getState().setInspector({ open: true, tab: 'background' }); nav(`/s/${sid}`); }}>{t('在「后台」中查看')}</Button>
+              <Button size="sm" onClick={() => { useApp.getState().setInspector({ open: true, tab: 'background' }); nav(`/s/${sid}`, { state: { inspector: 'background' } }); }}>{t('在「后台」中查看')}</Button>
             </div>
           )}
         </div>

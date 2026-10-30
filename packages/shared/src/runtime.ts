@@ -45,7 +45,7 @@ export function reduce(rt: SessionRuntime, ev: SessionEvent, seq = 0): SessionRu
     case 'item.remove':
       return { ...rt, items: rt.items.filter((x) => x.id !== ev.id) };
     case 'items.reset':
-      return { ...rt, items: ev.items };
+      return { ...rt, items: ev.items, earlier: undefined };
     case 'state':
       return { ...rt, state: ev.state };
     case 'request':

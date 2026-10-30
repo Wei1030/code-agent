@@ -384,6 +384,14 @@ export interface SessionRuntime {
   turn: number;
   tokens: number;
   info?: SessionInfo;
+  /** Sent to the web app: the items before the ones it has (a transcript comes a page at a time). */
+  earlier?: EarlierItems;
+}
+
+/** What comes before the loaded part of a transcript: how many items, and its prompts. */
+export interface EarlierItems {
+  items: number;
+  users: Array<{ id: string; text: string; ts: number }>;
 }
 
 /** Events the backend pushes to the UI for one session. */

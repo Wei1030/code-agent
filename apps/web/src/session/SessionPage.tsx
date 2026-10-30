@@ -1,13 +1,13 @@
 /** P04 — a session: session column, transcript, docked panels, composer, inspector. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { SessionRuntime, SessionSummary } from '../api/types';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
 import { Button } from '../components/ui';
 import { StateBadge, useSessionActions } from '../components/SessionRow';
-import { useApp } from '../store/app';
-import { useSessions } from '../store/sessions';
+import { useApp, type InspectorTab } from '../store/app';
+import { promptsOf, useSessions } from '../store/sessions';
 import { relTime, tokens as fmtTokens } from '../lib/format';
 import { cx } from '../lib/util';
 import { useT } from '../lib/i18n';
@@ -22,6 +22,7 @@ export function SessionPage() {
   const { id = '' } = useParams();
   const t = useT();
   const nav = useNavigate();
+  const location = useLocation();
   const sum = useApp((s) => s.sessions.find((x) => x.id === id));
   const rt = useSessions((s) => s.runtimes[id]);
   const record = useApp((s) => s.reviewRecord);
@@ -30,6 +31,9 @@ export function SessionPage() {
 
   useEffect(() => {
     api.openSession(id);
+    // The inspector starts closed, unless the link here asked for one of its tabs.
+    const tab = (location.state as { inspector?: InspectorTab } | null)?.inspector;
+    useApp.getState().setInspector(tab ? { open: true, tab } : { open: false });
     if (sum) useApp.getState().set({ currentWorkspaceId: sum.workspaceId });
     setReceipt(0);
     setRewindAt(null);
@@ -57,7 +61,7 @@ export function SessionPage() {
     useApp.getState().toast(t('已分叉：新会话停在这条消息之前，消息已放进输入框'), 'good');
   };
   const onRewind = (userId: string) => {
-    const n = rt.items.filter((x) => x.kind === 'user').findIndex((x) => x.id === userId) + 1;
+    const n = promptsOf(rt).findIndex((x) => x.id === userId) + 1;
     setRewindAt({ userId, n });
   };
 
@@ -189,6 +193,12 @@ function TranscriptPane({ rt, sum, onFork, onRewind }: { rt: SessionRuntime; sum
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const top = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(false);
+  /** Distance from the bottom to keep while an earlier page goes in front. */
+  const keep = useRef<number | null>(null);
+  const firstId = rt.items[0]?.id;
+  const more = (rt.earlier?.items ?? 0) > 0;
   const lastId = rt.items[rt.items.length - 1]?.id;
   const lastLen = (() => {
     const it = rt.items[rt.items.length - 1];
@@ -201,12 +211,43 @@ function TranscriptPane({ rt, sum, onFork, onRewind }: { rt: SessionRuntime; sum
   }, [lastId, lastLen, rt.items.length, rt.status, rt.request]);
   useEffect(() => { stick.current = true; }, [rt.id]);
 
+  // Scrolled up to the top: the page before comes in front, without moving what is in view.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && keep.current !== null) el.scrollTop = el.scrollHeight - keep.current;
+    keep.current = null;
+  }, [firstId]);
+  useEffect(() => {
+    const el = ref.current;
+    const sentinel = top.current;
+    if (!el || !sentinel || !more || !firstId) return;
+    let busy = false;
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting || busy) return;
+      busy = true;
+      setLoading(true);
+      api.earlierItems(rt.id, firstId)
+        .then((page) => {
+          if (page.items.length) keep.current = el.scrollHeight - el.scrollTop;
+          useSessions.getState().prepend(rt.id, page.items, page.earlier);
+        })
+        .finally(() => setLoading(false));
+    }, { root: el, rootMargin: '400px 0px 0px 0px' });
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [rt.id, firstId, more]);
+
   return (
     <div className="transcript" ref={ref} onScroll={(e) => {
       const el = e.currentTarget;
       stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     }}>
       <div className="transcript-inner">
+        {more && (
+          <div ref={top} className="earlier-line">
+            {loading ? <><span className="spinner" />{t('正在载入更早的对话…')}</> : t('更早的对话')}
+          </div>
+        )}
         {rt.items.length === 0 && sum.draft ? (
           <div className="draft-empty">
             <h2>{t('新会话 · {w}', { w: useApp.getState().workspaces.find((w) => w.id === sum.workspaceId)?.name ?? '' })}</h2>

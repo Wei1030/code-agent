@@ -1,7 +1,7 @@
 /** The operations the server offers the UI (called over the WebSocket). */
 import type {
   AgentFile, ApprovalAnswer, Attachment, BoardItem, BoardKind, BoardSource, CommandInfo, Effort, ElicitationAnswer, PermissionMode, PlanAnswer,
-  InstructionFile, OutputStyle, QuestionAnswer, QueuedMessage, SessionRef, SessionRuntime, AppSlices, Workspace, WorktreeInfo,
+  EarlierItems, InstructionFile, Item, OutputStyle, QuestionAnswer, QueuedMessage, SessionRef, SessionRuntime, AppSlices, Workspace, WorktreeInfo,
 } from './types';
 import type { FsNode } from './catalog';
 
@@ -48,7 +48,10 @@ export interface ServerApi {
   listCommands(sid: string): CommandInfo[];
 
   createDraft(workspaceId: string, id: string): void;
+  /** The runtime with the last page of its transcript. */
   openSession(sid: string): SessionRuntime | null;
+  /** The page of the transcript before an item. */
+  earlierItems(sid: string, beforeId: string): { items: Item[]; earlier?: EarlierItems };
   send(sid: string, text: string, opts?: SendOptions): void;
   updateQueued(sid: string, id: string, p: Partial<QueuedMessage>): void;
   removeQueued(sid: string, id?: string): void;
