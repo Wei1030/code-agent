@@ -76,8 +76,8 @@ test('a turn Claude Code starts by itself is the wake-up once its time has come,
   assert.equal(isWakeTurn(now - 30_000, [now - 60_000, undefined], now), true, 'tasks that ended earlier do not count');
 });
 
-test('a wake-up more than an hour overdue is too late (issue 10-31#3)', () => {
+test('a wake-up more than a minute overdue is too late (issue 10-31#3)', () => {
   const now = Date.UTC(2026, 9, 31, 12, 0);
-  assert.equal(wakeTooLate(now - 50 * 60_000, now), false);
-  assert.equal(wakeTooLate(now - 61 * 60_000, now), true);
+  assert.equal(wakeTooLate(now - 5000, now), false, 'on time, give or take a timer');
+  assert.equal(wakeTooLate(now - 61_000, now), true);
 });

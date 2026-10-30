@@ -58,7 +58,7 @@ export const EN: Record<string, string> = {
   "Claude 读取来源，整理成条目，并和看板上已有的条目查重": "Claude reads the source, organizes it into items, and checks them for duplicates against the items already on the board",
   "Claude 预约了 {time} 继续。": "Claude scheduled itself to carry on at {time}.",
   "Claude 预约了 {time} 继续：{reason}": "Claude scheduled itself to carry on at {time}: {reason}",
-  "Claude 预约了 {when} 继续，那时 Code Agent 没有在运行。过了一个多小时，这次预约不再执行。": "Claude scheduled itself to carry on at {when}, when Code Agent was not running. More than an hour has passed, so this wake-up is dropped.",
+  "Claude 预约了 {when} 继续，那时 Code Agent 没有在运行。已经过了预约的时间，这次预约不再执行。": "Claude scheduled itself to carry on at {when}, when Code Agent was not running. That time has passed, so this wake-up is dropped.",
   "Claude 马上读到；正在运行的工作转入后台": "Claude reads it right away; running work moves to the background",
   "Code Agent 不提供 claude.ai 登录，也不会读取或保存你的登录凭证。请在终端里自己登录 Claude Code，这里只指定它的配置目录。": "Code Agent does not offer claude.ai login and never reads or stores your login credentials. Log in to Claude Code yourself in a terminal; here you only specify its config directory.",
   "Code Agent 会删掉它在这里的数据：": "Code Agent will delete its data here:",

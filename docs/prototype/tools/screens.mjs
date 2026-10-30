@@ -755,7 +755,7 @@ export const SCREENS = [
     prepare: async (c) => { await openSession(c, c.ids.wake); await closeInspector(c); await openSteps(c); await scrollTo(c, 'end'); },
     marks: [
       { sel: '.tcard', text: 'ScheduleWakeup', note: ['预约', '展开', 'Claude 写明为什么、什么时候回来；再预约一次会替换上一次。'] },
-      { sel: '.readonly-bar.waiting', note: ['预约继续', '取消预约', '到点时 Claude Code 自己发起；进程不在了（腾位置被保存、重启、Code Agent 重启）就由 Code Agent 恢复会话并发出预约的消息，过时一个多小时的不再执行。取消要结束进程，会先确认。被限额拒绝时这里写重置时间，可以「现在重试」或「不自动继续」。'] },
+      { sel: '.readonly-bar.waiting', note: ['预约继续', '取消预约', '到点时 Claude Code 自己发起；进程不在了（腾位置被保存、重启、Code Agent 重启）就由 Code Agent 恢复会话并发出预约的消息，过了时间 1 分钟以上（Code Agent 当时没在运行）的不再执行。取消要结束进程，会先确认。被限额拒绝时这里写重置时间，可以「现在重试」或「不自动继续」。'] },
       { sel: '.scol-item.on .m', note: ['会话列表', '—', '会话列表和「全部会话」里也写明几点继续。'] },
     ],
   },

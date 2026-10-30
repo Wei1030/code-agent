@@ -126,5 +126,5 @@ export function isWakeTurn(at: number, tasksEndedAt: Array<number | undefined>, 
   return now >= at - 5000 && !tasksEndedAt.some((t) => t !== undefined && now - t < 10_000);
 }
 
-/** A wake-up overdue by more than an hour (Code Agent was not running) is dropped: what it waited for has passed. */
-export const wakeTooLate = (at: number, now: number) => now - at > 3600_000;
+/** A wake-up more than a minute overdue (Code Agent was not running at its time) is dropped. */
+export const wakeTooLate = (at: number, now: number) => now - at > 60_000;

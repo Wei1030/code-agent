@@ -61,7 +61,7 @@ function fire(sid: string) {
   if (r.kind === 'wake' && wakeTooLate(r.at, Date.now())) {
     const d = new Date(r.at);
     const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'warn', text: `Claude 预约了 ${when} 继续，那时 Code Agent 没有在运行。过了一个多小时，这次预约不再执行。` });
+    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'warn', text: `Claude 预约了 ${when} 继续，那时 Code Agent 没有在运行。已经过了预约的时间，这次预约不再执行。` });
     return;
   }
   if (r.kind === 'limit') tries.set(sid, r.tries ?? 1);
@@ -163,7 +163,7 @@ export function startResumes() {
     if (!s.resume) continue;
     if (s.resume.by === 'cli') patchSummary(s.id, { resume: { ...s.resume, by: 'server' } });
     // One whose time passed while the server was down goes once the server has settled (a wake-up
-    // more than an hour late is dropped instead).
+    // more than a minute late is dropped instead).
     arm(s.id, 5000);
   }
 }

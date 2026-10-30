@@ -1,4 +1,4 @@
-// Planned continuations at a server start (issue 10-31#3): a wake-up more than an hour overdue is
+// Planned continuations at a server start (issue 10-31#3): a wake-up more than a minute overdue is
 // dropped with a note in its session, not sent.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,8 +21,8 @@ function session(id: string, resume: Resume) {
   flush();
 }
 
-test('a wake-up more than an hour overdue at a start is dropped, with a note; the session is not resumed', async () => {
-  session('overdue', { kind: 'wake', at: Date.now() - 3 * 3600_000, reason: '十分钟后再看部署', prompt: '看看部署', by: 'cli' });
+test('a wake-up more than a minute overdue at a start is dropped, with a note; the session is not resumed', async () => {
+  session('overdue', { kind: 'wake', at: Date.now() - 2 * 60_000, reason: '十分钟后再看部署', prompt: '看看部署', by: 'cli' });
   startResumes();
   assert.equal(summary('overdue')?.resume?.by, 'server', 'Code Agent holds it after a start');
   const deadline = Date.now() + 15_000;
