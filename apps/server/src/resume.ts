@@ -94,7 +94,8 @@ onToolResult((sid, name, input, text, isError) => {
   // call replaces the earlier one, as in Claude Code.
   const secs = Number(/\(in (\d+)s\)/.exec(text)?.[1] ?? input.delaySeconds ?? 0);
   if (!secs) return;
-  plan(sid, { kind: 'wake', at: Date.now() + secs * 1000, reason: str(input.reason), prompt: str(input.prompt), by: 'cli' });
+  const at = Math.round((Date.now() + secs * 1000) / 60_000) * 60_000;
+  plan(sid, { kind: 'wake', at, reason: str(input.reason), prompt: str(input.prompt), by: 'cli' });
   return { right: '已预约' };
 });
 

@@ -42,6 +42,7 @@ test('a wake-up: Claude Code fires it while its process runs; once the process i
   assert.equal(planned.by, 'cli');
   assert.equal(planned.reason, '进程里唤醒的原因');
   assert.ok(planned.at > Date.now() && planned.at < Date.now() + 130_000, 'at the time Claude Code named');
+  assert.equal(planned.at % 60_000, 0, 'on the minute, as Claude Code rounds it');
   const card = (await env.rt(a)).items.find((i) => i.kind === 'tool' && i.tool === 'ScheduleWakeup') as Extract<Item, { kind: 'tool' }>;
   assert.equal(card.detail, '进程里唤醒的原因');
   assert.equal(card.right, '已预约');
