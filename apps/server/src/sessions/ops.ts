@@ -297,7 +297,8 @@ register({
     if (live(sid)) return true;
     if (!rt(sid)) await import('./history').then((h) => h.importTranscript(sid));
     if (model && app.models.some((m) => m.id === model) && model !== rt(sid)?.model) emit(sid, { t: 'settings', patch: { model } });
-    return acquire(sid, () => startProcess(sid, { resume: true }));
+    // Messages sent while it waited for a slot (or left from before a server restart) go out once it runs.
+    return acquire(sid, () => startProcess(sid, { resume: true }), () => pumpQueue(sid));
   },
   backgroundTool: async (sid, toolId) => {
     await live(sid)?.q.backgroundTasks(toolId);

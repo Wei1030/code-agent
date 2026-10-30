@@ -31,6 +31,8 @@ export interface Env {
   request(sid: string, kind?: PendingRequest['kind'], ms?: number): Promise<PendingRequest>;
   /** Connect another client (a second browser tab). */
   client(): Promise<Client>;
+  /** Restart the server on the same data (hard: the process is killed); `c` is a new connection. */
+  restart(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -73,22 +75,28 @@ export async function setup(opts: EnvOpts = {}): Promise<Env> {
 
   const env: Env = {
     world, model, server, c, repo, ws,
+    async restart() {
+      env.c.close();
+      await server.restart();
+      env.c = await new Client(server.port).connect();
+      clients.push(env.c);
+    },
     async start(text, o = {}) {
       const sid = randomUUID();
-      await c.call('createDraft', o.ws ?? ws, sid);
-      if (o.model) await c.call('setModel', sid, o.model);
-      if (o.effort) await c.call('setEffort', sid, o.effort);
-      if (o.mode) await c.call('setMode', sid, o.mode);
-      await c.call('send', sid, text, o.send ?? {});
+      await env.c.call('createDraft', o.ws ?? ws, sid);
+      if (o.model) await env.c.call('setModel', sid, o.model);
+      if (o.effort) await env.c.call('setEffort', sid, o.effort);
+      if (o.mode) await env.c.call('setMode', sid, o.mode);
+      await env.c.call('send', sid, text, o.send ?? {});
       return sid;
     },
     async rt(sid) {
-      const r = await c.call('openSession', sid);
+      const r = await env.c.call('openSession', sid);
       if (!r) throw new Error(`no session ${sid}`);
       return r;
     },
     async turns(sid, n = 1, ms = 90_000) {
-      await until(() => finished(c, sid) >= n, `turn ${n} of ${sid}`, ms);
+      await until(() => finished(env.c, sid) >= n, `turn ${n} of ${sid}`, ms);
     },
     async request(sid, kind, ms = 90_000) {
       return until(async () => {
