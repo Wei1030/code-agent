@@ -1739,8 +1739,4 @@ export const EN: Record<string, string> = {
   "只读：能读文件、搜索、运行只读命令（git diff / log / show / status、rg、ls 等）。审核者在「不询问」模式下运行，哪些命令算只读由 Claude Code 判断，其他的直接拒绝，不会问你。": "Read-only: reads files, searches and runs read-only commands (git diff / log / show / status, rg, ls…). The reviewer runs in Don't ask mode: Claude Code decides which commands are read-only and refuses the rest without asking you.",
   "读取项目的 CLAUDE.md": "Read the project's CLAUDE.md",
   "项目的约定和命令通常写在这里，审核时有用。只读仓库里的说明和设置，不读你个人和本机的规则。": "Project conventions and commands usually live here and help the review. Only the repository's instructions and settings are read, not your personal or this machine's rules.",
-  "中断这一轮": "Interrupt this turn",
-  "有 {n} 个请求在等你处理，但这里没有显示出来": "{n} requests are waiting for you but are not shown here",
-  "重新载入": "Reload",
-  "页面可能漏收了更新。重新载入会从服务端取回这个会话；仍然没有的话，可以中断这一轮。": "The page may have missed an update. Reloading fetches this session from the server again; if it still does not show, you can interrupt the turn.",
 };

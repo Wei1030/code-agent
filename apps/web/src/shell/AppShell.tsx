@@ -229,8 +229,7 @@ function ApprovalsInbox() {
         {pending.map((sum) => {
           const [req, ...rest] = sum.requests!;
           return (
-            // The session is loaded again from the server, so its docked panel shows what is really waiting.
-            <div key={sum.id} className={cx('inbox-item', sum.id === currentId && 'current')} onClick={() => { setOpen(false); void api.reloadSession(sum.id); nav(`/s/${sum.id}`); }}>
+            <div key={sum.id} className={cx('inbox-item', sum.id === currentId && 'current')} onClick={() => { setOpen(false); api.openSession(sum.id); nav(`/s/${sum.id}`); }}>
               <Icon name={{ approval: 'shield', question: 'chat', elicitation: 'plug', plan: 'list' }[req.kind]} size={16} className="ink2" />
               <div className="grow">
                 <div className="t ellipsis">{sum.title}</div>

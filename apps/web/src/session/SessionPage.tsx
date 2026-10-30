@@ -75,7 +75,6 @@ export function SessionPage() {
           <div className="dock-inner">
             {receipt > 0 && rt.queue.length > 0 && <InterruptReceipt sid={id} count={rt.queue.length} onDone={() => setReceipt(0)} />}
             <ReviewDecisionPanel sid={id} />
-            <MissingRequest sid={id} listed={sum.requests?.length ?? 0} shown={!!rt.request} />
             {(rt.moreRequests ?? 0) > 0 && (
               <div className="more-requests"><Icon name="bell" size={14} />{t('Claude 同时提出了 {n} 个请求：处理完这一个，下一个会接着出现', { n: (rt.moreRequests ?? 0) + 1 })}</div>
             )}
@@ -98,32 +97,6 @@ export function SessionPage() {
       <Inspector rt={rt} onRewind={onRewind} />
       {rewindAt && <RewindDialog sid={id} userId={rewindAt.userId} n={rewindAt.n} onClose={() => setRewindAt(null)} />}
       {record === id && <ReviewRecord sid={id} />}
-    </div>
-  );
-}
-
-/**
- * The server lists requests for this session but none is shown here (the page missed an update):
- * said plainly after a moment, with a reload and a way out.
- */
-function MissingRequest({ sid, listed, shown }: { sid: string; listed: number; shown: boolean }) {
-  const t = useT();
-  const [missing, setMissing] = useState(false);
-  useEffect(() => {
-    if (!listed || shown) { setMissing(false); return; }
-    const timer = setTimeout(() => setMissing(true), 1500);
-    return () => clearTimeout(timer);
-  }, [listed, shown]);
-  if (!missing) return null;
-  return (
-    <div className="banner-warn">
-      <Icon name="warning" size={16} />
-      <div className="grow">
-        <b>{t('有 {n} 个请求在等你处理，但这里没有显示出来', { n: listed })}</b>
-        <div className="hint">{t('页面可能漏收了更新。重新载入会从服务端取回这个会话；仍然没有的话，可以中断这一轮。')}</div>
-      </div>
-      <Button size="sm" icon="refresh" onClick={() => void api.reloadSession(sid)}>{t('重新载入')}</Button>
-      <Button size="sm" variant="danger-outline" icon="stop" onClick={() => void api.interrupt(sid)}>{t('中断这一轮')}</Button>
     </div>
   );
 }
