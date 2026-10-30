@@ -13,7 +13,7 @@ let env: Env;
 /** What the reviewer answers in round n: a verdict, or blocks (tool calls) first. */
 let reviewer: (round: number, req: Req) => { output?: unknown; blocks?: Block[] } | undefined;
 const pass = { verdict: 'pass', summary: '没有问题', findings: [], rulings: [] };
-const major = (title: string) => ({ verdict: 'changes_requested', summary: '有一处要改', findings: [{ severity: 'major', file: 'src/calc.js', line: 1, title, detail: '边界值没有处理' }], rulings: [] });
+const major = (title: string) => ({ verdict: 'changes_requested', summary: '有一处要改', findings: [{ severity: 'major', file: 'src/calc.js', line: 1, title, scenario: 'add(0, -1) 返回 1，应该是 -1', detail: '边界值没有处理' }], rulings: [] });
 
 before(async () => {
   env = await setup({ files: { 'package.json': { name: 'calc', scripts: { test: 'node -e "process.exit(0)"' } }, 'src/calc.js': 'export const add = (a, b) => a + b;\n' } });
@@ -73,10 +73,15 @@ test('changes requested: the author answers, round 2 rules on it and passes; the
   assert.equal(t.findings[0].id, 'R1');
   assert.equal(t.findings[0].status, 'verified');
   assert.equal(t.findings[0].response, '改了');
+  assert.equal(t.findings[0].scenario, 'add(0, -1) 返回 1，应该是 -1');
   const md = await env.c.call('reviewMarkdown', id);
   assert.match(md, /R1/);
   assert.match(md, /没处理 undefined/);
+  assert.match(md, /失败场景：add\(0, -1\) 返回 1/);
   assert.match(md, /第 2 轮/);
+  // The author got the scenario with the finding; the reviewer is asked for one.
+  assert.ok(env.model.requests.some((r) => /代码审核第 1 轮打回/.test(r.prompt) && /失败场景：add\(0, -1\) 返回 1/.test(r.prompt)), 'the author sees it');
+  assert.ok(env.model.requests.some((r) => r.tools.includes('StructuredOutput') && /Every finding names its failure scenario/.test(r.prompt)), 'the reviewer is asked');
 });
 
 test('the verdict is Code Agent\'s: "pass" with an open major finding is sent back', async () => {
@@ -129,7 +134,7 @@ test('stopping a review, and a finding put on the board once', async () => {
   const item = await env.c.call('findingToBoard', id, 'R1');
   assert.ok(item);
   assert.equal(await env.c.call('findingToBoard', id, 'R1'), item, 'the same item the second time');
-  assert.ok(env.c.slices.board.some((b) => b.id === item && /要记到看板的问题/.test(b.title)));
+  assert.ok(env.c.slices.board.some((b) => b.id === item && /要记到看板的问题/.test(b.title) && /^失败场景：add\(0, -1\) 返回 1/.test(b.body)), 'with its failure scenario');
 });
 
 test('stopping a review stops its check command, not only the shell around it', async () => {

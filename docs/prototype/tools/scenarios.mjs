@@ -214,8 +214,8 @@ export function structured(schema, prompt, step) {
     if (step === 0) return { blocks: [use('Bash', { command: 'git diff --stat', description: '查看改动' }), use('Read', { file_path: '{cwd}/src/orders.js' })] };
     if (round === 1) {
       return { output: { verdict: 'changes_requested', summary: '校验逻辑基本正确，但数量没有限制为整数；错误信息没有指出是哪个字段。', rulings: [], findings: [
-        { severity: 'major', file: 'src/orders.js', line: 4, title: '数量允许小数', detail: 'quantity 只检查了大于 0，2.5 这样的值会通过并算出非整数金额。应使用 Number.isInteger。' },
-        { severity: 'minor', file: 'src/orders.js', line: 2, title: '错误信息没有指明字段', detail: "抛出的错误只有 'invalid item'，调用方无法知道是数量还是单价不合法。" },
+        { severity: 'major', file: 'src/orders.js', line: 4, title: '数量允许小数', scenario: '下单时某一项是 { quantity: 2.5, price: 100 }，校验通过，订单按 2.5 件算出 250。', detail: 'quantity 只检查了大于 0，2.5 这样的值会通过并算出非整数金额。应使用 Number.isInteger。' },
+        { severity: 'minor', file: 'src/orders.js', line: 2, title: '错误信息没有指明字段', scenario: '单价传了 -1，接口只返回 invalid item，调用方看不出是哪个字段不对。', detail: "抛出的错误只有 'invalid item'，调用方无法知道是数量还是单价不合法。" },
       ] } };
     }
     const ids = [...prompt.matchAll(/^- (\S+) \[(blocker|major|minor)\]/gm)].map((m) => m[1]);

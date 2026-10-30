@@ -299,6 +299,7 @@ function FindingRow({ f, history, ticket }: { f: ReviewFinding; history?: boolea
       </div>
       <div className="title">{f.title}</div>
       <div className="loc">{f.file}{f.line ? `:${f.line}` : ''}</div>
+      {f.scenario && <div className="d"><b>{t('失败场景：')}</b>{f.scenario}</div>}
       <div className="d">{f.detail}</div>
       {history && f.response && <div className="d"><b>{t('作者：')}</b>{f.response}</div>}
       {history && f.reviewerNote && <div className="d"><b>{t('审核：')}</b>{f.reviewerNote}</div>}

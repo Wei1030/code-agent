@@ -547,6 +547,8 @@ export const EN: Record<string, string> = {
   "多选": "Multiple choice",
   "太大，只发送文件名": "Too large; only the file name is sent",
   "失败": "Failed",
+  "失败场景：": "Fails when: ",
+  "失败场景：{scenario}": "Fails when: {scenario}",
   "如「自动接受编辑」": "e.g. \"Accept edits\"",
   "始终开启": "Always on",
   "子代理": "Subagent",

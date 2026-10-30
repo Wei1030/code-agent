@@ -779,6 +779,8 @@ export interface ReviewFinding {
   file: string;
   line?: number;
   title: string;
+  /** When it goes wrong, concretely: the input or state, and the wrong result, error or crash. */
+  scenario?: string;
   detail: string;
   /**
    * open: waiting for the author (also when a later reviewer did not accept the fix or the dispute);

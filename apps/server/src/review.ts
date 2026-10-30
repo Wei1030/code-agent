@@ -251,8 +251,12 @@ const VERDICT_SCHEMA = {
     findings: {
       type: 'array', description: 'New findings of this round',
       items: {
-        type: 'object', required: ['severity', 'file', 'title', 'detail'], additionalProperties: false,
-        properties: { severity: { type: 'string', enum: ['blocker', 'major', 'minor'] }, file: { type: 'string' }, line: { type: 'integer' }, title: { type: 'string' }, detail: { type: 'string' } },
+        type: 'object', required: ['severity', 'file', 'title', 'scenario', 'detail'], additionalProperties: false,
+        properties: {
+          severity: { type: 'string', enum: ['blocker', 'major', 'minor'] }, file: { type: 'string' }, line: { type: 'integer' }, title: { type: 'string' },
+          scenario: { type: 'string', description: 'When it goes wrong, concretely: the input or state, and the wrong result, error or crash it leads to' },
+          detail: { type: 'string', description: 'Why: the cause in the code, and how to fix it' },
+        },
       },
     },
     rulings: {
@@ -268,7 +272,7 @@ const VERDICT_SCHEMA = {
 interface Verdict {
   verdict: 'pass' | 'changes_requested';
   summary: string;
-  findings: Array<Pick<ReviewFinding, 'severity' | 'file' | 'line' | 'title' | 'detail'>>;
+  findings: Array<Pick<ReviewFinding, 'severity' | 'file' | 'line' | 'title' | 'scenario' | 'detail'>>;
   rulings: Array<{ id: string; status: 'verified' | 'upheld' | 'open'; note: string }>;
 }
 
@@ -291,8 +295,9 @@ function roundPrompt(t: ReviewTicket, n: number): string {
     `Review round ${n} of at most ${t.maxRounds} of a change made in session "${sum?.title ?? ''}".`,
     where,
     'Correctness only: bugs, broken behaviour, data loss, security, missing error handling, tests that do not test what they claim, mismatches with the goal. Skip style, naming and formatting.',
+    'Every finding names its failure scenario: the concrete input or state and the wrong result, error or crash it leads to (for example "with 500 matching entries in one session, the search lists entries 60–79 instead of the latest 480–499"). If you cannot name one, it is not a finding: leave it out.',
     goals.length ? `What the user asked for:\n${goals.join('\n')}` : '',
-    earlier.length ? `Earlier findings (rule on each one the author answered: verified = fixed correctly, upheld = the author's dispute is right, open = still a problem):\n${earlier.map((f) => `- ${f.id} [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} ${f.title} — status ${f.status}${f.response ? `; author: ${f.response}` : ''}`).join('\n')}` : '',
+    earlier.length ? `Earlier findings (rule on each one the author answered: verified = fixed correctly, upheld = the author's dispute is right, open = still a problem):\n${earlier.map((f) => `- ${f.id} [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} ${f.title}${f.scenario ? ` (fails when: ${f.scenario})` : ''} — status ${f.status}${f.response ? `; author: ${f.response}` : ''}`).join('\n')}` : '',
     'Severity: blocker = breaks the build, loses data or is a security hole; major = wrong behaviour users will hit; minor = worth fixing but not blocking. The change passes when no blocker or major finding remains open.',
     'Answer through the structured output: verdict, a one- or two-sentence summary, new findings, and rulings on earlier findings. Write titles, details and notes in Simplified Chinese.',
     app.reviewProfile.extraPrompt.trim() ? `Additional review requirements from the user:\n${app.reviewProfile.extraPrompt.trim()}` : '',
@@ -431,8 +436,8 @@ function askAuthor(id: string, n: number) {
     text: [
       `代码审核第 ${n} 轮打回：${r.reviewer?.summary ?? ''}`,
       '需要处理的意见：',
-      ...open.map((f) => `- ${f.id} [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} ${f.title}\n  ${f.detail}${f.reviewerNote ? `\n  审核者：${f.reviewerNote}` : ''}`),
-      '请逐条处理：能改的改掉，不同意的写明理由；然后用 workspace 的 respond_findings 工具逐条答复（fixed 或 disputed），再结束这一轮。Code Agent 会接着做下一轮审核。',
+      ...open.map((f) => `- ${f.id} [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} ${f.title}${f.scenario ? `\n  失败场景：${f.scenario}` : ''}\n  ${f.detail}${f.reviewerNote ? `\n  审核者：${f.reviewerNote}` : ''}`),
+      '请逐条处理：能改的改掉（照失败场景补一个回归测试），不同意的写明理由（比如这个场景为什么不会发生）；然后用 workspace 的 respond_findings 工具逐条答复（fixed 或 disputed），再结束这一轮。Code Agent 会接着做下一轮审核。',
     ].join('\n'),
   });
 }
@@ -446,7 +451,7 @@ decorateTool((_sid, name, input, item) => {
 });
 
 addWorkspaceTools((sid) => [
-  tool('respond_findings', 'Answer the findings of the current Code Agent review round: fixed (say what you changed) or disputed (say why).', {
+  tool('respond_findings', 'Answer the findings of the current Code Agent review round: fixed (say what you changed) or disputed (say why, e.g. why its failure scenario cannot happen).', {
     answers: z.array(z.object({ id: z.string(), status: z.enum(['fixed', 'disputed']), text: z.string() })),
   }, async (a) => {
     const t = activeTicket(sid);
@@ -569,7 +574,7 @@ function reviewMarkdown(id: string): string {
     const raised = t.findings.filter((f) => r.raised.includes(f.id));
     if (raised.length) {
       lines.push('### 新意见', '');
-      for (const f of raised) lines.push(`- **${f.id}** [${sev[f.severity]}] ${f.file}${f.line ? `:${f.line}` : ''} — ${f.title}`, `  ${f.detail}`);
+      for (const f of raised) lines.push(`- **${f.id}** [${sev[f.severity]}] ${f.file}${f.line ? `:${f.line}` : ''} — ${f.title}`, ...(f.scenario ? [`  失败场景：${f.scenario}`] : []), `  ${f.detail}`);
       lines.push('');
     }
     if (r.rulings.length) {

@@ -365,7 +365,7 @@ function findingToBoard(ticketId: string, findingId: string): string | null {
   const existing = all().find((x) => x.workspaceId === ws && x.source.ref === ref);
   if (existing) return existing.id;
   return createItem(ws, {
-    kind: 'issue', title: f.title, body: `${f.detail}\n位置：${f.file}${f.line ? `:${f.line}` : ''}`, priority: f.severity === 'minor' ? 'low' : 'normal',
+    kind: 'issue', title: f.title, body: [f.scenario ? `失败场景：${f.scenario}` : '', `${f.detail}\n位置：${f.file}${f.line ? `:${f.line}` : ''}`].filter(Boolean).join('\n'), priority: f.severity === 'minor' ? 'low' : 'normal',
   }, { kind: 'review', sessionId: t.sessionId, ref }, `来自代码审核意见 ${f.id}（审核结束时没有解决）`).id;
 }
 
