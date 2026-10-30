@@ -3,9 +3,6 @@
 // Proposed parts are injected with the app's own classes and outlined (.proto-new); their marks
 // have isNew and their snippet is shown under the screen for whoever implements it.
 
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
-
 /** Open an inspector tab (click its rail button unless it is open already). */
 const inspector = async ({ eval: ev, sleep }, label) => {
   await ev(`(() => { const b = [...document.querySelectorAll('.ins-rail-btn')].find((x) => x.querySelector('span')?.textContent === ${JSON.stringify(label)}); if (b && !b.classList.contains('on')) b.click(); })()`);
@@ -122,26 +119,6 @@ export const SCREENS = [
     ],
   },
   {
-    id: 'P31b', group: '会话', title: '打开文件夹 — 信任这个文件夹', status: 'done',
-    summary: '添加的文件夹还没被 Claude Code 信任时，像在终端里第一次运行 claude 那样问一次；信任后仓库里提交的设置（例如允许的命令）才生效。',
-    frs: ['FR-WS-01', 'FR-PERM-08'],
-    prepare: async (c) => {
-      const dir = path.join(path.dirname(c.slices().workspaces[0].path), 'reports');
-      mkdirSync(dir, { recursive: true });
-      await c.go('/'); await c.click('.btn', '打开文件夹…'); await c.sleep(800);
-      await c.type('.modal input.mono', dir);
-      await c.click('.modal .btn.primary', '添加为工作区'); await c.sleep(1200);
-    },
-    after: async (c) => {
-      await c.click('.modal .btn', '取消');
-      const ws = c.slices().workspaces.find((w) => w.name === 'reports');
-      if (ws) await c.call('removeWorkspace', ws.id);
-    },
-    marks: [
-      { sel: '.modal', note: ['信任这个文件夹吗？', '信任 / 取消', '和终端里第一次运行 claude 时选「信任」一样，记在 Claude Code 的配置文件 ~/.claude.json 里；只信任你了解来源的代码。取消后也可以在「权限规则」页「来自仓库」那栏再信任。'] },
-    ],
-  },
-  {
     id: 'P30', group: '会话', title: '等你处理', status: 'done',
     summary: '顶栏铃铛：所有工作区里等你处理的请求，不管那个会话在这个页面里打开过没有；点一条直接跳到那个会话处理。',
     frs: ['FR-NTF-01', 'FR-PERM-06'],
@@ -230,7 +207,7 @@ export const SCREENS = [
     prepare: async (c) => { await openSession(c, c.ids.approval); await c.click('.opt', '允许，且以后不再询问'); await c.sleep(400); },
     marks: [
       { sel: '.always-line', nth: 0, note: ['建议的做法', '勾选 / 编辑', '每条一行：规则可以改写，下面一句话说明它的意思；也可能是「加为额外目录」或「切换到某个模式」。取消勾选的不会生效。像在工作区外写文件，要「加额外目录」和「切到自动接受编辑」都选上才不会再问。'] },
-      { sel: '.opt .always .row', note: ['保存到', '下拉', '默认「本会话」，会话结束就失效；可以改成本工作区（.claude/settings.local.json）或所有工作区（用户设置）。切换模式只对本会话。'] },
+      { sel: '.opt .always .row', note: ['保存到', '下拉', '默认「本会话」，会话结束就失效；可以改成本工作区（这个工作区以后的会话都不再询问）或所有工作区。切换模式只对本会话。'] },
       { sel: '.btn.primary', text: '允许并记住', note: ['允许并记住', '点击', '执行这一次，并把勾选的规则、目录和模式交给 Claude Code。'] },
     ],
   },
@@ -498,7 +475,7 @@ export const SCREENS = [
     frs: ['FR-PERM-08', 'FR-CFG-05'],
     prepare: async (c) => { await c.go('/settings/permissions'); await c.sleep(700); },
     marks: [
-      { sel: 'button', text: '所有工作区', note: ['作用范围', '点击', '所有工作区（~/.claude/settings.json）/ 单个工作区（.claude/settings.local.json）；仓库里的规则只读显示。'] },
+      { sel: 'button', text: '所有工作区', note: ['作用范围', '点击', '所有工作区（~/.claude/settings.json）/ 单个工作区（这个工作区的 .claude/settings.local.json）。'] },
       { sel: '.chip.crit', text: '拒绝', note: ['规则列表', '删除', '每条规则用一句话说明它的意思。'] },
       { sel: 'button', text: '以…开头', note: ['新规则', '选择 / 输入', '动作、工具、匹配方式和内容，不用写规则语法。'] },
       { sel: 'h3', text: '额外可访问的目录', note: ['额外目录', '添加', '工作目录之外 Claude 也能读写的目录。'] },
@@ -980,11 +957,11 @@ export const SCREENS = [
   },
   {
     id: 'P21b', group: '设置', title: '设置 — 一个工作区的权限规则', status: 'done',
-    summary: '「单个工作区」：只对这个工作区生效的规则和额外目录（本机），下方列出仓库里提交的规则（只读）。',
+    summary: '「单个工作区」：只对这个工作区生效的规则和额外目录。',
     frs: ['FR-PERM-08', 'FR-WS-02'],
     prepare: async (c) => { await c.go('/settings/permissions'); await c.click('button', '单个工作区'); await c.sleep(500); },
     marks: [
-      { sel: 'h3', text: '来自仓库', note: ['仓库里的规则', '—', '`.claude/settings.json` 里提交的规则，只在 Claude Code 信任过这个文件夹时生效；没信任时这里提示规则不会生效，并可以直接「信任这个文件夹」（P31b）。'] },
+      { sel: 'h3', text: '只对', note: ['这个工作区的规则', '添加 / 删除', '存在工作区的 .claude/settings.local.json 里；审批时选「以后不再询问 · 本工作区」的规则也在这里。'] },
     ],
   },
   {

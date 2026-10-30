@@ -430,34 +430,6 @@ window.SCREENS = [
   ]
  },
  {
-  "id": "P31b",
-  "group": "会话",
-  "title": "打开文件夹 — 信任这个文件夹",
-  "status": "done",
-  "summary": "添加的文件夹还没被 Claude Code 信任时，像在终端里第一次运行 claude 那样问一次；信任后仓库里提交的设置（例如允许的命令）才生效。",
-  "frs": [
-   "FR-WS-01",
-   "FR-PERM-08"
-  ],
-  "marks": [
-   {
-    "box": [
-     480,
-     301.75,
-     480,
-     296.5
-    ],
-    "at": "tl",
-    "note": [
-     "信任这个文件夹吗？",
-     "信任 / 取消",
-     "和终端里第一次运行 claude 时选「信任」一样，记在 Claude Code 的配置文件 ~/.claude.json 里；只信任你了解来源的代码。取消后也可以在「权限规则」页「来自仓库」那栏再信任。"
-    ],
-    "isNew": false
-   }
-  ]
- },
- {
   "id": "P30",
   "group": "会话",
   "title": "等你处理",
@@ -934,7 +906,7 @@ window.SCREENS = [
     "note": [
      "保存到",
      "下拉",
-     "默认「本会话」，会话结束就失效；可以改成本工作区（.claude/settings.local.json）或所有工作区（用户设置）。切换模式只对本会话。"
+     "默认「本会话」，会话结束就失效；可以改成本工作区（这个工作区以后的会话都不再询问）或所有工作区。切换模式只对本会话。"
     ],
     "isNew": false
    },
@@ -2484,7 +2456,7 @@ window.SCREENS = [
     "note": [
      "作用范围",
      "点击",
-     "所有工作区（~/.claude/settings.json）/ 单个工作区（.claude/settings.local.json）；仓库里的规则只读显示。"
+     "所有工作区（~/.claude/settings.json）/ 单个工作区（这个工作区的 .claude/settings.local.json）。"
     ],
     "isNew": false
    },
@@ -4294,7 +4266,7 @@ window.SCREENS = [
   "group": "设置",
   "title": "设置 — 一个工作区的权限规则",
   "status": "done",
-  "summary": "「单个工作区」：只对这个工作区生效的规则和额外目录（本机），下方列出仓库里提交的规则（只读）。",
+  "summary": "「单个工作区」：只对这个工作区生效的规则和额外目录。",
   "frs": [
    "FR-PERM-08",
    "FR-WS-02"
@@ -4303,15 +4275,15 @@ window.SCREENS = [
    {
     "box": [
      329,
-     738.75,
-     56,
+     274.25,
+     126.484375,
      21
     ],
     "at": "tl",
     "note": [
-     "仓库里的规则",
-     "—",
-     "`.claude/settings.json` 里提交的规则，只在 Claude Code 信任过这个文件夹时生效；没信任时这里提示规则不会生效，并可以直接「信任这个文件夹」（P31b）。"
+     "这个工作区的规则",
+     "添加 / 删除",
+     "存在工作区的 .claude/settings.local.json 里；审批时选「以后不再询问 · 本工作区」的规则也在这里。"
     ],
     "isNew": false
    }
