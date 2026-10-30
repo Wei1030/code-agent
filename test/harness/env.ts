@@ -99,7 +99,7 @@ async function ready(world: World, model: FakeModel, server: Server, opts: EnvOp
     },
     async start(text, o = {}) {
       const sid = randomUUID();
-      await env.c.call('createDraft', o.ws ?? ws, sid);
+      await env.c.call('createDraft', o.ws ?? env.ws, sid);
       if (o.model) await env.c.call('setModel', sid, o.model);
       if (o.effort) await env.c.call('setEffort', sid, o.effort);
       if (o.mode) await env.c.call('setMode', sid, o.mode);
