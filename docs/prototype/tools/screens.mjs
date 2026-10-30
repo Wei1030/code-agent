@@ -3,6 +3,9 @@
 // Proposed parts are injected with the app's own classes and outlined (.proto-new); their marks
 // have isNew and their snippet is shown under the screen for whoever implements it.
 
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+
 /** Open an inspector tab (click its rail button unless it is open already). */
 const inspector = async ({ eval: ev, sleep }, label) => {
   await ev(`(() => { const b = [...document.querySelectorAll('.ins-rail-btn')].find((x) => x.querySelector('span')?.textContent === ${JSON.stringify(label)}); if (b && !b.classList.contains('on')) b.click(); })()`);
@@ -116,6 +119,26 @@ export const SCREENS = [
     marks: [
       { sel: '.modal input', note: ['路径', '输入 / 粘贴', '直接填文件夹路径，回车打开。'] },
       { sel: '.modal', note: ['文件夹列表', '点击进入 / 双击打开', '从盘符开始逐级浏览；不存在或无法访问的路径会提示。'] },
+    ],
+  },
+  {
+    id: 'P31b', group: '会话', title: '打开文件夹 — 信任这个文件夹', status: 'done',
+    summary: '添加的文件夹还没被 Claude Code 信任时，像在终端里第一次运行 claude 那样问一次；信任后仓库里提交的设置（例如允许的命令）才生效。',
+    frs: ['FR-WS-01', 'FR-PERM-08'],
+    prepare: async (c) => {
+      const dir = path.join(path.dirname(c.slices().workspaces[0].path), 'reports');
+      mkdirSync(dir, { recursive: true });
+      await c.go('/'); await c.click('.btn', '打开文件夹…'); await c.sleep(800);
+      await c.type('.modal input.mono', dir);
+      await c.click('.modal .btn.primary', '添加为工作区'); await c.sleep(1200);
+    },
+    after: async (c) => {
+      await c.click('.modal .btn', '取消');
+      const ws = c.slices().workspaces.find((w) => w.name === 'reports');
+      if (ws) await c.call('removeWorkspace', ws.id);
+    },
+    marks: [
+      { sel: '.modal', note: ['信任这个文件夹吗？', '信任 / 取消', '和终端里第一次运行 claude 时选「信任」一样，记在 Claude Code 的配置文件 ~/.claude.json 里；只信任你了解来源的代码。取消后也可以在「权限规则」页「来自仓库」那栏再信任。'] },
     ],
   },
   {
@@ -558,6 +581,18 @@ export const SCREENS = [
     ],
   },
   {
+    id: 'P34b', group: '会话页', title: '会话信息 — 附加的系统提示词', status: 'done',
+    summary: '「信息」页下方：Code Agent 在这个会话开始时加进系统提示词的原文。',
+    frs: ['FR-SES-17'],
+    prepare: async (c) => {
+      await openSession(c, c.ids.validate); await inspector(c, '信息');
+      await c.eval(`document.querySelector('.session-prompt')?.scrollIntoView({ block: 'start' })`); await c.sleep(300);
+    },
+    marks: [
+      { sel: '.session-prompt h4', note: ['附加的系统提示词', '—', 'Code Agent 在会话开始时加在 Claude Code 系统提示词后面的内容（回复语言等）。Claude Code 一直沿用会话开始时的系统提示词，之后改配置方案不会变；分叉出的会话沿用原会话的。'] },
+    ],
+  },
+  {
     id: 'P33', group: '会话页', title: '文件预览', status: 'done',
     summary: '点对话里工具卡片上的文件路径，或变更列表里的预览按钮，在检查器「文件」页看文件内容。',
     frs: ['FR-FILE-02'],
@@ -949,7 +984,7 @@ export const SCREENS = [
     frs: ['FR-PERM-08', 'FR-WS-02'],
     prepare: async (c) => { await c.go('/settings/permissions'); await c.click('button', '单个工作区'); await c.sleep(500); },
     marks: [
-      { sel: 'h3', text: '来自仓库', note: ['仓库里的规则', '—', '`.claude/settings.json` 里提交的规则，只在 Claude Code 信任过这个文件夹时生效。'] },
+      { sel: 'h3', text: '来自仓库', note: ['仓库里的规则', '—', '`.claude/settings.json` 里提交的规则，只在 Claude Code 信任过这个文件夹时生效；没信任时这里提示规则不会生效，并可以直接「信任这个文件夹」（P31b）。'] },
     ],
   },
   {

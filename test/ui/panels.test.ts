@@ -131,8 +131,8 @@ test('inspector: the info tab shows what Code Agent put in the system prompt (FR
   const p = await env.page(`/s/${sid}`);
   await p.waitEl('.ins-rail-btn');
   await tab(p, '信息');
-  await p.waitEl('dt', '附加的系统提示词');
-  assert.match(await p.text('.session-prompt'), /Always respond to the user in/);
+  await p.waitEl('.session-prompt h4', '附加的系统提示词');
+  assert.match(await p.text('.session-prompt pre'), /Always respond to the user in/);
   noPageErrors(p);
   await p.close();
 });

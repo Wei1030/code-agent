@@ -402,4 +402,5 @@
 .opt .always .row > .ink2 { white-space: nowrap; flex: none; }
 
 /* The text Code Agent put in the session's system prompt (inspector 信息). */
-.session-prompt { max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere; margin-bottom: 4px; }
+.session-prompt { margin-top: 14px; }
+.session-prompt pre { max-height: 300px; overflow: auto; word-break: normal; overflow-wrap: anywhere; margin-bottom: 4px; }
