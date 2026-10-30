@@ -106,7 +106,7 @@ test('a check that fails says why in its session for a while (custom feature 看
   await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: false, recorderModel: M2 } });
 });
 
-test('a model that cannot run fails the check, saying so; with none chosen it takes the first usable one (custom feature 看板)', async () => {
+test('a model that cannot run fails the check and an import, saying so; with none chosen it takes the first usable one (custom feature 看板)', async () => {
   // Without the Claude login Haiku is not offered: nothing runs in its place.
   await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true, recorderModel: 'haiku' } });
   env.model.script(/^模型不可用$/, [[say('这一轮说了足够多的内容，后台识别会来检查它要不要更新看板。')]]);
@@ -116,6 +116,9 @@ test('a model that cannot run fails the check, saying so; with none chosen it ta
   assert.match(failed!, /选的模型现在不可用/);
   assert.equal((await env.rt(sid)).boardCheck?.model, 'haiku');
   assert.ok(!env.model.requests.some((r) => r.tools.includes('StructuredOutput') && /模型不可用/.test(r.prompt)), 'no other model ran it');
+  // Importing uses the same model, and fails the same way.
+  await assert.rejects(env.c.call('importPreview', env.ws, 'paste', '- 导入不该跑'), /选的模型现在不可用/);
+  assert.ok(!env.model.requests.some((r) => /导入不该跑/.test(JSON.stringify(r.body))), 'no model ran the import');
 
   // A new install has no model chosen: it takes Haiku on the subscription, else the first endpoint model.
   await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: false, recorderModel: '' } });

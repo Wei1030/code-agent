@@ -70,7 +70,7 @@ export const EN: Record<string, string> = {
   "协议": "Protocol",
   "未选择": "Not chosen",
   "看板设置里选的模型现在不可用，请换一个": "The model chosen in the board settings is not available now; choose another",
-  "还没有选看板分析用的模型": "No model chosen for board checks yet",
+  "看板设置里还没有选模型": "No model is chosen in the board settings yet",
   "图片": "Image",
   "点击查看大图": "Click to view full size",
   "{m} 正在分析本轮对话是否需要更新看板": "{m} is checking whether this turn should update the board",

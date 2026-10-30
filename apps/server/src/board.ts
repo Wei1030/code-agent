@@ -174,11 +174,15 @@ addWorkspaceTools((sid) => [
 
 // ------------------------------------------------------------------ recorder
 
-/** The model chosen for the recorder; whether it can run now (offered, and Claude's only with the login). */
+/** The model chosen for the recorder and imports; why it cannot run now (offered, and Claude's only with the login). */
 function recorderModel() {
   const id = app.boardSettings.recorderModel;
   const m = app.models.find((x) => x.id === id);
-  return { id, label: m?.label ?? (id.replace(/^ep:[^:]+:/, '') || '看板分析'), usable: !!m && (!!m.endpoint || app.provider.loggedIn) };
+  const usable = !!m && (!!m.endpoint || app.provider.loggedIn);
+  return {
+    id, label: m?.label ?? (id.replace(/^ep:[^:]+:/, '') || '看板分析'),
+    problem: usable ? null : id ? '看板设置里选的模型现在不可用，请换一个' : '看板设置里还没有选模型',
+  };
 }
 
 function recorderLabel() {
@@ -274,7 +278,7 @@ async function recordTurn(sid: string, userId: string) {
   const check: BoardCheck = { model: model.label, startedAt: Date.now() };
   showCheck(sid, check);
   try {
-    if (!model.usable) throw new Error(model.id ? '看板设置里选的模型现在不可用，请换一个' : '还没有选看板分析用的模型');
+    if (model.problem) throw new Error(model.problem);
     ops = await oneShot<RecorderOps>({ prompt, schema: RECORDER_SCHEMA, model: s.recorderModel, effort: s.recorderEffort, workspaceId: ws, signal: abort.signal });
   } catch (e) {
     if (abort.signal.aborted) {
@@ -379,6 +383,9 @@ function importPrompt(wsId: string, what: string, material: string): string {
 async function importPreview(wsId: string, source: ImportSource, input: string): Promise<ImportRow[]> {
   const ws = app.workspaces.find((w) => w.id === wsId);
   if (!ws) throw new Error('工作区不存在');
+  // Like the checks after a turn: on the chosen model or not at all.
+  const problem = recorderModel().problem;
+  if (problem) throw new Error(problem);
   const s = app.boardSettings;
   let material = input;
   let what = 'the pasted list';
