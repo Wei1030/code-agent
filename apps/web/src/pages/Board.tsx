@@ -1,6 +1,5 @@
 /**
- * 看板 — a workspace's features, issues and notes. Claude reads and writes it through its board tools;
- * items the recorder added are marked 待确认 until the user confirms them.
+ * 看板 — a workspace's features, issues and notes. Claude reads and writes it through its board tools.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -33,7 +32,7 @@ export function Board() {
   const items = app.board.filter((x) => x.workspaceId === wsId);
   const focused = focus ? items.find((x) => x.id === focus) : undefined;
   const [kind, setKind] = useState<BoardKind>(focused?.kind ?? 'feature');
-  const [view, setView] = useState<'open' | 'all' | 'unconfirmed'>(focused && CLOSED.includes(focused.status) ? 'all' : 'open');
+  const [view, setView] = useState<'open' | 'all'>(focused && CLOSED.includes(focused.status) ? 'all' : 'open');
   const [q, setQ] = useState('');
   const [selId, setSelId] = useState<string | null>(focus);
   const [dialog, setDialog] = useState<'new' | 'import' | 'settings' | null>(null);
@@ -48,17 +47,13 @@ export function Board() {
     requestAnimationFrame(() => document.getElementById(`bi-${focused.id}`)?.scrollIntoView({ block: 'nearest' }));
   }, [focus, wsId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const unconfirmed = items.filter((x) => x.unconfirmed);
   const count = (k: BoardKind) => items.filter((x) => x.kind === k && !CLOSED.includes(x.status)).length;
   const list = useMemo(() => {
-    const base = view === 'unconfirmed' ? unconfirmed : items.filter((x) => x.kind === kind && (view === 'all' || !CLOSED.includes(x.status)));
     const k = q.trim().toLowerCase();
-    return base.filter((x) => !k || `${x.id} ${x.title} ${x.body}`.toLowerCase().includes(k));
-  }, [items, unconfirmed, kind, view, q]);
+    return items.filter((x) => x.kind === kind && (view === 'all' || !CLOSED.includes(x.status)) && (!k || `${x.id} ${x.title} ${x.body}`.toLowerCase().includes(k)));
+  }, [items, kind, view, q]);
   const sel = list.find((x) => x.id === selId) ?? list[0];
-  const groups: Array<{ title: string; items: BoardItem[] }> = view === 'unconfirmed'
-    ? (['feature', 'issue', 'note'] as BoardKind[]).map((k) => ({ title: t(KIND_LABEL[k]), items: list.filter((x) => x.kind === k) }))
-    : STATUSES[kind].map((s) => ({ title: t(STATUS_LABEL[s]), items: list.filter((x) => x.status === s) }));
+  const groups: Array<{ title: string; items: BoardItem[] }> = STATUSES[kind].map((s) => ({ title: t(STATUS_LABEL[s]), items: list.filter((x) => x.status === s) }));
   const pick = (id: string) => { setSelId(id); setParams({ ws: wsId, item: id }, { replace: true }); };
 
   const intro = t('这个工作区要做的功能、发现的问题和值得记住的笔记。Claude 可以查看和修改看板。数据保存在 Code Agent 的数据目录，不放进仓库。');
@@ -80,9 +75,7 @@ export function Board() {
         <div className="row board-bar">
           <Select value={wsId} icon="folder" className="w-240" onChange={(v) => { setSelId(null); setParams({ ws: v }); }}
             options={app.workspaces.map((w) => ({ value: w.id, label: w.name, desc: w.path }))} />
-          <Seg value={view} onChange={setView} items={[
-            { value: 'open', label: t('未完成') }, { value: 'all', label: t('全部') }, { value: 'unconfirmed', label: t('待确认 {n}', { n: unconfirmed.length }) },
-          ]} />
+          <Seg value={view} onChange={setView} items={[{ value: 'open', label: t('未完成') }, { value: 'all', label: t('全部') }]} />
           <div className="input-wrap" style={{ width: 220 }}>
             <Icon name="search" size={15} />
             <input className="input" placeholder={t('搜索编号、标题、内容')} value={q} onChange={(e) => setQ(e.target.value)} />
@@ -93,17 +86,15 @@ export function Board() {
           <Button icon="gear" title={t('导入时整理条目用的模型和思考强度')} onClick={() => setDialog('settings')}>{t('设置')}</Button>
           <Button variant="primary" icon="plus" onClick={() => setDialog('new')}>{t('新建')}</Button>
         </div>
-        {view !== 'unconfirmed' && (
-          <Tabs className="board-tabs" value={kind} onChange={(k) => { setKind(k); setSelId(null); }}
-            items={(['feature', 'issue', 'note'] as BoardKind[]).map((k) => ({ value: k, label: t(KIND_LABEL[k]), count: count(k) }))} />
-        )}
+        <Tabs className="board-tabs" value={kind} onChange={(k) => { setKind(k); setSelId(null); }}
+          items={(['feature', 'issue', 'note'] as BoardKind[]).map((k) => ({ value: k, label: t(KIND_LABEL[k]), count: count(k) }))} />
 
         <div className="ext-layout board-layout">
           <div className="ext-list">
             {list.length === 0 && (
               <div className="empty" style={{ padding: 18 }}>
-                <b>{view === 'unconfirmed' ? t('没有待确认的条目') : q ? t('没有匹配的条目') : t('还没有{k}', { k: t(KIND_LABEL[kind]) })}</b>
-                {view !== 'unconfirmed' && !q && t('在对话里说「记到看板」，也可以点「新建」或「导入」。')}
+                <b>{q ? t('没有匹配的条目') : t('还没有{k}', { k: t(KIND_LABEL[kind]) })}</b>
+                {!q && t('在对话里说「记到看板」，也可以点「新建」或「导入」。')}
               </div>
             )}
             {groups.filter((g) => g.items.length).map((g) => (
@@ -115,7 +106,6 @@ export function Board() {
                       <Icon name={KIND_ICON[it.kind]} size={13} className="muted" />
                       <b className="mono">{it.id}</b>
                       <span className="grow truncate">{it.title}</span>
-                      {it.unconfirmed && <Chip tone="accent">{t('待确认')}</Chip>}
                     </div>
                     <div className="sub">
                       <Chip tone={STATUS_TONE[it.status]}>{t(STATUS_LABEL[it.status])}</Chip>
@@ -167,14 +157,6 @@ function ItemDetail({ item, onDeleted }: { item: BoardItem; onDeleted: () => voi
 
   return (
     <div className="ext-detail">
-      {item.unconfirmed && (
-        <div className="banner-info" style={{ marginBottom: 0 }}>
-          <Icon name="info" size={16} />
-          <span className="grow">{t('这条是后台自动记录的{s}，看一下内容对不对。', { s: srcSession ? t('（来自会话「{x}」）', { x: srcSession.title }) : '' })}</span>
-          <Button size="sm" variant="primary" onClick={() => api.confirmItem(item.workspaceId, item.id)}>{t('确认')}</Button>
-          <Button size="sm" onClick={remove}>{t('删除')}</Button>
-        </div>
-      )}
       <div className="panel">
         <div className="panel-body board-detail">
           <div className="row" style={{ gap: 8 }}>

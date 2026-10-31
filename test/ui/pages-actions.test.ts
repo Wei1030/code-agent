@@ -17,17 +17,33 @@ before(async () => {
 });
 after(() => env?.close());
 
-test('board: a new item from the dialog, then its status changed (custom feature 看板)', async () => {
+test('board: a new item from the dialog, then its status changed; the rail counts unfinished features and issues (custom feature 看板)', async () => {
+  // Features to start or in progress, and issues neither fixed nor declined; never notes.
+  const unfinished = () => env.c.slices.board.filter((b) => b.workspaceId === env.ws
+    && (b.kind === 'feature' ? b.status === 'todo' || b.status === 'doing' : b.kind === 'issue' && b.status !== 'fixed' && b.status !== 'wontfix')).length;
+  for (const [kind, status] of [['issue', 'fixing'], ['issue', 'wontfix'], ['feature', 'dropped'], ['note', 'active']] as const) {
+    await env.c.call('createItem', env.ws, { kind, title: `${kind} ${status}`, status }, { kind: 'manual' });
+  }
   const p = await env.page(`/board?ws=${env.ws}`);
+  const badge = () => p.eval<string>(`document.querySelector('.navrail .nbadge')?.textContent ?? ''`);
+  const counted = () => until(async () => (await badge()) === String(unfinished() || ''), 'the rail shows the unfinished features and issues');
+  await counted();
   await p.click('.btn', '新建');
   await p.waitEl('.modal');
   await p.type('.modal input', '列表分页');
   await p.click('.modal .btn.primary', '新建');
   await until(() => env.c.slices.board.find((b) => b.title === '列表分页'), 'created');
+  await counted();
   await p.waitEl('.board-detail');
   await p.click('.board-detail .select-btn', '待开始');
   await p.click('.menu-item', '进行中');
   await until(() => env.c.slices.board.find((b) => b.title === '列表分页')?.status === 'doing', 'status changed');
+  await counted();
+  const before = unfinished();
+  await p.click('.board-detail .select-btn', '进行中');
+  await p.click('.menu-item', '已完成');
+  await until(() => unfinished() === before - 1, 'done');
+  await counted();
   noPageErrors(p);
   await p.close();
 });

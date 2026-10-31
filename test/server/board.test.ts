@@ -46,7 +46,7 @@ test('ids count per kind; edits are logged; delete removes', async () => {
   await until(() => !board().some((b) => b.id === 'F-2'), 'deleted');
 });
 
-test('the recorder records after a turn, unconfirmed; undo restores; confirm accepts', async () => {
+test('the recorder records after a turn and after the next; undo restores', async () => {
   assert.equal(env.c.slices.boardSettings.recorder, false, 'off until the user turns it on');
   await env.c.call('setState', { boardSettings: { ...env.c.slices.boardSettings, recorder: true } });
   recorderOps = [{ op: 'create', kind: 'issue', title: '自动记下的问题', body: '对话里确认过', status: 'confirmed', priority: 'high', note: '确认的缺陷' }];
@@ -54,7 +54,7 @@ test('the recorder records after a turn, unconfirmed; undo restores; confirm acc
   const sid = await env.start('确认一个缺陷');
   await env.turns(sid);
   const item = await until(() => board().find((b) => b.title === '自动记下的问题'), 'recorded');
-  assert.equal(item.unconfirmed, true);
+  assert.equal(item.source.kind, 'auto');
   assert.ok(env.model.requests.some((r) => r.tools.includes('StructuredOutput') && /where things stand now, not how they got there/.test(r.prompt)), 'the recorder writes state, not history');
   const card = await until(async () => (await env.rt(sid)).items.find((i) => i.kind === 'board') as Extract<Item, { kind: 'board' }> | undefined, 'board card in the transcript');
   assert.equal(card.by, 'recorder');
@@ -63,12 +63,10 @@ test('the recorder records after a turn, unconfirmed; undo restores; confirm acc
   await until(() => !board().some((b) => b.title === '自动记下的问题'), 'undone');
   assert.equal(((await env.rt(sid)).items.find((i) => i.id === card.id) as Extract<Item, { kind: 'board' }>).undone, true);
 
-  recorderOps = [{ op: 'create', kind: 'note', title: '要确认的笔记', body: '内容', note: '决定' }];
+  recorderOps = [{ op: 'create', kind: 'note', title: '第二轮记下的笔记', body: '内容', note: '决定' }];
   env.model.script(/定一个决定/, [[say('决定：金额统一用分存储，展示时换算成元，这个以后不再改。')]]);
   await env.c.call('send', sid, '定一个决定', {});
-  const note = await until(() => board().find((b) => b.title === '要确认的笔记'), 'second record');
-  await env.c.call('confirmItem', env.ws, note.id);
-  await until(() => board().find((b) => b.id === note.id)?.unconfirmed === false, 'confirmed');
+  await until(() => board().find((b) => b.title === '第二轮记下的笔记'), 'second record');
 });
 
 test('the recorder updates status, tasks and decisions, never the body it does not see (issue 10-30#19)', async () => {

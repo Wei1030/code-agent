@@ -915,8 +915,6 @@ export interface BoardItem {
   tasks: Array<{ id: string; text: string; done: boolean }>;
   decisions: Array<{ id: string; text: string; outcome?: string }>;
   source: BoardSource;
-  /** Recorded automatically; the user has not confirmed it yet. */
-  unconfirmed?: boolean;
   /** Sessions that worked on it or mentioned it. */
   sessions: string[];
   log: Array<{ ts: number; text: string; sessionId?: string; auto?: boolean }>;

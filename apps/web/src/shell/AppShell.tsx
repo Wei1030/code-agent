@@ -6,6 +6,7 @@ import { useApp } from '../store/app';
 import { resolveLocale, useT } from '../lib/i18n';
 import { relTime } from '../lib/format';
 import { cx } from '../lib/util';
+import { CLOSED } from '../lib/board';
 import { FolderPicker } from './FolderPicker';
 import { api } from '../api';
 import { useGoToSessions, useOpenWorkspace } from '../components/SessionRow';
@@ -67,13 +68,13 @@ function TopProgress() {
   return shown ? <div className="top-progress" role="progressbar" aria-label={t('正在处理')} /> : null;
 }
 
-/** 看板 in the left rail, with the selected workspace's count of items waiting for confirmation. */
+/** 看板 in the left rail, with the selected workspace's count of unfinished features and issues (notes left out). */
 function BoardNav() {
   const t = useT();
   const ws = useApp((s) => s.currentWorkspaceId);
-  const n = useApp((s) => s.board.filter((x) => x.unconfirmed && (!ws || x.workspaceId === ws)).length);
+  const n = useApp((s) => s.board.filter((x) => x.kind !== 'note' && !CLOSED.includes(x.status) && (!ws || x.workspaceId === ws)).length);
   return (
-    <NavLink to={ws ? `/board?ws=${ws}` : '/board'} className={({ isActive }) => cx('nav-badged', isActive && 'active')} title={n ? t('{n} 条自动记录的条目待确认', { n }) : undefined}>
+    <NavLink to={ws ? `/board?ws=${ws}` : '/board'} className={({ isActive }) => cx('nav-badged', isActive && 'active')} title={n ? t('{n} 个未完成的功能和问题', { n }) : undefined}>
       <Icon name="board" size={22} />{t('看板')}
       {n > 0 && <span className="nbadge">{n}</span>}
     </NavLink>

@@ -110,7 +110,6 @@ export interface ServerApi {
   createItem(wsId: string, p: Partial<BoardItem> & Pick<BoardItem, 'kind' | 'title'>, source: BoardSource): BoardItem;
   updateItem(wsId: string, id: string, p: Partial<BoardItem>, logText?: string): void;
   deleteItem(wsId: string, id: string): void;
-  confirmItem(wsId: string, id: string): void;
   undoBoardRecord(sid: string, cardId: string): void;
   /** Stop the board recorder checking a session's last turn; with turnOff, stop recording after every turn too. */
   stopBoardCheck(sid: string, turnOff: boolean): void;

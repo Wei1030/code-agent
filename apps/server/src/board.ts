@@ -2,8 +2,8 @@
  * Workspace board: features F-n, issues I-n and notes N-n, kept in Code Agent's data directory.
  * Claude reaches it through board tools on the "workspace" MCP server. After each turn a recorder —
  * a cheap model with structured output, run in the background — records what the turn settled:
- * decisions, confirmed issues, finished work. Its changes are applied directly, marked unconfirmed,
- * and can be undone from the transcript. Imports normalise outside lists the same way.
+ * decisions, confirmed issues, finished work. Its changes are applied directly and can be undone
+ * from the transcript. Imports normalise outside lists the same way.
  */
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -78,7 +78,7 @@ function tracker() {
   return {
     before,
     create(wsId: string, p: Partial<BoardItem> & Pick<BoardItem, 'kind' | 'title'>, source: BoardSource, logText?: string) {
-      const it = createItem(wsId, { ...p, unconfirmed: source.kind === 'auto' ? true : p.unconfirmed }, source, logText);
+      const it = createItem(wsId, p, source, logText);
       before.push({ wsId, id: it.id, before: null });
       return it;
     },
@@ -86,7 +86,7 @@ function tracker() {
       const cur = findBoardItem(wsId, id);
       if (!cur) return false;
       if (!before.some((b) => b.wsId === wsId && b.id === id)) before.push({ wsId, id, before: cur });
-      updateItem(wsId, id, { ...p, unconfirmed: by.auto ? true : cur.unconfirmed }, logText, by);
+      updateItem(wsId, id, p, logText, by);
       return true;
     },
   };
@@ -485,7 +485,6 @@ register({
   createItem: (wsId, p, source) => createItem(wsId, p, source),
   updateItem: (wsId, id, p, logText) => updateItem(wsId, id, p, logText),
   deleteItem,
-  confirmItem: (wsId, id) => updateItem(wsId, id, { unconfirmed: false }, '已确认'),
   undoBoardRecord,
   stopBoardCheck,
   findingToBoard,
