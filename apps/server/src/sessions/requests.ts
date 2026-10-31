@@ -12,7 +12,7 @@ import type {
 import { parseRule } from '@code-agent/shared/rules';
 import { app, update } from '../state';
 import { addItem, emit, findItem, patchItem, rt } from './registry';
-import { waitForUser, type Live } from './live';
+import { stoppingTurn, waitForUser, type Live } from './live';
 import { proposedDiff, toolDetail, toolName, mcpParts } from './describe';
 import { cwdOf } from './options';
 
@@ -93,6 +93,8 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
   o.signal.removeEventListener('abort', onAbort);
   if (a.behavior === 'deny') {
     patchItem(l.sid, item.id, { status: 'denied', right: undefined, provenance: '已被你拒绝', ...(a.message ? { denialMessage: a.message } : {}) });
+    // Denied and stopped: the turn stops as with the interrupt button.
+    if (a.interrupt) await stoppingTurn(l);
     return { behavior: 'deny', message: a.message || 'The user denied this action.', interrupt: !!a.interrupt, toolUseID: o.toolUseID };
   }
   const kept = a.always?.updates ?? [];

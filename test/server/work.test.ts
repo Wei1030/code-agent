@@ -59,6 +59,15 @@ test('a subagent moved from the foreground to the background is listed by its na
   await env.c.call('stop', sid);
 });
 
+test('a foreground subagent whose answer says it left something "在后台" is no background task (review R8)', async () => {
+  env.model.script(/^派个说在后台的子代理$/, [[use('Agent', { description: '启动开发服务器', subagent_type: 'general-purpose', prompt: '子任务：启动服务器', run_in_background: false })], [say('好')]]);
+  env.model.script(/子任务：启动服务器/, [[say('开发服务器已在后台运行于 3000 端口')]]);
+  const sid = await env.start('派个说在后台的子代理');
+  await env.turns(sid);
+  await sleep(1500);
+  assert.deepEqual((await env.rt(sid)).background.filter((b) => b.status === 'running'), [], 'nothing left running');
+});
+
 test('a command in the background: listed, finishes with a notice, its output can be read (FR-BG-01, FR-BG-04, FR-BG-05)', async () => {
   env.model.script(/后台跑/, [(r) => shell('node -e "setTimeout(() => console.log(\'bench done 42\'), 1500)"', { run_in_background: true })(r), [say('在后台跑着')]]);
   const sid = await env.start('后台跑', { mode: 'bypassPermissions' });

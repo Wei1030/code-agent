@@ -76,6 +76,24 @@ test('an interrupt takes back an "after tools" message Claude has not read: it w
   await until(() => reached('收回的话'), 'it runs once the user says so');
 });
 
+test('denying a tool call and stopping takes back an "after tools" message too: it waits for the user\'s choice (review R7)', async () => {
+  env.model.script(/^要审批的命令$/, [shell(sleepCmd(2)), [say('不该走到这里')]]);
+  env.model.script(/^拒绝后收回的话$/, [[say('拒绝后收回的话 读到了')]]);
+  // The tests' profile asks before running a command.
+  const sid = await env.start('要审批的命令');
+  const req = await until(async () => (await env.rt(sid)).request, 'the command asks for approval');
+  await env.c.call('send', sid, '拒绝后收回的话', { priority: 'next' });
+  assert.equal((await env.rt(sid)).queue[0]?.sent, true);
+  await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
+  await env.turns(sid);
+  await sleep(3000);
+  assert.ok(!reached('拒绝后收回的话'), 'Claude does not run it by itself');
+  assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, !!m.sent]), [['拒绝后收回的话', false]], 'it waits, and can change again');
+  assert.equal(((await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string }).stopReason, 'interrupted');
+  await env.c.call('runQueued', sid);
+  await until(() => reached('拒绝后收回的话'), 'it runs once the user says so');
+});
+
 test('"after tools" still unread when the turn ends goes first, as its own turn; the queue waits for it (review R2)', async () => {
   env.model.script(/^慢慢说完$/, [[say('这一段说得很慢，'.repeat(30))]], { slow: 40 });
   env.model.script(/^工具后补一句$/, [[say('补一句 读到了')]]);

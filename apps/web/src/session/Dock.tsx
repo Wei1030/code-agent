@@ -55,7 +55,7 @@ function kept(suggestions: SuggestedUpdate[], lines: Line[]): SuggestedUpdate[] 
 
 const VALID_RULE = /^[\w-]+(\(.*\))?$/s;
 
-export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingRequest, { kind: 'approval' }> }) {
+export function ApprovalPanel({ sid, req, onStop }: { sid: string; req: Extract<PendingRequest, { kind: 'approval' }>; onStop: () => void }) {
   const t = useT();
   const waited = useSince(req.since);
   const showRaw = useApp((s) => s.prefs.showRawSdkText);
@@ -172,7 +172,7 @@ export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingR
         </div>
       </div>
       <div className="dpanel-foot">
-        <Button variant="danger-outline" icon="stop" onClick={() => api.respondApproval(sid, req.id, { behavior: 'deny', interrupt: true })}>{t('拒绝并停止本轮')}</Button>
+        <Button variant="danger-outline" icon="stop" onClick={() => { api.respondApproval(sid, req.id, { behavior: 'deny', interrupt: true }); onStop(); }}>{t('拒绝并停止本轮')}</Button>
         <span className="grow" />
         <Button variant={choice === 'deny' ? 'danger' : 'primary'} onClick={submit} disabled={choice === 'always' && !alwaysOk}>{primaryLabel}</Button>
       </div>

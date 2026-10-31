@@ -84,7 +84,8 @@ export function SessionPage() {
             {(sum.requests?.length ?? 0) > 1 && (
               <div className="more-requests"><Icon name="bell" size={14} />{t('Claude 同时提出了 {n} 个请求：处理完这一个，下一个会接着出现', { n: sum.requests!.length })}</div>
             )}
-            {rt.request?.kind === 'approval' && <ApprovalPanel key={rt.request.id} sid={id} req={rt.request} />}
+            {/* Stopping the turn there asks about the queue, as the interrupt button does. */}
+            {rt.request?.kind === 'approval' && <ApprovalPanel key={rt.request.id} sid={id} req={rt.request} onStop={() => setReceipt(1)} />}
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'plan' && <PlanReviewBar key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}

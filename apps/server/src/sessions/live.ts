@@ -508,18 +508,27 @@ export function addContext(sid: string, m: Outgoing) {
   l.input.push({ ...userMessage(m, id), shouldQuery: false });
 }
 
+/**
+ * The user stops the turn (the interrupt button, or denying a tool call and stopping): the turn ends
+ * interrupted, so the queue waits for the user's choice. Messages handed over after tool calls would
+ * run as soon as it stops; they are taken back to wait with the queue. One already started is part
+ * of the stopped turn.
+ */
+export async function stoppingTurn(l: Live) {
+  if (l.turn) l.turn.interrupted = true;
+  for (const id of [...l.afterTools.keys()]) {
+    const cancelled = await (l.q as unknown as CancelsMessages).cancelAsyncMessage(id).catch(() => false);
+    if (cancelled) takeBack(l, id);
+  }
+}
+
 export async function interruptTurn(sid: string) {
   const l = lives.get(sid);
   if (!l?.turn) return;
   l.turn.interrupted = true;
   for (const [, resolve] of l.pending) resolve({ behavior: 'deny', message: 'The user interrupted.', interrupt: true });
   l.pending.clear();
-  // Messages handed over after tool calls would run once the turn stops: they wait with the queue
-  // for the user's choice instead. One already started is part of the stopped turn.
-  for (const id of [...l.afterTools.keys()]) {
-    const cancelled = await (l.q as unknown as CancelsMessages).cancelAsyncMessage(id).catch(() => false);
-    if (cancelled) takeBack(l, id);
-  }
+  await stoppingTurn(l);
   try {
     await l.q.interrupt();
   } catch (e) {
@@ -906,6 +915,8 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
       ...(hookWhy ? { provenance: hookWhy, right: undefined } : !item.provenance && !denied && !track.name.startsWith('mcp__workspace__') ? { provenance: '无需审批' } : {}),
       ...(r.output ? { output: r.output } : {}), ...(r.right !== undefined ? { right: r.right } : {}), ...(r.images ? { images: r.images } : {}),
     };
+    // Claude Code's own word that the task goes on in the background (not words in a subagent's answer).
+    let movedOn = false;
     if (item.agent) {
       const text = typeof b.content === 'string' ? b.content : Array.isArray(b.content) ? (b.content as Block[]).map((x) => x.text ?? '').join('\n') : '';
       // An agent started in the background answers with instructions meant for the model only.
@@ -917,16 +928,18 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
         p.right = '后台运行';
         if (launched) p.output = undefined;
       }
+      movedOn = launched && !isError;
     }
     const started = structured as { backgroundTaskId?: string; taskId?: string } | undefined;
     if (((track.name === 'Bash' || track.name === 'PowerShell') && started?.backgroundTaskId) || ((track.name === 'Monitor' || track.name === 'Workflow') && started?.taskId && !isError)) {
       p.status = 'running';
       p.background = true;
       p.right = '后台运行';
+      movedOn = true;
     }
     // A foreground task (subagent or command) ends with its result; one that went to the background goes on.
     const task = l.taskByTool.get(b.tool_use_id);
-    if (task && p.background) toBackground(l, task);
+    if (task && movedOn) toBackground(l, task);
     if (task && !p.background) {
       l.foreground.delete(task);
       const cur = rt(l.sid)!.background.find((x) => x.id === task);
