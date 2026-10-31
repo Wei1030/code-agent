@@ -58,7 +58,9 @@ export class Server {
       ...(this.opts.web ? {} : { CODE_AGENT_WEB_DIST: path.dirname(stub) }),
       ...this.opts.env,
     });
-    const p = spawn(process.execPath, ['--import', 'tsx', path.join(ROOT, 'apps/server/src/start.ts')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    // TEST_SERVER_ENTRY runs the tests on a build instead (npm run build:bin: …/bin/code-agent.mjs).
+    const entry = process.env.TEST_SERVER_ENTRY;
+    const p = spawn(process.execPath, entry ? [entry] : ['--import', 'tsx', path.join(ROOT, 'apps/server/src/start.ts')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
     this.proc = p;
     const take = (b: Buffer) => {
       const s = b.toString();
