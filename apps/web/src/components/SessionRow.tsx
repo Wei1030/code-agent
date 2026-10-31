@@ -95,7 +95,7 @@ export function useSessionActions() {
   };
 }
 
-/** Open a workspace: its latest running session (see api.latestSession), or a new one when it has none. */
+/** Open a workspace: the session last open there, else its latest running one (see api.latestSession), or a new one when it has none. */
 export function useOpenWorkspace() {
   const nav = useNavigate();
   return (workspaceId: string) => {

@@ -26,7 +26,7 @@ export function AppShell() {
     <div className="app">
       <TopBar />
       <nav className="navrail" aria-label={t('主导航')}>
-        <button className={cx(onSessions && 'active')} onClick={goToSessions} title={t('进入所选工作区最近的会话；选择「所有工作区」时进入总览')}><Icon name="chat" size={22} />{t('会话')}</button>
+        <button className={cx(onSessions && 'active')} onClick={goToSessions} title={t('进入所选工作区上次打开的会话；选择「所有工作区」时进入总览')}><Icon name="chat" size={22} />{t('会话')}</button>
         <BoardNav />
         <NavLink to="/mcp" className={({ isActive }) => cx(isActive && 'active')}><Icon name="plug" size={22} />MCP</NavLink>
         <NavLink to="/skills" className={({ isActive }) => cx(isActive && 'active')}><Icon name="spark" size={22} />{t('技能')}</NavLink>

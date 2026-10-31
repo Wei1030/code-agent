@@ -67,6 +67,20 @@ test('the inspector starts closed; a rail icon opens its tab, a second click clo
   await p.close();
 });
 
+test('back to the sessions from another page: the session last open there, not the latest running one', async () => {
+  const older = await done('先开的会话', [[say('好')]]);
+  const newer = await done('后开的会话', [[say('好')]]);
+  assert.ok((env.c.sessions.get(newer)?.lastActive ?? 0) >= (env.c.sessions.get(older)?.lastActive ?? 0));
+  const p = await env.page(`/s/${older}`);
+  await p.waitEl('.shead .title', '先开的会话');
+  await p.click('nav a', '看板');
+  await p.waitFor(`location.pathname === '/board'`, 'the board');
+  await p.click('nav button, nav a', '会话');
+  await p.waitFor(`location.pathname === ${JSON.stringify(`/s/${older}`)}`, 'the session last open');
+  noPageErrors(p);
+  await p.close();
+});
+
 test('a long conversation shows its end; scrolling to the top loads earlier turns (FR-SES-06)', async () => {
   env.model.script(/^长对话 \d+$/, [[say('答')]]);
   const sid = await env.start('长对话 1');
@@ -125,7 +139,8 @@ test('"/" lists commands and filters; "@" lists files and sessions; picking inse
   await p.fill('.c-input', '');
   await p.type('.c-input', '看看 @');
   await p.waitEl('.palette', 'a.txt');
-  assert.ok(await p.has('.palette', '折叠行'), 'sessions of the workspace are listed');
+  const latest = [...env.c.sessions.values()].filter((s) => s.workspaceId === env.ws && s.id !== sid && !s.draft).sort((a, b) => b.lastActive - a.lastActive)[0];
+  assert.ok(await p.has('.palette', latest.title), 'sessions of the workspace are listed');
   await p.type('.c-input', 'a.t');
   await p.waitEl('.palette .pi', 'a.txt');
   await p.press('Enter');

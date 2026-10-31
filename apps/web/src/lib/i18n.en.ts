@@ -1315,7 +1315,7 @@ export const EN: Record<string, string> = {
   "这次调用为什么被执行 / 拒绝": "Why this call was run / denied",
   "这次运行的会话不在示例数据里": "This run's session isn't in the sample data",
   "这段时间还没有用量": "No usage in this period yet",
-  "进入所选工作区最近的会话；选择「所有工作区」时进入总览": "Opens the selected workspace's most recent session; with \"All workspaces\" selected, opens the overview",
+  "进入所选工作区上次打开的会话；选择「所有工作区」时进入总览": "Opens the session you last had open in the selected workspace; with \"All workspaces\" selected, opens the overview",
   "进入规划模式时代替默认的规划要求交给 Claude；留空用 Claude Code 默认的。": "Given to Claude in place of the default planning instructions when entering Plan mode; leave empty to use Claude Code's default.",
   "进程": "Process",
   "进程 {p}": "PID {p}",

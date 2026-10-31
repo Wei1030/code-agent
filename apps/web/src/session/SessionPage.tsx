@@ -2,7 +2,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { SessionRuntime, SessionSummary } from '../api/types';
-import { api } from '../api';
+import { api, rememberViewed } from '../api';
 import { Icon } from '../components/Icon';
 import { Button } from '../components/ui';
 import { StateBadge, useSessionActions } from '../components/SessionRow';
@@ -51,6 +51,10 @@ export function SessionPage() {
     setReceipt(0);
     setRewindAt(null);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Coming back to this workspace's sessions opens this one again.
+  useEffect(() => {
+    if (sum?.workspaceId) rememberViewed(sum.workspaceId, id);
+  }, [id, sum?.workspaceId]);
   // Messages from other sessions count as read while this session is open.
   useEffect(() => {
     if (sum?.peerUnread) void api.markRead(id);

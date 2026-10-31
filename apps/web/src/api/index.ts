@@ -32,6 +32,13 @@ function sendRaw(data: string) {
   else outbox.push(data);
 }
 
+/** The session last open on the session page, per workspace (in this browser). */
+const VIEWED_KEY = 'ca.viewed';
+const viewedSessions = (): Record<string, string> => JSON.parse(localStorage.getItem(VIEWED_KEY) ?? '{}');
+export function rememberViewed(workspaceId: string, sid: string) {
+  localStorage.setItem(VIEWED_KEY, JSON.stringify({ ...viewedSessions(), [workspaceId]: sid }));
+}
+
 /** Calls that happen in the background (typing, palettes): no progress bar for them. */
 const QUIET = new Set(['setState', 'markRead', 'listCommands', 'listFiles', 'listDir', 'suggestChecks']);
 
@@ -240,6 +247,9 @@ const local: Local = {
   },
   latestSession(workspaceId) {
     const list = useApp.getState().sessions.filter((s) => s.workspaceId === workspaceId && !s.jobId);
+    // The session last open here, while it is still there.
+    const last = viewedSessions()[workspaceId];
+    if (last && list.some((s) => s.id === last)) return last;
     const newest = (xs: typeof list) => (xs.length ? xs.reduce((a, b) => (b.lastActive > a.lastActive ? b : a)).id : null);
     return newest(list.filter((s) => s.live && !s.draft)) ?? newest(list.filter((s) => s.draft)) ?? newest(list);
   },
