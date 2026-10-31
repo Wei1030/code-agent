@@ -77,7 +77,7 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
     kind: 'approval', id: randomUUID(), toolItemId: item.id, tool: toolName(name), title, reason,
     ...(command ? { command } : {}), ...(typeof input.description === 'string' ? { description: input.description } : {}),
     ...(diff ? { diff } : {}),
-    ...(agentType ? { agent: agentType } : {}), ...(background ? { background: true } : {}),
+    ...(agentType ? { agent: agentType, agentTask: o.agentID } : {}), ...(background ? { background: true } : {}),
     suggestions,
     ...(o.defaultToNo ? { defaultToNo: true } : {}),
     ...(o.decisionReason ? { decisionReason: o.decisionReason } : {}),
@@ -96,7 +96,8 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
     patchItem(l.sid, item.id, { status: 'denied', right: undefined, provenance: '已被你拒绝', ...(a.message ? { denialMessage: a.message } : {}) });
     // Denied and stopped: the turn stops as with the interrupt button, also for a foreground subagent,
     // which shares the turn's stop. A background subagent's stops that subagent only; the turn goes on.
-    if (a.interrupt && !background) await stoppingTurn(l);
+    // Asked now: the subagent may have gone to the background while the request waited.
+    if (a.interrupt && !(o.agentID && inBackground(l, o.agentID))) await stoppingTurn(l);
     return { behavior: 'deny', message: a.message || 'The user denied this action.', interrupt: !!a.interrupt, toolUseID: o.toolUseID };
   }
   const kept = a.always?.updates ?? [];

@@ -1261,4 +1261,10 @@ function toBackground(l: Live, taskId: string, description?: string) {
   l.foreground.delete(taskId);
   if (rt(l.sid)!.background.some((b) => b.id === taskId)) return;
   upsertBg(l.sid, fg ?? { id: taskId, kind: 'agent', name: description ?? '', status: 'running', startedAt: Date.now() });
+  // A request its subagent (or one inside it) left waiting comes from the background now.
+  const moved = l.asks.map((a) => (a.kind === 'approval' && a.agentTask && !a.background && inBackground(l, a.agentTask) ? { ...a, background: true } : a));
+  if (moved.some((a, i) => a !== l.asks[i])) {
+    l.asks = moved;
+    showAsks(l);
+  }
 }

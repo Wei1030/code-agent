@@ -125,6 +125,19 @@ test('denying a foreground subagent\'s tool call and stopping stops the turn: an
   assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, !!m.sent]), [['前台停下后收回的话', false]], 'it waits for the user\'s choice');
 });
 
+test('a foreground subagent moved to the background while its request waits: denying and stopping it then stops that subagent only (review R12)', async () => {
+  env.model.script(/^前台转后台再拒绝$/, [[use('Agent', { description: '先在前台的子代理', subagent_type: 'general-purpose', prompt: '子任务：转后台前要审批', run_in_background: false })], [say('主线程接着说，'.repeat(60))]], { slow: 50 });
+  env.model.script(/子任务：转后台前要审批/, [shell(sleepCmd(1)), [say('子代理完了')]]);
+  const sid = await env.start('前台转后台再拒绝');
+  const req = await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent ? r : undefined; }, 'the subagent asks', 30_000);
+  assert.equal(req.background, undefined, 'in the foreground when it asks');
+  await env.c.call('backgroundAll', sid);
+  await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.id === req.id && r.background; }, 'the waiting request now comes from the background', 15_000);
+  await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'footer'), 'the turn ends', 60_000);
+  assert.notEqual(((await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string }).stopReason, 'interrupted', 'the turn goes on and ends as usual');
+});
+
 test('"after tools" still unread when the turn ends goes first, as its own turn; the queue waits for it (review R2)', async () => {
   env.model.script(/^慢慢说完$/, [[say('这一段说得很慢，'.repeat(30))]], { slow: 40 });
   env.model.script(/^工具后补一句$/, [[say('补一句 读到了')]]);
