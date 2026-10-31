@@ -3,7 +3,7 @@
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, finished, type Env } from '../harness/env';
-import { say, shell, sleepCmd, type Req } from '../harness/fake-model';
+import { say, shell, sleepCmd, use, type Req } from '../harness/fake-model';
 import { until, sleep } from '../harness/client';
 import type { Item } from '@code-agent/shared/types';
 
@@ -92,6 +92,18 @@ test('denying a tool call and stopping takes back an "after tools" message too: 
   assert.equal(((await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string }).stopReason, 'interrupted');
   await env.c.call('runQueued', sid);
   await until(() => reached('拒绝后收回的话'), 'it runs once the user says so');
+});
+
+test('denying a subagent\'s tool call and stopping stops that subagent only: the turn goes on and ends as usual (review R10)', async () => {
+  // The subagent goes to the background; the turn goes on writing slowly while the subagent asks.
+  env.model.script(/^派子代理后接着说$/, [[use('Agent', { description: '要审批的子代理', subagent_type: 'general-purpose', prompt: '子任务：跑个要审批的命令' })], [say('主线程还在说，'.repeat(60))]], { slow: 50 });
+  env.model.script(/子任务：跑个要审批的命令/, [shell(sleepCmd(1)), [say('子代理完了')]]);
+  const sid = await env.start('派子代理后接着说');
+  const req = await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent ? r : undefined; }, 'the subagent asks', 30_000);
+  await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'footer'), 'the turn ends', 60_000);
+  const footer = (await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string };
+  assert.notEqual(footer.stopReason, 'interrupted', 'the turn was not stopped');
 });
 
 test('"after tools" still unread when the turn ends goes first, as its own turn; the queue waits for it (review R2)', async () => {

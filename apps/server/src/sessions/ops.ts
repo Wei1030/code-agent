@@ -55,6 +55,15 @@ export function enqueue(sid: string, m: Outgoing, priority: QueuedMessage['prior
 }
 
 /**
+ * Whether "after tools" may go to Claude Code now. Not a message from another session: its sender
+ * waits for the receipt of a turn of its own. Not while something holds the queue (a review in
+ * progress): unread when the turn ends, Claude Code would start it by itself, beside the review.
+ */
+function mayHandOver(sid: string, m: Outgoing) {
+  return !m.from && !m.meta && !blockers.some((f) => f(sid));
+}
+
+/**
  * "After tools": handed to the running turn now, which reads it once its current tool calls end (or,
  * with none left, right after the turn). Until Claude reads it, it shows in the queue, fixed.
  */
@@ -176,7 +185,7 @@ export async function send(sid: string, text: string, opts: SendOptions = {}) {
     // Not saying when, it waits in the queue for the turn to end, and can still change.
     const priority = opts.priority ?? 'later';
     if (priority === 'now') await steer(sid, m);
-    else if (priority === 'next') handOver(sid, m);
+    else if (priority === 'next' && mayHandOver(sid, m)) handOver(sid, m);
     else enqueue(sid, m, priority);
     return;
   }
@@ -294,9 +303,8 @@ register({
       keepQueued();
     }
     emit(sid, { t: 'queue', queue: r.queue.map((x) => (x.id === id ? { ...x, ...p } : x)) });
-    // A message from another session keeps its own turn: its sender waits for that turn's receipt.
     const m = queued.get(id) ?? { text: p.text ?? q.text };
-    if (p.priority === 'next' && inTurn(sid) && !m.from && !m.meta) handOver(sid, m, id);
+    if (p.priority === 'next' && inTurn(sid) && mayHandOver(sid, m)) handOver(sid, m, id);
   },
   removeQueued: (sid, id) => {
     const r = rt(sid);

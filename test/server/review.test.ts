@@ -180,6 +180,32 @@ test('a message the user sends during a review waits until the review ends (issu
   assert.ok(order.slice(0, sentAt).includes('review:passed'), `sent only after the review ended: ${order.join(', ')}`);
 });
 
+test('"after tools" sent while the author writes its last words of a review answer waits for the review to end (review R9)', async () => {
+  const sid = await changed('审核中工具后');
+  await env.c.call('resume', sid);
+  reviewer = (n) => ({ output: n === 1 ? major('第一轮问题') : { ...pass, rulings: [{ id: 'R1', status: 'verified', note: '好' }] } });
+  // This session's author ends its answer slowly, so the message comes in while it writes, no tool call left.
+  env.model.script((r) => /代码审核第 \d+ 轮打回/.test(r.prompt) && JSON.stringify(r.body.messages).includes('审核中工具后'), [
+    [use('Edit', { file_path: '{cwd}/src/calc.js', old_string: 'a + b', new_string: '(a ?? 0) + (b ?? 0)' })],
+    (r) => [use('mcp__workspace__respond_findings', { answers: [...r.prompt.matchAll(/^- (R\d+) /gm)].map((m) => ({ id: m[1], status: 'fixed', text: '改了' })) })],
+    [say('总结一下这一轮改了什么，'.repeat(60))],
+  ], { slow: 50 });
+  env.model.script(/顺便改 README/, [[say('README 改了')]]);
+  const id = (await env.c.call('startReview', sid, [], {}))!;
+  const order: string[] = [];
+  const stop = env.c.on((m) => {
+    if (m.t === 'app' && m.patch.reviews) order.push(`review:${m.patch.reviews.find((t) => t.id === id)?.status}`);
+    if (m.t === 'ev' && m.sid === sid && m.ev.t === 'item.add' && m.ev.item.kind === 'user' && m.ev.item.text === '顺便改 README') order.push('sent');
+  });
+  await until(async () => ticket(id)?.status === 'fixing' && (await env.rt(sid)).items.some((i) => i.kind === 'text' && i.streaming && /总结一下/.test(i.text)), 'the author writing its last words', 60_000);
+  await env.c.call('send', sid, '顺便改 README', { priority: 'next' });
+  assert.equal((await env.rt(sid)).queue.find((m) => m.text === '顺便改 README')?.sent, undefined, 'not handed to Claude Code while the review holds the queue');
+  await ended(id, 'passed');
+  await until(() => order.includes('sent'), 'sent at last');
+  stop();
+  assert.ok(order.slice(0, order.indexOf('sent')).includes('review:passed'), `sent only after the review ended: ${order.join(', ')}`);
+});
+
 test('the reviewer cannot change files, even with a trusted repository allowing the command (issue 10-30#4)', async () => {
   const sid = await changed('只读审核');
   env.world.write(path.join(env.repo, '.claude', 'settings.json'), { permissions: { allow: ['Bash(node -e *)', 'PowerShell(node -e *)'] } });

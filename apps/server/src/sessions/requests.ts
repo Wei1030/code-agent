@@ -93,8 +93,9 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
   o.signal.removeEventListener('abort', onAbort);
   if (a.behavior === 'deny') {
     patchItem(l.sid, item.id, { status: 'denied', right: undefined, provenance: '已被你拒绝', ...(a.message ? { denialMessage: a.message } : {}) });
-    // Denied and stopped: the turn stops as with the interrupt button.
-    if (a.interrupt) await stoppingTurn(l);
+    // Denied and stopped: the turn stops as with the interrupt button. A subagent's request stops that
+    // subagent only; the turn goes on.
+    if (a.interrupt && !o.agentID) await stoppingTurn(l);
     return { behavior: 'deny', message: a.message || 'The user denied this action.', interrupt: !!a.interrupt, toolUseID: o.toolUseID };
   }
   const kept = a.always?.updates ?? [];
