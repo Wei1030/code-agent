@@ -106,6 +106,21 @@ test('a message to an idle session starts its turn; the sender gets a receipt wi
   await until(() => env.c.sessions.get(b)?.peerUnread === 0, 'read');
 });
 
+test('a message from another session queued in a busy session and set to "after tools" keeps its own turn and its receipt (review R5)', async () => {
+  env.model.script(/^忙着的接收方$/, [shell('node -e "setTimeout(() => {}, 6000)"'), [say('忙完了')]]);
+  const b = await env.start('忙着的接收方', { mode: 'bypassPermissions' });
+  await until(async () => (await env.rt(b)).items.some((i) => i.kind === 'tool' && i.status === 'running'), 'busy');
+  env.model.script(/请忙着的接收方回答/, [[say('忙着的接收方回答：77')]]);
+  env.model.script(/^发给忙着的接收方$/, [[use('mcp__workspace__send_to_session', { session_id: b, message: '请忙着的接收方回答一个数字' })], [say('发出去了')]]);
+  env.model.script(/处理完了你的消息/, [[say('收到回执')]]);
+  const a = await env.start('发给忙着的接收方', { mode: 'bypassPermissions' });
+  const q = await until(async () => (await env.rt(b)).queue.find((m) => /请忙着的接收方回答/.test(m.text)), 'queued in the busy session');
+  await env.c.call('updateQueued', b, q.id, { priority: 'next' });
+  assert.equal((await env.rt(b)).queue.find((m) => m.id === q.id)?.sent, undefined, 'not handed over: it keeps a turn of its own');
+  await until(async () => (await peerCard(a, 'send'))?.peer?.delivery === 'handled', 'handled', 60_000);
+  await until(async () => (await users(a)).some((u) => u.from?.kind === 'receipt' && /77/.test(u.text)), 'receipt with its reply');
+});
+
 test('different permission classes: the message waits for the user; release delivers, reject tells the sender', async () => {
   await setPeer({ inbound: 'parity' });
   const b = await idle('谨慎的接收方');

@@ -9,7 +9,7 @@ import { register } from '../hub';
 import { app } from '../state';
 import { load, save } from '../store';
 import { addItem, allSummaries, closeOpen, conversationOf, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
-import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onProcessEnd, onReadAfterTools, onTurnEnd, refreshContext, sendAfterTools, sendTurn, startProcess, steer, type Outgoing } from './live';
+import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onAfterToolsTakenBack, onProcessEnd, onReadAfterTools, onTurnEnd, refreshContext, sendAfterTools, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
 import { cwdOf } from './options';
 import { lastPage, pageBefore } from './page';
@@ -68,6 +68,11 @@ onReadAfterTools((sid, id) => {
   emit(sid, { t: 'queue', queue: rt(sid)!.queue.filter((q) => q.id !== id) });
 });
 
+// Taken back unread (an interrupt): it waits with the other queued messages for the user's choice.
+onAfterToolsTakenBack((sid, id) => {
+  emit(sid, { t: 'queue', queue: rt(sid)!.queue.map((q) => (q.id === id ? { id: q.id, text: q.text, priority: q.priority, ...(q.from ? { from: q.from } : {}) } : q)) });
+});
+
 // A process that ends before Claude read them leaves them to be sent like any queued message.
 onProcessEnd((sid) => {
   const r = rt(sid);
@@ -84,10 +89,10 @@ export function addQueueBlocker(fn: (sid: string) => boolean) {
 export function pumpQueue(sid: string): boolean {
   const r = rt(sid);
   const l = live(sid);
-  // What Claude Code already holds comes by itself.
-  const first = r?.queue.find((q) => !q.sent);
-  if (!r || !l || l.turn || r.request || !first || blockers.some((f) => f(sid))) return false;
-  emit(sid, { t: 'queue', queue: r.queue.filter((q) => q !== first) });
+  // What Claude Code already holds goes first, as its own turn: the rest waits for that turn to end.
+  if (!r || !l || l.turn || r.request || !r.queue.length || r.queue.some((q) => q.sent) || blockers.some((f) => f(sid))) return false;
+  const [first] = r.queue;
+  emit(sid, { t: 'queue', queue: r.queue.slice(1) });
   const m = queued.get(first.id) ?? { text: first.text };
   forget([first.id]);
   sendTurn(sid, m);
@@ -289,7 +294,9 @@ register({
       keepQueued();
     }
     emit(sid, { t: 'queue', queue: r.queue.map((x) => (x.id === id ? { ...x, ...p } : x)) });
-    if (p.priority === 'next' && inTurn(sid)) handOver(sid, queued.get(id) ?? { text: p.text ?? q.text }, id);
+    // A message from another session keeps its own turn: its sender waits for that turn's receipt.
+    const m = queued.get(id) ?? { text: p.text ?? q.text };
+    if (p.priority === 'next' && inTurn(sid) && !m.from && !m.meta) handOver(sid, m, id);
   },
   removeQueued: (sid, id) => {
     const r = rt(sid);

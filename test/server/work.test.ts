@@ -47,6 +47,18 @@ test('a subagent\'s card shows its steps and tokens; its own requests go to the 
   assert.ok(env.model.sent(/子任务：读 a\.txt/).length >= 1);
 });
 
+test('a subagent moved from the foreground to the background is listed by its name, as a subagent (review R6)', async () => {
+  // Claude Code starts a subagent in the background unless asked to keep it in the foreground.
+  env.model.script(/^派个慢的子代理$/, [[use('Agent', { description: '慢慢查的子任务', subagent_type: 'general-purpose', prompt: '子任务：慢慢查', run_in_background: false })], [say('子代理转到后台了')]]);
+  env.model.script(/子任务：慢慢查/, [shell(sleepCmd(30)), [say('查完了')]]);
+  const sid = await env.start('派个慢的子代理', { mode: 'bypassPermissions' });
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'tool' && !!i.agent && i.backgroundable), 'a backgroundable subagent', 30_000);
+  await env.c.call('backgroundAll', sid);
+  const bg = await until(async () => (await env.rt(sid)).background.find((b) => b.kind === 'agent'), 'listed', 15_000);
+  assert.equal(bg.name, '慢慢查的子任务');
+  await env.c.call('stop', sid);
+});
+
 test('a command in the background: listed, finishes with a notice, its output can be read (FR-BG-01, FR-BG-04, FR-BG-05)', async () => {
   env.model.script(/后台跑/, [(r) => shell('node -e "setTimeout(() => console.log(\'bench done 42\'), 1500)"', { run_in_background: true })(r), [say('在后台跑着')]]);
   const sid = await env.start('后台跑', { mode: 'bypassPermissions' });

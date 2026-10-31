@@ -59,6 +59,60 @@ test('"insert now" reaches Claude at once; the running command goes on in the ba
   assert.ok(rt.background.some((b) => b.kind === 'bash' && b.status === 'running'), 'the command keeps running in the background');
 });
 
+const reached = (text: string) => env.model.requests.some((r) => r.body.messages && JSON.stringify(r.body.messages).includes(text));
+
+test('an interrupt takes back an "after tools" message Claude has not read: it waits with the queue for the user\'s choice (FR-IN-07, review R1)', async () => {
+  const sid = await busy('中断收回', 15);
+  env.model.script(/^收回的话$/, [[say('收回的话 读到了')]]);
+  await env.c.call('send', sid, '收回的话', { priority: 'next' });
+  assert.equal((await env.rt(sid)).queue[0].sent, true);
+  const left = await env.c.call('interrupt', sid);
+  assert.deepEqual(left.map((m) => m.text), ['收回的话'], 'counted on the interrupt receipt');
+  await env.turns(sid);
+  await sleep(3000);
+  assert.ok(!reached('收回的话'), 'Claude does not run it by itself');
+  assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, !!m.sent]), [['收回的话', false]], 'it waits, and can change again');
+  await env.c.call('runQueued', sid);
+  await until(() => reached('收回的话'), 'it runs once the user says so');
+});
+
+test('"after tools" still unread when the turn ends goes first, as its own turn; the queue waits for it (review R2)', async () => {
+  env.model.script(/^慢慢说完$/, [[say('这一段说得很慢，'.repeat(30))]], { slow: 40 });
+  env.model.script(/^工具后补一句$/, [[say('补一句 读到了')]]);
+  env.model.script(/^下一轮的话$/, [[say('下一轮 读到了')]]);
+  const sid = await env.start('慢慢说完');
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'text' && i.streaming), 'the last reply streaming');
+  await env.c.call('send', sid, '下一轮的话', { priority: 'later' });
+  await env.c.call('send', sid, '工具后补一句', { priority: 'next' });
+  await env.turns(sid, 3);
+  const items = (await env.rt(sid)).items;
+  assert.deepEqual(items.filter((i) => i.kind === 'user' || i.kind === 'footer').map((i) => (i.kind === 'user' ? i.text : i.kind)), ['慢慢说完', 'footer', '工具后补一句', 'footer', '下一轮的话', 'footer'], 'each its own turn, in order');
+  const after = (text: string) => items.findIndex((i) => i.kind === 'user' && i.text === text);
+  assert.ok(items.findIndex((i) => i.kind === 'text' && /补一句 读到了/.test(i.text)) > after('工具后补一句'), 'its reply in its own turn');
+  assert.ok(items.findIndex((i) => i.kind === 'text' && /下一轮 读到了/.test(i.text)) > after('下一轮的话'));
+});
+
+test('insert now with background tasks switched off still reaches Claude, once the command ends (review R3)', async () => {
+  const before = env.c.slices.env;
+  await env.c.call('setState', { env: [...before, { id: 'nobg', key: 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', value: '1', note: '' }] });
+  const sid = await busy('关了后台', 4);
+  await env.c.call('setState', { env: before });
+  await env.c.call('send', sid, '关了后台也要读到', { priority: 'now' });
+  await until(() => reached('关了后台也要读到'), 'reaches Claude', 30_000);
+  assert.ok((await env.rt(sid)).stderr.some((l) => /没能把运行中的工作转入后台/.test(l)), 'why it waited is in the log');
+});
+
+test('insert now a second into a command, before Claude Code makes it a task: it goes to the background once it is one (review R4)', async () => {
+  const sid = await busy('刚开始的命令', 30);
+  // Running, but Claude Code makes a command a task only after two or three seconds.
+  await sleep(1000);
+  const t0 = Date.now();
+  await env.c.call('send', sid, '命令刚开始时插入的话', { priority: 'now' });
+  await until(() => env.model.requests.some((r) => /命令刚开始时插入的话/.test(JSON.stringify(r.body.messages)) && /running in background|manually backgrounded/.test(JSON.stringify(r.body.messages))), 'read with the command in the background', 20_000);
+  assert.ok(Date.now() - t0 < 10_000, 'without waiting for the 30-second command');
+  assert.ok((await env.rt(sid)).background.some((b) => b.kind === 'bash' && b.status === 'running'), 'the command goes on in the background');
+});
+
 test('queued messages can be edited, re-prioritised and removed', async () => {
   const sid = await busy('编辑队列', 5);
   await env.c.call('send', sid, '原来的话', { priority: 'later' });

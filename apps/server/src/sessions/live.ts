@@ -85,6 +85,8 @@ export interface Live {
   foreground: Map<string, BgTask>;
   /** Messages handed to the running turn to read after its current tool calls, by uuid, until Claude reads them. */
   afterTools: Map<string, Outgoing>;
+  /** Commands running in the foreground when a message was put into the turn, not tasks yet: they go to the background once they are. */
+  backgroundWanted: Set<string>;
   /** API message being streamed and its blocks by index. */
   curMsg: string;
   streamIdx: Map<number, StreamItem>;
@@ -249,7 +251,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   let endedResolve!: () => void;
   l = {
     sid, q, input, cwd: opts.cwd, closing: false, turn: null, pending: new Map(), asks: [], tools: new Map(), streams: new Map(), group: null,
-    taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), foreground: new Map(), afterTools: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
+    taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), foreground: new Map(), afterTools: new Map(), backgroundWanted: new Set(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
   };
   lives.set(sid, l);
   patchSummary(sid, { live: true, draft: false, waiting: false, lastActive: Date.now() });
@@ -429,7 +431,14 @@ export async function steer(sid: string, m: Outgoing) {
   const id = randomUUID();
   showUser(sid, m, id);
   l.group = null;
-  await l.q.backgroundTasks();
+  // A command Claude Code has not made a task yet (the first second or two) goes once it is one.
+  for (const it of rt(sid)?.items ?? []) if (it.kind === 'tool' && it.status === 'running' && !it.background) l.backgroundWanted.add(it.id);
+  try {
+    await l.q.backgroundTasks();
+  } catch (e) {
+    // Background tasks switched off: the message still goes, Claude reads it when the command ends.
+    emit(sid, { t: 'stderr', line: `插入消息前没能把运行中的工作转入后台：${e instanceof Error ? e.message : String(e)}` });
+  }
   l.input.push(userMessage({ ...m, priority: 'now' }, id));
   raw(sid, 'user', `插入本轮：${(m.shown ?? m.text).slice(0, 50)}`, { uuid: id, priority: 'now' });
   return id;
@@ -453,6 +462,11 @@ const readFns: Array<(sid: string, id: string) => void> = [];
 export function onReadAfterTools(fn: (sid: string, id: string) => void) {
   readFns.push(fn);
 }
+const takenBackFns: Array<(sid: string, id: string) => void> = [];
+/** Runs when a message handed over after tool calls comes back unread (cancelled): it waits in the queue again. */
+export function onAfterToolsTakenBack(fn: (sid: string, id: string) => void) {
+  takenBackFns.push(fn);
+}
 
 /** Claude Code starts reading a message it holds: one handed over after tool calls shows there. */
 function noteRead(l: Live, id: string) {
@@ -461,13 +475,22 @@ function noteRead(l: Live, id: string) {
   l.afterTools.delete(id);
   // Read as a turn of its own when the turn it was handed to had no tool calls left.
   if (!l.turn) {
-    l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false };
+    l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false, meta: m.meta };
     emit(l.sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
   }
   l.group = null;
   showUser(l.sid, m, id);
+  for (const fn of sendFns) fn(l.sid, m);
   for (const fn of readFns) fn(l.sid, id);
 }
+
+function takeBack(l: Live, id: string) {
+  if (!l.afterTools.delete(id)) return;
+  for (const fn of takenBackFns) fn(l.sid, id);
+}
+
+/** In the SDK's Query, not in its declared types: drops a message Claude Code holds and has not started. */
+type CancelsMessages = { cancelAsyncMessage(uuid: string): Promise<boolean> };
 
 /**
  * How context Code Agent adds without showing it starts (addContext with hidden): a transcript
@@ -491,6 +514,12 @@ export async function interruptTurn(sid: string) {
   l.turn.interrupted = true;
   for (const [, resolve] of l.pending) resolve({ behavior: 'deny', message: 'The user interrupted.', interrupt: true });
   l.pending.clear();
+  // Messages handed over after tool calls would run once the turn stops: they wait with the queue
+  // for the user's choice instead. One already started is part of the stopped turn.
+  for (const id of [...l.afterTools.keys()]) {
+    const cancelled = await (l.q as unknown as CancelsMessages).cancelAsyncMessage(id).catch(() => false);
+    if (cancelled) takeBack(l, id);
+  }
   try {
     await l.q.interrupt();
   } catch (e) {
@@ -596,7 +625,10 @@ function handle(l: Live, m: SDKMessage) {
   const { sid } = l;
   // Claude Code starting a message it holds: one handed over after tool calls is read now.
   const life = m as unknown as { type: string; state?: string; command_uuid?: string };
-  if (life.type === 'command_lifecycle' && life.state === 'started' && life.command_uuid) noteRead(l, life.command_uuid);
+  if (life.type === 'command_lifecycle' && life.command_uuid) {
+    if (life.state === 'started') noteRead(l, life.command_uuid);
+    if (life.state === 'cancelled') takeBack(l, life.command_uuid);
+  }
   switch (m.type) {
     case 'stream_event':
       if (m.parent_tool_use_id) return;
@@ -851,6 +883,7 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
     if (b.type !== 'tool_result' || !b.tool_use_id) continue;
     const track = l.tools.get(b.tool_use_id);
     if (!track) continue;
+    l.backgroundWanted.delete(b.tool_use_id);
     if (parent || track.parent) {
       // A subagent's own tool call finished; nothing to show beyond its row.
       continue;
@@ -1071,14 +1104,19 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const kind: BgTask['kind'] = m.task_type === 'local_bash' ? 'bash' : m.task_type === 'local_workflow' ? 'workflow' : m.task_type === 'monitor' ? 'monitor' : 'agent';
       const task: BgTask = { id: taskId, kind, name: String(m.description ?? ''), status: 'running', startedAt: Date.now(), parent: m.parent_task_id as string | undefined };
       const card = m.tool_use_id ? findItem(sid, String(m.tool_use_id)) : undefined;
+      const foreground = card?.kind === 'tool' && card.status === 'running' && !card.background && m.is_backgrounded !== true;
       if (m.tool_use_id) {
         l.taskByTool.set(String(m.tool_use_id), taskId);
-        if (card?.kind === 'tool' && card.status === 'running' && !card.background && m.is_backgrounded !== true) patchItem(sid, card.id, { backgroundable: true });
+        if (foreground) patchItem(sid, card.id, { backgroundable: true });
       }
-      // Claude Code registers every longer command as a task, so that it can go to the background:
-      // one running in the foreground is listed only once it goes there.
+      // Claude Code registers every longer command and subagent as a task, so that it can go to the
+      // background: one running in the foreground is listed only once it goes there, as what it is.
       if (m.is_backgrounded === true || kind === 'monitor' || (kind === 'bash' && card?.kind === 'tool' && card.background)) upsertBg(sid, task);
-      else if (kind === 'bash') l.foreground.set(taskId, task);
+      else l.foreground.set(taskId, task);
+      // A message was put into the turn before this command was a task: it goes to the background now.
+      if (foreground && l.backgroundWanted.delete(String(m.tool_use_id))) {
+        l.q.backgroundTasks(String(m.tool_use_id)).catch((e) => emit(sid, { t: 'stderr', line: `没能把运行中的工作转入后台：${e instanceof Error ? e.message : String(e)}` }));
+      }
       raw(sid, 'system/task_started', String(m.description ?? ''), m);
       return;
     }
@@ -1091,6 +1129,7 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
         const st = p.status === 'completed' ? 'completed' : p.status === 'failed' ? 'failed' : p.status === 'killed' ? 'stopped' : 'running';
         upsertBg(sid, { ...cur, status: st, ...(st !== 'running' ? { endedAt: Date.now() } : {}) });
       }
+      if (p.status && p.status !== 'running') l.foreground.delete(taskId);
       raw(sid, 'system/task_updated', `${taskId} · ${p.status ?? ''}`, m);
       return;
     }
@@ -1110,6 +1149,7 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const taskId = String(m.task_id);
       const st = m.status === 'completed' ? 'completed' : m.status === 'failed' ? 'failed' : 'stopped';
       const cur = rt(sid)!.background.find((b) => b.id === taskId);
+      l.foreground.delete(taskId);
       if (cur) upsertBg(sid, { ...cur, status: st, summary: String(m.summary ?? cur.summary ?? ''), endedAt: Date.now(), ...(m.output_file ? { outputFile: String(m.output_file) } : {}) });
       const toolUse = m.tool_use_id as string | undefined;
       if (toolUse) {
