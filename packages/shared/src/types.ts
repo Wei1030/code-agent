@@ -450,7 +450,7 @@ export interface SessionRuntime {
   status: TransientStatus | null;
   /** Saved session opened without a running process. */
   readOnly: boolean;
-  /** The last turn was interrupted: its queue waits for the user to run or drop it. The next turn clears it. */
+  /** The last turn was interrupted with messages queued: they wait for the user to run or drop them. A new turn, or an empty queue, clears it. */
   queueHeld?: boolean;
   turn: number;
   tokens: number;

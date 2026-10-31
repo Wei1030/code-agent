@@ -404,13 +404,19 @@ function showUser(sid: string, m: Outgoing, id: string) {
   });
 }
 
+/** A turn begins (it may begin waiting on a request): what an interrupt held goes out after it as usual. */
+function beginTurn(l: Live, turn: Turn) {
+  l.turn = turn;
+  if (rt(l.sid)?.queueHeld) emit(l.sid, { t: 'settings', patch: { queueHeld: false } });
+}
+
 /** Start a turn with a message. The session must be live and idle. */
 export function sendTurn(sid: string, m: Outgoing): string {
   const l = lives.get(sid);
   if (!l) throw new Error('会话没有在运行');
   const id = randomUUID();
   showUser(sid, m, id);
-  l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false, meta: m.meta };
+  beginTurn(l, { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false, meta: m.meta });
   for (const fn of sendFns) fn(sid, m);
   l.group = null;
   emit(sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
@@ -475,7 +481,7 @@ function noteRead(l: Live, id: string) {
   l.afterTools.delete(id);
   // Read as a turn of its own when the turn it was handed to had no tool calls left.
   if (!l.turn) {
-    l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false, meta: m.meta };
+    beginTurn(l, { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false, meta: m.meta });
     emit(l.sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
   }
   l.group = null;
@@ -619,7 +625,7 @@ export function findToolUse(sid: string, name: string, pred: (input: Input) => b
 function ensureTurn(l: Live) {
   if (l.turn) return;
   // Claude Code started a turn by itself (a background task finished, a wake-up…).
-  l.turn = { userId: lastUserId(l.sid), startedAt: Date.now(), toolCalls: 0, interrupted: false };
+  beginTurn(l, { userId: lastUserId(l.sid), startedAt: Date.now(), toolCalls: 0, interrupted: false });
   // A request still waiting (a background subagent's) keeps the session waiting on the user.
   emit(l.sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
 }

@@ -47,12 +47,12 @@ export function reduce(rt: SessionRuntime, ev: SessionEvent, seq = 0): SessionRu
     case 'items.reset':
       return { ...rt, items: ev.items, earlier: undefined };
     case 'state':
-      // A turn starting: whatever an interrupt held goes on as usual after it.
-      return { ...rt, state: ev.state, ...(ev.state === 'running' && rt.queueHeld ? { queueHeld: false } : {}) };
+      return { ...rt, state: ev.state };
     case 'request':
       return { ...rt, request: ev.request };
     case 'queue':
-      return { ...rt, queue: ev.queue };
+      // Nothing left waiting: nothing is held either.
+      return { ...rt, queue: ev.queue, ...(rt.queueHeld && !ev.queue.length ? { queueHeld: false } : {}) };
     case 'tasks':
       return { ...rt, tasks: ev.tasks };
     case 'background':

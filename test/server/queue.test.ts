@@ -143,6 +143,39 @@ test('a foreground subagent moved to the background while its request waits: den
   assert.ok(!(await env.rt(sid)).queueHeld, 'nothing to ask about the queue');
 });
 
+test('an interrupt with nothing queued holds nothing: a message queued while the process restarts asks nothing and goes out (review I-3)', async () => {
+  env.model.script(/^停下时没排队$/, [shell(sleepCmd(30)), [say('不该走到这里')]]);
+  env.model.script(/^重启时排的$/, [[say('重启时排的 读到了')]]);
+  const sid = await env.start('停下时没排队', { mode: 'bypassPermissions' });
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'tool' && i.status === 'running'), 'the command runs');
+  await env.c.call('interrupt', sid);
+  await until(async () => (await env.rt(sid)).state === 'idle', 'stopped');
+  assert.ok(!(await env.rt(sid)).queueHeld, 'nothing waits, so nothing is held');
+  // Another endpoint's model: the process restarts, and a message sent meanwhile queues.
+  const switching = env.c.call('setModel', sid, 'ep:ep-test:model-two');
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'notice' && /已换到/.test(i.text)), 'restarting');
+  await env.c.call('send', sid, '重启时排的', {});
+  assert.ok(!(await env.rt(sid)).queueHeld);
+  await switching;
+  await until(() => reached('重启时排的'), 'it goes out once the process runs');
+});
+
+test('a turn that starts while a background subagent\'s request waits lets go of what the interrupt held (review I-3)', async () => {
+  // The main thread writes slowly after starting a subagent in the background, which asks only later.
+  env.model.script(/^停下后子代理才问$/, [[use('Agent', { description: '晚点才问的子代理', subagent_type: 'general-purpose', prompt: '子任务：过一会儿才要审批' })], [say('主线程慢慢说，'.repeat(60))]], { slow: 100 });
+  env.model.script(/子任务：过一会儿才要审批/, [(r) => [say('子代理先想一想，'.repeat(60)), ...shell(sleepCmd(1))(r)], [say('子代理完了')]], { slow: 100 });
+  env.model.script(/^新的一轮$/, [[say('新的一轮 读到了')]]);
+  const sid = await env.start('停下后子代理才问');
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'text' && i.streaming), 'the main thread writing');
+  await env.c.call('send', sid, '停下时排着的', { priority: 'later' });
+  await env.c.call('interrupt', sid);
+  await until(async () => (await env.rt(sid)).queueHeld, 'the queue waits for the user');
+  await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent; }, 'the subagent asks after the stop', 30_000);
+  assert.equal((await env.rt(sid)).state, 'requires_action');
+  await env.c.call('send', sid, '新的一轮', {});
+  await until(async () => !(await env.rt(sid)).queueHeld, 'a turn started: nothing is held any more');
+});
+
 test('"after tools" still unread when the turn ends goes first, as its own turn; the queue waits for it (review R2)', async () => {
   env.model.script(/^慢慢说完$/, [[say('这一段说得很慢，'.repeat(30))]], { slow: 40 });
   env.model.script(/^工具后补一句$/, [[say('补一句 读到了')]]);
