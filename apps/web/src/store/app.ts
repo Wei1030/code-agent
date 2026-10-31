@@ -115,7 +115,7 @@ export const useApp = create<AppState>((set, get) => ({
     browserNotifications: true,
     notifyRequests: true,
     notifyTurnDone: true,
-    notifyBackground: true,
+    notifyBackground: false,
   },
   profiles: [],
   rules: [],

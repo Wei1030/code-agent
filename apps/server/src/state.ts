@@ -23,7 +23,7 @@ function defaults(): AppSlices {
     workspaces: [],
     prefs: {
       uiLanguage: 'auto', responseLanguage: 'ui', responseLanguageCustom: '', numberStyle: 'intl', showRawSdkText: false,
-      browserNotifications: true, notifyRequests: true, notifyTurnDone: true, notifyBackground: true,
+      browserNotifications: true, notifyRequests: true, notifyTurnDone: true, notifyBackground: false,
     },
     profiles: [DEFAULT_PROFILE],
     rules: [],
