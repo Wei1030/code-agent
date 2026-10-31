@@ -6,7 +6,7 @@ import path from 'node:path';
 
 process.env.CODE_AGENT_HOME = mkdtempSync(path.join(os.tmpdir(), 'ca-gitbash-'));
 delete process.env.CLAUDE_CODE_GIT_BASH_PATH;
-const { findGitBash, gitBash } = await import('./claude/gitbash');
+const { findGitBash, GIT_BASH } = await import('./claude/gitbash');
 const { processEnv } = await import('./claude/files');
 const { app } = await import('./state');
 
@@ -19,32 +19,19 @@ function fakeGit() {
   }
   return { root, bash: path.join(root, 'bin', 'bash.exe') };
 }
-const none = () => undefined;
 
-test('Git Bash is found from the git.exe Git Bash puts first on PATH, not only from cmd\\git.exe', () => {
+test('Git Bash is found from the git.exe Git Bash puts first on PATH, not only from cmd\\git.exe; without git, none', () => {
   const g = fakeGit();
   const other = mkdtempSync(path.join(os.tmpdir(), 'ca-other-'));
-  assert.equal(findGitBash({ pathVar: `${other};${path.join(g.root, 'mingw64', 'bin')}`, defaults: [], installPath: none }), g.bash);
-  assert.equal(findGitBash({ pathVar: path.join(g.root, 'cmd'), defaults: [], installPath: none }), g.bash);
+  assert.equal(findGitBash(`${other};${path.join(g.root, 'mingw64', 'bin')}`, []), g.bash);
+  assert.equal(findGitBash(path.join(g.root, 'cmd'), []), g.bash);
+  assert.equal(findGitBash(other, []), undefined);
 });
 
-test('Git Bash is found through the registry when git is not on PATH; nowhere, there is none', () => {
-  const g = fakeGit();
-  assert.equal(findGitBash({ pathVar: '', defaults: [], installPath: () => g.root }), g.bash);
-  assert.equal(findGitBash({ pathVar: os.tmpdir(), defaults: [], installPath: none }), undefined);
-  assert.equal(findGitBash({ pathVar: '', defaults: [], installPath: () => path.join(g.root, 'gone') }), undefined);
-});
-
-test('a CLAUDE_CODE_GIT_BASH_PATH of the user wins; one naming no bash.exe is reported and replaced', { skip: process.platform !== 'win32' }, () => {
-  const g = fakeGit();
-  app.env = [{ id: 'v1', key: 'CLAUDE_CODE_GIT_BASH_PATH', value: g.bash, note: '' }];
-  assert.deepEqual(gitBash(), { path: g.bash, source: 'settings' });
-  assert.equal(processEnv().CLAUDE_CODE_GIT_BASH_PATH, g.bash);
-  const gone = path.join(g.root, 'nowhere', 'bash.exe');
-  app.env = [{ id: 'v1', key: 'CLAUDE_CODE_GIT_BASH_PATH', value: gone, note: '' }];
-  const s = gitBash();
-  assert.equal(s?.missing, gone);
-  // What Code Agent finds instead goes to Claude Code; with nothing found, the variable stays as set.
-  assert.equal(processEnv().CLAUDE_CODE_GIT_BASH_PATH, s?.path ?? gone);
+test('Claude Code gets the Git Bash found at the start; one set on the settings page replaces it', { skip: process.platform !== 'win32' }, () => {
+  app.env = [];
+  assert.equal(processEnv().CLAUDE_CODE_GIT_BASH_PATH, GIT_BASH?.path);
+  app.env = [{ id: 'v1', key: 'CLAUDE_CODE_GIT_BASH_PATH', value: 'X:\\mine\\bash.exe', note: '' }];
+  assert.equal(processEnv().CLAUDE_CODE_GIT_BASH_PATH, 'X:\\mine\\bash.exe');
   app.env = [];
 });

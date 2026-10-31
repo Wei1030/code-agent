@@ -973,12 +973,10 @@ export interface Provider {
 
 /** The Git Bash Claude Code gets on Windows: its Bash and Monitor tools need one. */
 export interface GitBash {
-  /** bash.exe passed as CLAUDE_CODE_GIT_BASH_PATH; none: Claude runs commands in PowerShell only. */
+  /** CLAUDE_CODE_GIT_BASH_PATH; none: Claude runs commands in PowerShell only. */
   path?: string;
-  /** settings: the variable on the settings page; environment: Code Agent's own environment; found: looked up by Code Agent. */
-  source: 'settings' | 'environment' | 'found' | 'none';
-  /** A CLAUDE_CODE_GIT_BASH_PATH that names no bash.exe: Claude Code would ignore it. */
-  missing?: string;
+  /** environment: set where Code Agent was started; found: looked up by Code Agent when it started. */
+  source: 'environment' | 'found' | 'none';
 }
 
 export interface McpBehavior {

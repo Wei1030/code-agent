@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { Workspace } from '@code-agent/shared/types';
 import { app } from '../state';
-import { GIT_BASH_VAR, gitBash } from './gitbash';
+import { GIT_BASH, GIT_BASH_VAR } from './gitbash';
 
 /** CLAUDE_CONFIG_DIR as Code Agent was started with: what the "environment variable" choice means. */
 export const ENV_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR;
@@ -157,13 +157,13 @@ export function processEnv(endpoint?: EndpointTarget): Record<string, string | u
     if (r.otelPrompts) env.OTEL_LOG_USER_PROMPTS = '1';
     if (r.otelTools) env.OTEL_LOG_TOOL_DETAILS = '1';
   }
+  // The Git Bash found when Code Agent started; one set on the settings page replaces it below.
+  if (GIT_BASH?.source === 'found') env[GIT_BASH_VAR] = GIT_BASH.path;
   for (const v of app.env) {
     const k = v.key.trim();
     // An endpoint's address and token are its own; the variables cannot point it elsewhere.
     if (k && !(endpoint && (CREDENTIAL_VARS.includes(k) || k === 'ANTHROPIC_BASE_URL'))) env[k] = v.value;
   }
-  const bash = gitBash()?.path;
-  if (bash) env[GIT_BASH_VAR] = bash;
   // The model's own window wins over a variable set for every process.
   if (endpoint?.contextWindow) env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(endpoint.contextWindow);
   return env;
