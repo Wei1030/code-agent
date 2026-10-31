@@ -737,6 +737,8 @@ function onToolUse(l: Live, id: string, name: string, input: Input) {
     item.background = !!input.run_in_background;
   }
   if ((name === 'Bash' || name === 'PowerShell') && input.run_in_background) item.background = true;
+  // A monitor and a workflow always run in the background.
+  if (name === 'Monitor' || name === 'Workflow') item.background = true;
   // File tools link to the file preview, Read with the lines it read.
   const fp = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : undefined;
   if (fp && FILE_TOOLS.has(name)) {
@@ -838,7 +840,8 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
         if (launched) p.output = undefined;
       }
     }
-    if ((track.name === 'Bash' || track.name === 'PowerShell') && (structured as { backgroundTaskId?: string } | undefined)?.backgroundTaskId) {
+    const started = structured as { backgroundTaskId?: string; taskId?: string } | undefined;
+    if (((track.name === 'Bash' || track.name === 'PowerShell') && started?.backgroundTaskId) || ((track.name === 'Monitor' || track.name === 'Workflow') && started?.taskId && !isError)) {
       p.status = 'running';
       p.background = true;
       p.right = '后台运行';

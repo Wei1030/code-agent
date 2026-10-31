@@ -35,6 +35,25 @@ test('thinking and tool calls between answers fold into one line, opened on clic
   await p.close();
 });
 
+test('a task started in the background stands on its own: the steps before and after it are lines of their own (FR-BG-01)', async () => {
+  env.model.script(/^后台单列$/, [
+    [think('先看看'), use('Read', { file_path: '{cwd}/a.txt' })],
+    (r) => shell('node -e "setTimeout(() => console.log(\'bench done\'), 1500)"', { run_in_background: true })(r),
+    [use('Grep', { pattern: 'x', path: '{cwd}/src' })],
+    [say('命令在后台跑着，我接着看别的')],
+  ]);
+  const sid = await env.start('后台单列', { mode: 'bypassPermissions' });
+  await env.turns(sid);
+  const p = await env.page(`/s/${sid}`);
+  await p.waitEl('.transcript-inner > .tcard', '后台运行');
+  const order = await p.eval<string[]>(`[...document.querySelector('.transcript-inner').children].map((e) => ['umsg', 'steps', 'tcard', 'atext'].find((c) => e.classList.contains(c))).filter(Boolean)`);
+  assert.deepEqual(order, ['umsg', 'steps', 'tcard', 'steps', 'atext']);
+  assert.deepEqual((await p.texts('.transcript-inner > .steps .counts')), ['思考 1 次 · 工具调用 1 次', '工具调用 1 次'], 'the card does not count as a step of either line');
+  await p.waitEl('.transcript-inner > .tcard', '后台已完成', 60_000);
+  noPageErrors(p);
+  await p.close();
+});
+
 test('the inspector starts closed; a rail icon opens its tab, a second click closes it', async () => {
   const sid = await done('检查器', [[say('好')]]);
   const p = await env.page(`/s/${sid}`);

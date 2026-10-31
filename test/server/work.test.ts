@@ -58,6 +58,16 @@ test('a command in the background: listed, finishes with a notice, its output ca
   assert.match(outText, /bench done 42/);
 });
 
+test('a monitor runs in the background: its card goes on until the monitor ends (FR-BG-01)', async () => {
+  env.model.script(/^盯着输出$/, [[use('Monitor', { description: '等它打印 ready', timeout_ms: 30000, command: 'node -e "setTimeout(() => console.log(\'ready\'), 1500)"' })], [say('盯着')]]);
+  const sid = await env.start('盯着输出', { mode: 'bypassPermissions' });
+  await env.turns(sid);
+  const card = (await env.rt(sid)).items.find((i): i is Tool => i.kind === 'tool' && i.tool === 'Monitor');
+  assert.ok(card?.background, 'shown as a task in the background');
+  assert.notEqual(card!.status, 'error', card!.right);
+  await until(async () => ((await env.rt(sid)).items.find((i) => i.id === card!.id) as Tool).right === '后台已完成', 'done once the monitor ends', 60_000);
+});
+
 test('stopping a background task (FR-BG-02)', async () => {
   env.model.script(/后台长任务/, [(r) => shell(sleepCmd(60), { run_in_background: true })(r), [say('跑着')]]);
   const sid = await env.start('后台长任务', { mode: 'bypassPermissions' });

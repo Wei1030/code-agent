@@ -23,7 +23,8 @@ const TOOL_ICON: Record<string, string> = {
 
 /** What Claude does between two replies: thinking and tool calls. */
 type Step = Extract<Item, { kind: 'thinking' | 'tool' | 'toolgroup' }>;
-const isStep = (it: Item): it is Step => it.kind === 'thinking' || it.kind === 'tool' || it.kind === 'toolgroup';
+/** A task Claude starts in the background is no step: it stands on its own, and the steps after it start a new line. */
+const isStep = (it: Item): it is Step => it.kind === 'thinking' || (it.kind === 'tool' && !it.background) || it.kind === 'toolgroup';
 
 /** Items in order, the steps between two replies (or anything else) taken together. */
 function blocks(items: Item[]): Array<Item | Step[]> {
@@ -56,8 +57,8 @@ export function Transcript({ rt, onRewind, onFork }: { rt: SessionRuntime; onRew
 const toolName = (tool: string) => (tool.startsWith('mcp__') ? tool.split('__').slice(2).join('__') || tool : tool);
 
 /**
- * Thinking and tool calls up to Claude's next reply: one line saying how many, until opened.
- * While they are still going on, the line says what Claude is doing.
+ * Thinking and tool calls up to Claude's next reply (or a task it starts in the background): one
+ * line saying how many, until opened. While they are still going on, the line says what Claude is doing.
  */
 function Steps({ steps, rt, wsId, live }: { steps: Step[]; rt: SessionRuntime; wsId: string; live: boolean }) {
   const t = useT();
