@@ -201,7 +201,7 @@ test('the board check floats over the chat while it runs: shrink, settings, stop
   await p.click('.board-check.small');
   await p.waitEl('.board-check-foot');
   await p.click('.board-check .btn[title="看板设置"]');
-  await p.waitEl('.modal', '每轮对话结束后自动记录');
+  await p.waitEl('.modal', '整理条目用的模型');
   await p.click('.modal .btn', '完成');
   await p.click('.board-check-foot .btn', '停止分析');
   await p.gone('.board-check');

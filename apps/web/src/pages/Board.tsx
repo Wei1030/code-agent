@@ -1,6 +1,6 @@
 /**
  * 看板 — a workspace's features, issues and notes. Claude reads and writes it through its board tools;
- * after each turn the recorder adds what was settled (marked 待确认 until the user confirms it).
+ * items the recorder added are marked 待确认 until the user confirms them.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -8,7 +8,7 @@ import type { BoardItem, BoardKind, BoardStatus, Effort } from '../api/types';
 import type { ImportRow } from '../api';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
-import { Button, Check, Chip, Field, Modal, Seg, Select, Tabs, Toggle } from '../components/ui';
+import { Button, Check, Chip, Field, Modal, Seg, Select, Tabs } from '../components/ui';
 import { linkify } from '../components/BoardLink';
 import { SessionLink } from '../session/Transcript';
 import { useApp } from '../store/app';
@@ -61,13 +61,13 @@ export function Board() {
     : STATUSES[kind].map((s) => ({ title: t(STATUS_LABEL[s]), items: list.filter((x) => x.status === s) }));
   const pick = (id: string) => { setSelId(id); setParams({ ws: wsId, item: id }, { replace: true }); };
 
-  const intro = t('这个工作区要做的功能、发现的问题和值得记住的笔记。Claude 可以查看和修改看板；每轮对话结束后，后台会把新的决定、确认的问题和完成的工作记下来。数据保存在 Code Agent 的数据目录，不放进仓库。');
+  const intro = t('这个工作区要做的功能、发现的问题和值得记住的笔记。Claude 可以查看和修改看板。数据保存在 Code Agent 的数据目录，不放进仓库。');
   if (!wsId) {
     return (
       <div className="page"><div className="page-inner full">
         <div className="page-title"><h1>{t('看板')}</h1></div>
         <p className="page-sub">{intro}</p>
-        <NoWorkspace text={t('看板按工作区记录。添加一个工作区后，就能在这里新建、导入条目，Claude 也会在对话后自动记录。')} />
+        <NoWorkspace text={t('看板按工作区记录。添加一个工作区后，就能在这里新建、导入条目。')} />
       </div></div>
     );
   }
@@ -90,7 +90,7 @@ export function Board() {
           <span className="grow" />
           <Button icon="download" onClick={() => api.boardMarkdown(wsId).then((md) => download(`board-${app.workspaces.find((w) => w.id === wsId)?.name ?? wsId}.md`, md, 'text/markdown;charset=utf-8'))}>{t('导出')}</Button>
           <Button icon="upload" onClick={() => setDialog('import')}>{t('导入')}</Button>
-          <Button icon="gear" title={t('自动记录、识别用的模型和思考强度')} onClick={() => setDialog('settings')}>{t('设置')}</Button>
+          <Button icon="gear" title={t('导入时整理条目用的模型和思考强度')} onClick={() => setDialog('settings')}>{t('设置')}</Button>
           <Button variant="primary" icon="plus" onClick={() => setDialog('new')}>{t('新建')}</Button>
         </div>
         {view !== 'unconfirmed' && (
@@ -103,7 +103,7 @@ export function Board() {
             {list.length === 0 && (
               <div className="empty" style={{ padding: 18 }}>
                 <b>{view === 'unconfirmed' ? t('没有待确认的条目') : q ? t('没有匹配的条目') : t('还没有{k}', { k: t(KIND_LABEL[kind]) })}</b>
-                {view !== 'unconfirmed' && !q && t('在对话里说「记到看板」，或者等后台自动记录；也可以点「新建」或「导入」。')}
+                {view !== 'unconfirmed' && !q && t('在对话里说「记到看板」，也可以点「新建」或「导入」。')}
               </div>
             )}
             {groups.filter((g) => g.items.length).map((g) => (
@@ -405,7 +405,7 @@ function ImportDialog({ wsId, onClose, onDone }: { wsId: string; onClose: () => 
   );
 }
 
-/** The board's settings: the recorder and the model it runs on. Also opened from a session's board check. */
+/** The board's settings: the model that organizes imported items. Also opened from a session's board check. */
 export function BoardSettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const s = useApp((x) => x.boardSettings);
@@ -415,11 +415,7 @@ export function BoardSettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title={t('看板设置')} width={560} onClose={onClose} footer={<Button variant="primary" onClick={onClose}>{t('完成')}</Button>}>
       <div className="col" style={{ gap: 14 }}>
-        <div>
-          <Toggle on={s.recorder} onChange={(v) => set({ recorder: v })} label={t('每轮对话结束后自动记录')} />
-          <div className="hint" style={{ marginTop: 4, lineHeight: 1.6 }}>{t('只记你拍板的决定、确认过的问题和完成的工作，讨论中的想法不记；优先更新已有条目。直接写进看板并标为「待确认」，对话里可以一键撤销。')}</div>
-        </div>
-        <Field label={t('后台识别用的模型')} hint={t('自动记录和导入时整理条目都用它。在后台运行，不拖慢会话；选便宜的模型、较低的思考强度就够了。')}>
+        <Field label={t('整理条目用的模型')} hint={t('导入时用它把来源整理成条目，并和看板上已有的条目查重。选便宜的模型、较低的思考强度就够了。')}>
           <div className="row" style={{ gap: 8 }}>
             <Select value={s.recorderModel} className="w-240" icon="cpu"
               renderValue={(o) => o?.label ?? (s.recorderModel.replace(/^ep:[^:]+:/, '') || t('未选择'))}
