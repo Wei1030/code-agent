@@ -1,14 +1,17 @@
 /**
- * 看板 — a workspace's features, issues and notes. Claude reads and writes it through its board tools.
+ * 看板 — a workspace's features, issues and notes. Claude reads and writes it through its board tools;
+ * the page shows an item and changes only its priority, a feature's open decisions, and deletes
+ * features and notes.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { BoardItem, BoardKind, BoardStatus, Effort } from '../api/types';
+import type { BoardItem, BoardKind, Effort } from '../api/types';
 import type { ImportRow } from '../api';
 import { api } from '../api';
 import { Icon } from '../components/Icon';
-import { Button, Check, Chip, Field, Modal, Seg, Select, Tabs } from '../components/ui';
+import { Button, Chip, Field, Modal, Seg, Select, Tabs } from '../components/ui';
 import { linkify } from '../components/BoardLink';
+import { Markdown } from '../components/Markdown';
 import { SessionLink } from '../session/Transcript';
 import { useApp } from '../store/app';
 import { NoWorkspace } from '../components/NoWorkspace';
@@ -16,7 +19,7 @@ import { EFFORT_LABEL } from '../lib/catalog';
 import { effortFor, effortOptions, modelOptions, takesEffort } from '../lib/models';
 import { CLOSED, KIND_ICON, KIND_LABEL, STATUSES, STATUS_LABEL, STATUS_TONE } from '../lib/board';
 import { relTime } from '../lib/format';
-import { cx, download, uid } from '../lib/util';
+import { cx, download } from '../lib/util';
 import { useT } from '../lib/i18n';
 
 const PRIORITY = { high: '高', normal: '中', low: '低' } as const;
@@ -132,16 +135,15 @@ export function Board() {
 
 // ------------------------------------------------------------------ detail
 
+/** Deleted from the page: features and notes; an issue goes only through Claude. */
+const DELETABLE: Record<BoardKind, boolean> = { feature: true, issue: false, note: true };
+
 function ItemDetail({ item, onDeleted }: { item: BoardItem; onDeleted: () => void }) {
   const t = useT();
   const nav = useNavigate();
   const sessions = useApp((s) => s.sessions);
-  const [title, setTitle] = useState(item.title);
-  const [body, setBody] = useState(item.body);
-  const [task, setTask] = useState('');
-  const [decision, setDecision] = useState('');
-  useEffect(() => { setTitle(item.title); setBody(item.body); }, [item.title, item.body]);
-  const upd = (p: Partial<BoardItem>, log?: string) => api.updateItem(item.workspaceId, item.id, p, log);
+  const ws = item.workspaceId;
+  const upd = (p: Partial<BoardItem>, log?: string) => api.updateItem(ws, item.id, p, log);
   const srcSession = item.source.sessionId ? sessions.find((s) => s.id === item.source.sessionId) : undefined;
   const source = {
     manual: t('你手动新建'),
@@ -163,44 +165,48 @@ function ItemDetail({ item, onDeleted }: { item: BoardItem; onDeleted: () => voi
             <Icon name={KIND_ICON[item.kind]} size={16} className="muted" />
             <b className="mono">{item.id}</b>
             <Chip>{t(KIND_LABEL[item.kind])}</Chip>
+            <Chip tone={STATUS_TONE[item.status]}>{t(STATUS_LABEL[item.status])}</Chip>
             <span className="grow" />
-            <Select<BoardStatus> size="sm" value={item.status} className="w-120" onChange={(v) => upd({ status: v }, t('状态改为「{s}」', { s: t(STATUS_LABEL[v]) }))}
-              options={STATUSES[item.kind].map((s) => ({ value: s, label: t(STATUS_LABEL[s]) }))} />
             <Select<BoardItem['priority']> size="sm" value={item.priority} className="w-120" onChange={(v) => upd({ priority: v }, t('优先级改为「{p}」', { p: t(PRIORITY[v]) }))} renderValue={(o) => <>{t('优先级')} · {o?.label}</>}
               options={(['high', 'normal', 'low'] as const).map((p) => ({ value: p, label: t(PRIORITY[p]) }))} />
-            <Button size="sm" variant="ghost" icon="trash" title={t('删除')} onClick={remove} />
+            {DELETABLE[item.kind] && <Button size="sm" variant="ghost" icon="trash" title={t('删除')} onClick={remove} />}
           </div>
-          <input className="input board-title" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title.trim() && title !== item.title && upd({ title: title.trim() }, t('改了标题'))} />
-          <Field label={item.kind === 'feature' ? t('目标') : item.kind === 'issue' ? t('现象和证据') : t('内容')}>
-            <textarea className="textarea" rows={4} value={body} onChange={(e) => setBody(e.target.value)} onBlur={() => body !== item.body && upd({ body }, t('改了内容'))} />
-          </Field>
+          <h3 className="board-title">{linkify(item.title, ws)}</h3>
+          {item.body.trim() && (
+            <>
+              <h4>{item.kind === 'feature' ? t('目标') : item.kind === 'issue' ? t('现象和证据') : t('内容')}</h4>
+              <Markdown text={item.body} wsId={ws} className="md board-body" />
+            </>
+          )}
 
-          {item.kind === 'feature' && (
+          {item.tasks.length > 0 && (
             <>
               <h4>{t('任务')}<span className="right">{item.tasks.filter((x) => x.done).length}/{item.tasks.length}</span></h4>
-              {item.tasks.map((x) => (
-                <div key={x.id} className="board-task">
-                  <Check on={x.done} onChange={(v) => upd({ tasks: item.tasks.map((y) => (y.id === x.id ? { ...y, done: v } : y)) }, v ? t('完成任务：{x}', { x: x.text }) : undefined)} label={<span className={cx(x.done && 'done')}>{linkify(x.text, item.workspaceId)}</span>} />
-                  <span className="grow" />
-                  <Button size="sm" variant="ghost" icon="x" title={t('删除任务')} onClick={() => upd({ tasks: item.tasks.filter((y) => y.id !== x.id) })} />
-                </div>
-              ))}
-              <input className="input sm" placeholder={t('添加任务，回车保存')} value={task} onChange={(e) => setTask(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && task.trim()) { upd({ tasks: [...item.tasks, { id: uid('t'), text: task.trim(), done: false }] }); setTask(''); } }} />
+              <ul className="board-tasks">
+                {item.tasks.map((x) => (
+                  <li key={x.id} className={cx(x.done && 'done')}>
+                    <span className="tick">{x.done && <Icon name="check" size={11} />}</span>
+                    <span>{linkify(x.text, ws)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
+          {item.decisions.length > 0 && (
+            <>
               <h4>{t('决定')}<span className="right">{t('{n} 个待定', { n: item.decisions.filter((d) => !d.outcome).length })}</span></h4>
               {item.decisions.map((d) => (
                 <div key={d.id} className="board-decision">
-                  <span className="q">{d.text}</span>
-                  {d.outcome ? <span className="a"><Icon name="check" size={13} className="st-ok" />{d.outcome}</span>
-                    : <input className="input sm" placeholder={t('待定 · 填写结论后回车')} onKeyDown={(e) => {
+                  <span className="q">{linkify(d.text, ws)}</span>
+                  {d.outcome ? <span className="a"><Icon name="check" size={13} className="st-ok" />{linkify(d.outcome, ws)}</span>
+                    : item.kind === 'feature' ? <input className="input sm" placeholder={t('待定 · 填写结论后回车')} onKeyDown={(e) => {
                       const v = (e.target as HTMLInputElement).value.trim();
                       if (e.key === 'Enter' && !e.nativeEvent.isComposing && v) upd({ decisions: item.decisions.map((y) => (y.id === d.id ? { ...y, outcome: v } : y)) }, t('决定：{q} → {a}', { q: d.text, a: v }));
-                    }} />}
+                    }} />
+                    : <span className="muted">{t('待定')}</span>}
                 </div>
               ))}
-              <input className="input sm" placeholder={t('添加一个要决定的问题，回车保存')} value={decision} onChange={(e) => setDecision(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && decision.trim()) { upd({ decisions: [...item.decisions, { id: uid('d'), text: decision.trim() }] }); setDecision(''); } }} />
             </>
           )}
         </div>
@@ -237,7 +243,7 @@ function ItemDetail({ item, onDeleted }: { item: BoardItem; onDeleted: () => voi
             })}
           </div>
           <div className="hint" style={{ marginTop: 10 }}>
-            {t('在对话里提到 {id} 时会显示成链接。', { id: item.id })}
+            {t('在对话里提到 {id} 时会显示成链接。要改内容，在对话里让 Claude 改。', { id: item.id })}
             <button className="link-btn" onClick={() => nav(`/s/${item.sessions[item.sessions.length - 1] ?? ''}`)} hidden={!item.sessions.length}>{t('打开最近的会话')}</button>
           </div>
         </div>

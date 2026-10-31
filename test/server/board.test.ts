@@ -152,7 +152,7 @@ test('the recorder stays off when switched off, and for interrupted turns', asyn
 test('Claude\'s board tools: search, create, a wrong status refused (custom feature 看板)', async () => {
   env.model.script(/用看板工具/, [
     [use('mcp__workspace__board_search', { query: '金额' })],
-    [use('mcp__workspace__board_create', { kind: 'feature', title: 'Claude 建的功能', body: '由 Claude 新建' })],
+    [use('mcp__workspace__board_create', { kind: 'feature', title: 'Claude 建的功能', body: '由 Claude 新建', decisions: [{ text: '先做哪一页？' }] })],
     [use('mcp__workspace__board_update', { id: 'I-1', status: 'doing' })],
     [say('好')],
   ]);
@@ -161,6 +161,7 @@ test('Claude\'s board tools: search, create, a wrong status refused (custom feat
   const created = board().find((b) => b.title === 'Claude 建的功能');
   assert.ok(created);
   assert.equal(created!.source.kind, 'agent');
+  assert.deepEqual(created!.decisions.map((d) => [d.text, d.outcome]), [['先做哪一页？', undefined]], 'created with its open decision');
   const results = JSON.stringify(env.model.sent(/用看板工具/).at(-1)!.body.messages);
   assert.match(results, /I-1/, 'search found the issue');
   assert.equal(board().find((b) => b.id === 'I-1')?.status, 'open', 'an issue cannot be "doing"');
@@ -189,6 +190,30 @@ test('Claude writes a body only over the version it has read: not unread, not ch
   await env.turns(sid, 2);
   assert.match(JSON.stringify(env.model.sent(/^改正文二$/).at(-1)!.body.messages), /it has changed since you read it/);
   assert.equal(body(), '用户后来又改了');
+});
+
+test('Claude rewrites a task or decision list only over the version it has read: rename, remove, reopen, settle (custom feature 看板)', async () => {
+  const item = await env.c.call('createItem', env.ws, {
+    kind: 'feature', title: '列表整张替换',
+    tasks: [{ id: 'ta', text: '写接口', done: true }, { id: 'tb', text: '写页面', done: false }, { id: 'tc', text: '多余的任务', done: false }],
+    decisions: [{ id: 'da', text: '用哪种分页？' }],
+  }, { kind: 'manual' });
+  env.model.script(/^改列表$/, [
+    [use('mcp__workspace__board_update', { id: item.id, tasks: [{ text: '写接口', done: true }] })],
+    [use('mcp__workspace__board_get', { id: item.id })],
+    [use('mcp__workspace__board_update', {
+      id: item.id, tasks: [{ text: '写接口', done: false }, { text: '写列表页面' }], decisions: [{ text: '用哪种分页？', outcome: '游标分页' }], note: '整理任务，定了分页方式',
+    })],
+    [say('好')],
+  ]);
+  const sid = await env.start('改列表');
+  await env.turns(sid);
+  assert.match(JSON.stringify(env.model.sent(/^改列表$/).at(-1)!.body.messages), /Nothing changed: the task list replaces the whole old one and you have not read it/);
+  const now = board().find((b) => b.id === item.id)!;
+  assert.deepEqual(now.tasks.map((t) => [t.text, t.done]), [['写接口', false], ['写列表页面', false]], 'reopened, renamed, removed');
+  assert.equal(now.tasks[0].id, 'ta', 'a task with the same text keeps its id');
+  assert.deepEqual(now.decisions.map((d) => [d.id, d.text, d.outcome]), [['da', '用哪种分页？', '游标分页']], 'the open decision is settled, not added again');
+  assert.ok(now.log.some((l) => /定了分页方式/.test(l.text)));
 });
 
 test('the board needs nothing in the system prompt: its tools ask Claude to cite items by id (custom feature 看板)', async () => {

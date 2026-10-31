@@ -17,7 +17,7 @@ before(async () => {
 });
 after(() => env?.close());
 
-test('board: a new item from the dialog, then its status changed; the rail counts unfinished features and issues (custom feature 看板)', async () => {
+test('board: a new item from the dialog; the rail counts unfinished features and issues (custom feature 看板)', async () => {
   // Features to start or in progress, and issues neither fixed nor declined; never notes.
   const unfinished = () => env.c.slices.board.filter((b) => b.workspaceId === env.ws
     && (b.kind === 'feature' ? b.status === 'todo' || b.status === 'doing' : b.kind === 'issue' && b.status !== 'fixed' && b.status !== 'wontfix')).length;
@@ -32,18 +32,59 @@ test('board: a new item from the dialog, then its status changed; the rail count
   await p.waitEl('.modal');
   await p.type('.modal input', '列表分页');
   await p.click('.modal .btn.primary', '新建');
-  await until(() => env.c.slices.board.find((b) => b.title === '列表分页'), 'created');
-  await counted();
-  await p.waitEl('.board-detail');
-  await p.click('.board-detail .select-btn', '待开始');
-  await p.click('.menu-item', '进行中');
-  await until(() => env.c.slices.board.find((b) => b.title === '列表分页')?.status === 'doing', 'status changed');
+  const created = await until(() => env.c.slices.board.find((b) => b.title === '列表分页'), 'created');
+  await p.waitEl('.board-detail .board-title', '列表分页');
   await counted();
   const before = unfinished();
-  await p.click('.board-detail .select-btn', '进行中');
-  await p.click('.menu-item', '已完成');
+  await env.c.call('updateItem', env.ws, created.id, { status: 'done' }, '状态 → 已完成');
   await until(() => unfinished() === before - 1, 'done');
   await counted();
+  noPageErrors(p);
+  await p.close();
+});
+
+test('board: the page shows an item; a feature takes its priority, an open decision\'s outcome and deletion, an issue only its priority, a note its priority and deletion (custom feature 看板)', async () => {
+  const f = await env.c.call('createItem', env.ws, {
+    kind: 'feature', title: '只读的功能', body: '目标写在**这里**',
+    tasks: [{ id: 'ta', text: '做完的任务', done: true }, { id: 'tb', text: '没做的任务', done: false }], decisions: [{ id: 'da', text: '要不要分页？' }],
+  }, { kind: 'manual' });
+  const i = await env.c.call('createItem', env.ws, { kind: 'issue', title: '只读的问题', body: '现象', decisions: [{ id: 'db', text: '要不要修？' }] }, { kind: 'manual' });
+  const n = await env.c.call('createItem', env.ws, { kind: 'note', title: '只读的笔记', body: '内容' }, { kind: 'manual' });
+  const item = (id: string) => env.c.slices.board.find((b) => b.workspaceId === env.ws && b.id === id);
+  const p = await env.page(`/board?ws=${env.ws}&item=${f.id}`);
+  const fields = () => p.eval<number>(`document.querySelectorAll('.ext-detail input, .ext-detail textarea').length`);
+  const setPriority = async (label: string) => { await p.click('.board-detail .select-btn', '优先级'); await p.click('.menu-item', label); };
+
+  await p.waitEl('.board-detail .board-title', '只读的功能');
+  await p.waitEl('.board-body b', '这里');
+  assert.deepEqual(await p.texts('.board-tasks li'), ['做完的任务', '没做的任务'], 'tasks are shown, not ticked or removed here');
+  assert.equal(await fields(), 1, 'nothing to type into but the open decision');
+  assert.deepEqual(await p.texts('.board-detail .select-btn'), ['优先级 · 中'], 'the status is shown, not chosen');
+  await setPriority('高');
+  await until(() => item(f.id)?.priority === 'high', 'the feature\'s priority');
+  await p.type('.board-decision input', '游标分页');
+  await p.press('Enter');
+  await until(() => item(f.id)?.decisions[0].outcome === '游标分页', 'the decision settled');
+  await p.waitEl('.board-decision .a', '游标分页');
+  assert.equal(await fields(), 0);
+  assert.ok(await p.has('.board-detail .btn[title="删除"]'), 'a feature can be deleted');
+
+  await p.goto(`/board?ws=${env.ws}&item=${i.id}`);
+  await p.waitEl('.board-detail .board-title', '只读的问题');
+  await p.waitEl('.board-decision .muted', '待定');
+  assert.equal(await fields(), 0, 'an issue\'s open decision is only shown');
+  assert.equal(await p.has('.board-detail .btn[title="删除"]'), false, 'an issue is not deleted from the page');
+  await setPriority('低');
+  await until(() => item(i.id)?.priority === 'low', 'the issue\'s priority');
+
+  await p.goto(`/board?ws=${env.ws}&item=${n.id}`);
+  await p.waitEl('.board-detail .board-title', '只读的笔记');
+  assert.equal(await fields(), 0);
+  await setPriority('高');
+  await until(() => item(n.id)?.priority === 'high', 'the note\'s priority');
+  await p.click('.board-detail .btn[title="删除"]');
+  await p.click('.modal-foot .btn', '删除');
+  await until(() => !item(n.id), 'the note deleted');
   noPageErrors(p);
   await p.close();
 });

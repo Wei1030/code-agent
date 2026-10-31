@@ -140,6 +140,16 @@ function matches(x: BoardItem, q: string): boolean {
 }
 
 const STATUS_ENUM = ['todo', 'doing', 'done', 'dropped', 'open', 'confirmed', 'fixing', 'fixed', 'wontfix', 'active', 'outdated'] as const;
+const DECISION = z.object({ text: z.string(), outcome: z.string().optional() });
+
+/** A new task or decision list: an entry whose text is unchanged keeps its id. */
+function keepIds<T extends { text: string }>(old: Array<T & { id: string }>, next: T[]): Array<T & { id: string }> {
+  const free = [...old];
+  return next.map((x) => {
+    const i = free.findIndex((o) => o.text === x.text);
+    return { ...x, id: i >= 0 ? free.splice(i, 1)[0].id : randomUUID().slice(0, 8) };
+  });
+}
 
 addWorkspaceTools((sid) => [
   tool('board_search', 'Search the workspace board (features F-n, issues I-n, notes N-n). Empty query lists open items. When you mention an item, write its id (e.g. F-3): the user can click it.', {
@@ -156,31 +166,40 @@ addWorkspaceTools((sid) => [
   }, { annotations: { readOnlyHint: true } }),
   tool('board_create', `Create a board item: a feature to build, an issue, a note on a decision. Search first to avoid duplicates. ${STATE_RULE}`, {
     kind: z.enum(['feature', 'issue', 'note']), title: z.string(), body: z.string().optional(), priority: z.enum(['high', 'normal', 'low']).optional(),
-    tasks: z.array(z.string()).optional(),
+    tasks: z.array(z.string()).optional(), decisions: z.array(DECISION).optional(),
   }, async (a) => {
     const ws = wsOf(sid);
     const tr = tracker();
-    const it = tr.create(ws, { kind: a.kind, title: a.title, body: a.body ?? '', priority: a.priority ?? 'normal', tasks: (a.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false })) }, { kind: 'agent', sessionId: sid }, 'Claude 新建');
+    const it = tr.create(ws, {
+      kind: a.kind, title: a.title, body: a.body ?? '', priority: a.priority ?? 'normal',
+      tasks: (a.tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false })),
+      decisions: (a.decisions ?? []).map((d) => ({ id: randomUUID().slice(0, 8), ...d })),
+    }, { kind: 'agent', sessionId: sid }, 'Claude 新建');
     saw(sid, it);
     card(sid, 'agent', tr, [{ itemId: it.id, action: 'created', text: a.kind === 'feature' ? '新功能' : a.kind === 'issue' ? '新问题' : '新笔记' }]);
     return { content: [{ type: 'text' as const, text: `Created ${it.id}. Cite it by id from now on.` }] };
   }),
-  tool('board_update', `Update a board item: status, title, body, priority, tasks, decisions. ${STATE_RULE} A body replaces the whole old one: read the item with board_get first (a body is refused over a version you have not read). Say what changed in note.`, {
+  tool('board_update', `Update a board item: status, title, body, priority, tasks, decisions. ${STATE_RULE} A body, a task list or a decision list replaces the whole old one: read the item with board_get first (they are refused over a version you have not read). add_tasks, complete_tasks and add_decisions change the current lists without reading them. Say what changed in note.`, {
     id: z.string(), status: z.enum(STATUS_ENUM).optional(), title: z.string().optional(), body: z.string().optional().describe('The whole new body; it replaces the old one'), priority: z.enum(['high', 'normal', 'low']).optional(),
+    tasks: z.array(z.object({ text: z.string(), done: z.boolean().optional() })).optional().describe('The whole new task list; it replaces the old one (to rename, remove, reopen or reorder tasks)'),
+    decisions: z.array(DECISION).optional().describe('The whole new decision list; it replaces the old one (to settle, change or remove decisions)'),
     add_tasks: z.array(z.string()).optional(), complete_tasks: z.array(z.string()).optional().describe('Task texts (or their start) to mark done'),
-    add_decisions: z.array(z.object({ text: z.string(), outcome: z.string().optional() })).optional(), note: z.string().optional().describe('What changed, for the item log'),
+    add_decisions: z.array(DECISION).optional(), note: z.string().optional().describe('What changed, for the item log'),
   }, async (a) => {
     const ws = wsOf(sid);
     const cur = findBoardItem(ws, a.id.toUpperCase());
     if (!cur) return { content: [{ type: 'text' as const, text: `No item ${a.id}.` }], isError: true };
     if (a.status && !STATUSES[cur.kind].includes(a.status)) return { content: [{ type: 'text' as const, text: `Status ${a.status} does not apply to a ${cur.kind}; use one of ${STATUSES[cur.kind].join(', ')}.` }], isError: true };
     const knew = seenAt(sid, cur) === cur.updatedAt;
-    if (a.body !== undefined && !knew) {
+    const whole = [a.body !== undefined && 'the body', a.tasks && 'the task list', a.decisions && 'the decision list'].filter((x): x is string => !!x);
+    if (whole.length && !knew) {
       const why = seenAt(sid, cur) ? 'it has changed since you read it' : 'you have not read it';
-      return { content: [{ type: 'text' as const, text: `Nothing changed: the body replaces the whole old one and ${why}. Read ${cur.id} with board_get, then write the body again.` }], isError: true };
+      const one = whole.length === 1;
+      return { content: [{ type: 'text' as const, text: `Nothing changed: ${whole.join(' and ')} ${one ? 'replaces' : 'replace'} the whole old ${one ? 'one' : 'ones'} and ${why}. Read ${cur.id} with board_get, then send ${one ? 'it' : 'them'} again.` }], isError: true };
     }
-    const tasks = [...cur.tasks.map((t) => (a.complete_tasks?.some((c) => t.text.startsWith(c) || c.startsWith(t.text)) ? { ...t, done: true } : t)), ...(a.add_tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false }))];
-    const decisions = [...cur.decisions, ...(a.add_decisions ?? []).map((d) => ({ id: randomUUID().slice(0, 8), ...d }))];
+    const base = a.tasks ? keepIds(cur.tasks, a.tasks.map((t) => ({ text: t.text, done: !!t.done }))) : cur.tasks;
+    const tasks = [...base.map((t) => (a.complete_tasks?.some((c) => t.text.startsWith(c) || c.startsWith(t.text)) ? { ...t, done: true } : t)), ...(a.add_tasks ?? []).map((t) => ({ id: randomUUID().slice(0, 8), text: t, done: false }))];
+    const decisions = [...(a.decisions ? keepIds(cur.decisions, a.decisions) : cur.decisions), ...(a.add_decisions ?? []).map((d) => ({ id: randomUUID().slice(0, 8), ...d }))];
     const p: Partial<BoardItem> = { tasks, decisions, ...(a.status ? { status: a.status } : {}), ...(a.title ? { title: a.title } : {}), ...(a.body !== undefined ? { body: a.body } : {}), ...(a.priority ? { priority: a.priority } : {}) };
     const text = a.note ?? (a.status ? `状态 → ${STATUS_LABEL[a.status]}` : '已更新');
     const tr = tracker();
