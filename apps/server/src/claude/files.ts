@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { Workspace } from '@code-agent/shared/types';
 import { app } from '../state';
+import { GIT_BASH_VAR, gitBash } from './gitbash';
 
 /** CLAUDE_CONFIG_DIR as Code Agent was started with: what the "environment variable" choice means. */
 export const ENV_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR;
@@ -161,6 +162,8 @@ export function processEnv(endpoint?: EndpointTarget): Record<string, string | u
     // An endpoint's address and token are its own; the variables cannot point it elsewhere.
     if (k && !(endpoint && (CREDENTIAL_VARS.includes(k) || k === 'ANTHROPIC_BASE_URL'))) env[k] = v.value;
   }
+  const bash = gitBash()?.path;
+  if (bash) env[GIT_BASH_VAR] = bash;
   // The model's own window wins over a variable set for every process.
   if (endpoint?.contextWindow) env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(endpoint.contextWindow);
   return env;

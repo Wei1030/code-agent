@@ -1,7 +1,7 @@
 /** The operations the server offers the UI (called over the WebSocket). */
 import type {
   AgentFile, ApprovalAnswer, Attachment, BoardItem, BoardKind, BoardSource, CommandInfo, Effort, ElicitationAnswer, PermissionMode, PlanAnswer,
-  EarlierItems, InstructionFile, Item, OutputStyle, QuestionAnswer, QueuedMessage, SessionRef, SessionRuntime, AppSlices, Workspace, WorktreeInfo,
+  EarlierItems, InstructionFile, Item, OutputStyle, QuestionAnswer, QueuedMessage, SessionRef, SessionRuntime, AppSlices, GitBash, Workspace, WorktreeInfo,
 } from './types';
 import type { FsNode } from './catalog';
 
@@ -121,6 +121,8 @@ export interface ServerApi {
   checkLogin(): void;
   /** Save (or with an empty key, remove) a compatible endpoint's token; it stays on the server. */
   setEndpointKey(endpointId: string, key: string): void;
+  /** The Git Bash Claude Code gets (null off Windows); again: look it up again (Git just installed). */
+  gitBash(again?: boolean): GitBash | null;
   /** Send one short prompt to a model to see whether its service answers. */
   /** contextWindow: what the endpoint reports for the model (the Models API's max_input_tokens), if it does. */
   testModel(modelId: string): { ok: boolean; message: string; contextWindow?: number };

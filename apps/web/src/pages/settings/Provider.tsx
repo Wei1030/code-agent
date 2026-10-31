@@ -5,10 +5,10 @@
  * Code Agent never signs anyone in to claude.ai and never touches those credentials: with a
  * subscription, the user logs in to Claude Code themselves and we only point at its config dir.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { relTime } from '../../lib/format';
-import type { Endpoint, EndpointModel, EnvVar, RuntimeSettings } from '../../api/types';
+import type { Endpoint, EndpointModel, EnvVar, GitBash, RuntimeSettings } from '../../api/types';
 import { COMMON_ENV } from '../../lib/catalog';
 import { Icon } from '../../components/Icon';
 import { Button, Chip, Field, Radio, Seg, Select, Status, Toggle } from '../../components/ui';
@@ -250,10 +250,23 @@ function EnvVars() {
     app.set({ env: [...app.env, { id: uid('e'), key: k, value: v, note: note || known?.note || '' }] });
     setK(''); setV(''); setNote('');
   };
+  // The Git Bash Claude Code gets on Windows, read again when the variables change (one may name it).
+  const [gitBash, setGitBash] = useState<GitBash | null>(null);
+  useEffect(() => {
+    let on = true;
+    void settled().then(() => api.gitBash()).then((g) => { if (on) setGitBash(g); });
+    return () => { on = false; };
+  }, [app.env]);
+  const lookAgain = () => api.gitBash(true).then((g) => {
+    setGitBash(g);
+    app.toast(g?.path ? t('找到了 Git Bash：{p}', { p: g.path }) : t('还是没找到 Git Bash'), g?.path ? 'good' : 'warn');
+  });
+  // Passed by Code Agent itself: listed with the variables; one of the user's with the same name wins.
+  const auto = gitBash?.path && gitBash.source !== 'settings' ? gitBash : null;
   return (
     <div className="panel" style={{ marginBottom: 16 }}>
       <div className="panel-head"><h3>{t('环境变量')}</h3><span className="sub">{t('启动 Claude Code 进程时传入，对所有会话生效')}</span></div>
-      {app.env.length === 0 ? (
+      {app.env.length === 0 && !auto ? (
         <div className="empty">{t('没有设置任何环境变量，Claude Code 使用自己的默认值。')}</div>
       ) : (
         <div className="panel-body" style={{ padding: 0 }}>
@@ -268,8 +281,41 @@ function EnvVars() {
                   <td className="num"><Button size="sm" variant="ghost" icon="trash" title={t('删除')} onClick={() => app.set({ env: app.env.filter((x) => x.id !== e.id) })} /></td>
                 </tr>
               ))}
+              {auto && (
+                <tr>
+                  <td className="mono" style={{ paddingLeft: 16 }}>CLAUDE_CODE_GIT_BASH_PATH</td>
+                  <td className="mono" style={{ fontSize: 12.5, wordBreak: 'break-all' }}>{auto.path}</td>
+                  <td className="muted" style={{ fontSize: 12.5 }}>{auto.source === 'found'
+                    ? t('Code Agent 自动找到的 Git Bash，Claude 的 Bash 和 Monitor 工具要用它。要换一个，添加同名变量。')
+                    : t('来自启动 Code Agent 时的环境。要换一个，添加同名变量。')}</td>
+                  <td className="num"><Chip>{auto.source === 'found' ? t('自动') : t('启动环境')}</Chip></td>
+                </tr>
+              )}
             </tbody>
           </table>
+        </div>
+      )}
+      {(gitBash?.missing || gitBash?.source === 'none') && (
+        <div className="panel-body col" style={{ borderTop: '1px solid var(--border)' }}>
+          {gitBash.missing && (
+            <div className="banner-warn">
+              <Icon name="warning" size={16} />
+              <div className="grow">
+                {t('CLAUDE_CODE_GIT_BASH_PATH 指向的 {p} 不是存在的 bash.exe，Claude Code 会忽略它。', { p: gitBash.missing })}
+                {gitBash.path && t('现在改用自动找到的 {f}。', { f: gitBash.path })}
+              </div>
+            </div>
+          )}
+          {gitBash.source === 'none' && (
+            <div className="banner-warn">
+              <Icon name="warning" size={16} />
+              <div className="grow">
+                <b>{t('没找到 Git Bash')}</b>
+                <div>{t('会话里的 Claude 只能用 PowerShell 执行命令，没有 Bash 和 Monitor 工具。装好 Git for Windows 后点「重新查找」；还是找不到的话，添加 CLAUDE_CODE_GIT_BASH_PATH，值为 Git 安装目录下 bin 文件夹里的 bash.exe。')}</div>
+              </div>
+              <Button size="sm" onClick={() => void lookAgain()}>{t('重新查找')}</Button>
+            </div>
+          )}
         </div>
       )}
       <div className="panel-body col" style={{ borderTop: '1px solid var(--border)' }}>

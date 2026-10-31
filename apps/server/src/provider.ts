@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { Endpoint, ModelInfo, Provider } from '@code-agent/shared/types';
 import { app, onWrite, set } from './state';
 import { applyConfigDir, endpointKey, ENV_CONFIG_DIR, envCredentialVar, NO_TOKEN, processEnv, setEndpointKey, systemClaude } from './claude/files';
+import { gitBash } from './claude/gitbash';
 import { recordLimits } from './usage';
 import { register } from './hub';
 import { apiErrorText } from '@code-agent/shared/catalog';
@@ -224,4 +225,5 @@ register({
     void restartStale((model) => model.startsWith(`ep:${id}:`));
   },
   testModel,
+  gitBash: (again) => gitBash(again),
 });
