@@ -140,6 +140,8 @@ export function rt(id: string): SessionRuntime | undefined {
   const items = rows.map((x) => closeOpen(JSON.parse(x.data) as Item));
   r = emptyRuntime(id, { ...(JSON.parse(meta.meta) as Partial<SessionRuntime>), items, state: 'idle', request: null, status: null, boardCheck: null, readOnly: !sum?.live });
   r.background = r.background.map((b) => (b.status === 'running' ? { ...b, status: 'stopped' as const } : b));
+  // A message handed to a process that is gone waits again like any queued one.
+  r.queue = r.queue.map(({ sent: _, ...q }) => q);
   runtimes.set(id, r);
   saved.set(id, items);
   // Items closed above differ from the rows: write them back once.

@@ -377,8 +377,8 @@ export function ReadOnlyBar({ sid, model, worktreeGone, onFork }: { sid: string;
 
 const PRIORITIES = [
   { value: 'now', label: '立即插入', desc: 'Claude 马上读到；正在运行的工作转入后台' },
-  { value: 'next', label: '工具后', desc: '当前这批工具调用结束后读取（默认）' },
-  { value: 'later', label: '下一轮', desc: '本轮结束后作为新一轮发送' },
+  { value: 'next', label: '工具后', desc: '当前这批工具调用结束后读取；交给 Claude 后不能再改' },
+  { value: 'later', label: '下一轮', desc: '本轮结束后作为新一轮发送（默认）' },
 ] as const;
 
 export function QueueList({ sid, queue, saved }: { sid: string; queue: QueuedMessage[]; saved?: boolean }) {
@@ -389,7 +389,13 @@ export function QueueList({ sid, queue, saved }: { sid: string; queue: QueuedMes
   return (
     <div className="queue">
       <div className="queue-head">{saved ? t('排队中 · {n} · 恢复会话后按顺序发出', { n: queue.length }) : t('排队中 · {n}', { n: queue.length })}</div>
-      {queue.map((q) => (
+      {queue.map((q) => q.sent ? (
+        <div key={q.id} className="qitem">
+          <Icon name="queue" size={15} className="muted" />
+          <span className="txt" title={q.text}>{q.text}</span>
+          <span className="muted">{t('已交给 Claude，工具调用结束后读取')}</span>
+        </div>
+      ) : (
         <div key={q.id} className="qitem">
           <Icon name="queue" size={15} className="muted" />
           {editing === q.id ? (

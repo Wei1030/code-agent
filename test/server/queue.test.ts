@@ -21,16 +21,31 @@ async function busy(tag: string, seconds = 4) {
   return sid;
 }
 
-test('messages sent during a turn wait, then go in order; "next" goes before "later" (FR-IN-06)', async () => {
-  env.model.script(/^排队[一二三]/, [[say('好')]]);
+test('messages sent during a turn, saying nothing or "later", wait for it to end, then go in order as turns of their own (FR-IN-06)', async () => {
+  env.model.script(/^排队[一二]/, [[say('好')]]);
   const sid = await busy('忙一会儿');
-  await env.c.call('send', sid, '排队一', { priority: 'later' });
+  await env.c.call('send', sid, '排队一', {});
   await env.c.call('send', sid, '排队二', { priority: 'later' });
-  await env.c.call('send', sid, '排队三', { priority: 'next' });
-  const q = (await env.rt(sid)).queue.map((m) => m.text);
-  assert.deepEqual(q, ['排队三', '排队一', '排队二']);
-  await env.turns(sid, 4);
-  assert.deepEqual(users((await env.rt(sid)).items), ['忙一会儿', '排队三', '排队一', '排队二']);
+  assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, m.priority, !!m.sent]), [['排队一', 'later', false], ['排队二', 'later', false]]);
+  await env.turns(sid, 3);
+  assert.deepEqual(users((await env.rt(sid)).items), ['忙一会儿', '排队一', '排队二']);
+});
+
+test('"after tools" goes to Claude at once and is read in the same turn when the running command ends, shown there (FR-IN-06)', async () => {
+  const sid = await busy('工具后测试', 5);
+  await env.c.call('send', sid, '工具后读这句', { priority: 'next' });
+  assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, m.sent]), [['工具后读这句', true]], 'handed over: it can no longer change');
+  await env.c.call('removeQueued', sid, (await env.rt(sid)).queue[0].id);
+  assert.equal((await env.rt(sid)).queue.length, 1, 'not withdrawn: Claude Code holds it');
+  await env.turns(sid);
+  // The request after the command carries its result and then the message, in the turn that ran it.
+  const req = env.model.sent(/工具后测试/).find((r) => /工具后读这句/.test(JSON.stringify(r.body.messages)));
+  assert.ok(req, 'Claude read it');
+  const body = JSON.stringify(req!.body.messages);
+  assert.ok(body.indexOf('tool_result') < body.indexOf('工具后读这句'), 'after the command\'s result');
+  const items = (await env.rt(sid)).items;
+  assert.deepEqual(items.filter((i) => i.kind === 'user' || i.kind === 'tool' || i.kind === 'footer').map((i) => (i.kind === 'user' ? i.text : i.kind)), ['工具后测试', 'tool', '工具后读这句', 'footer'], 'shown after the command, in one turn');
+  assert.deepEqual((await env.rt(sid)).queue, []);
 });
 
 test('"insert now" reaches Claude at once; the running command goes on in the background (FR-IN-06, FR-BG-03)', async () => {

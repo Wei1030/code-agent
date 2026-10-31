@@ -9,7 +9,7 @@ import { register } from '../hub';
 import { app } from '../state';
 import { load, save } from '../store';
 import { addItem, allSummaries, closeOpen, conversationOf, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
-import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onTurnEnd, refreshContext, sendTurn, startProcess, steer, type Outgoing } from './live';
+import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onProcessEnd, onReadAfterTools, onTurnEnd, refreshContext, sendAfterTools, sendTurn, startProcess, steer, type Outgoing } from './live';
 import { acquire, cancelWaiting, isWaiting, pump } from './slots';
 import { cwdOf } from './options';
 import { lastPage, pageBefore } from './page';
@@ -43,7 +43,7 @@ function titleFrom(text: string) {
   return t.length > 24 ? `${t.slice(0, 24)}…` : t || '新会话';
 }
 
-export function enqueue(sid: string, m: Outgoing, priority: QueuedMessage['priority'] = 'next', id = randomUUID()) {
+export function enqueue(sid: string, m: Outgoing, priority: QueuedMessage['priority'] = 'next', id: string = randomUUID()) {
   const r = rt(sid)!;
   queued.set(id, m);
   keepQueued();
@@ -53,6 +53,26 @@ export function enqueue(sid: string, m: Outgoing, priority: QueuedMessage['prior
   emit(sid, { t: 'queue', queue });
   return id;
 }
+
+/**
+ * "After tools": handed to the running turn now, which reads it once its current tool calls end (or,
+ * with none left, right after the turn). Until Claude reads it, it shows in the queue, fixed.
+ */
+function handOver(sid: string, m: Outgoing, id: string = randomUUID()) {
+  if (!rt(sid)!.queue.some((q) => q.id === id)) enqueue(sid, m, 'next', id);
+  if (sendAfterTools(sid, m, id)) emit(sid, { t: 'queue', queue: rt(sid)!.queue.map((q) => (q.id === id ? { ...q, priority: 'next' as const, sent: true } : q)) });
+}
+
+onReadAfterTools((sid, id) => {
+  forget([id]);
+  emit(sid, { t: 'queue', queue: rt(sid)!.queue.filter((q) => q.id !== id) });
+});
+
+// A process that ends before Claude read them leaves them to be sent like any queued message.
+onProcessEnd((sid) => {
+  const r = rt(sid);
+  if (r?.queue.some((q) => q.sent)) emit(sid, { t: 'queue', queue: r.queue.map(({ sent: _, ...q }) => q) });
+});
 
 /** Things that keep queued messages waiting although no turn runs (a review running its checks…). */
 const blockers: Array<(sid: string) => boolean> = [];
@@ -64,9 +84,10 @@ export function addQueueBlocker(fn: (sid: string) => boolean) {
 export function pumpQueue(sid: string): boolean {
   const r = rt(sid);
   const l = live(sid);
-  if (!r || !l || l.turn || r.request || !r.queue.length || blockers.some((f) => f(sid))) return false;
-  const [first, ...rest] = r.queue;
-  emit(sid, { t: 'queue', queue: rest });
+  // What Claude Code already holds comes by itself.
+  const first = r?.queue.find((q) => !q.sent);
+  if (!r || !l || l.turn || r.request || !first || blockers.some((f) => f(sid))) return false;
+  emit(sid, { t: 'queue', queue: r.queue.filter((q) => q !== first) });
   const m = queued.get(first.id) ?? { text: first.text };
   forget([first.id]);
   sendTurn(sid, m);
@@ -147,8 +168,10 @@ export async function send(sid: string, text: string, opts: SendOptions = {}) {
     return;
   }
   if (inTurn(sid)) {
-    const priority = opts.priority ?? 'next';
+    // Not saying when, it waits in the queue for the turn to end, and can still change.
+    const priority = opts.priority ?? 'later';
     if (priority === 'now') steer(sid, m);
+    else if (priority === 'next') handOver(sid, m);
     else enqueue(sid, m, priority);
     return;
   }
@@ -252,7 +275,7 @@ register({
   updateQueued: (sid, id, p) => {
     const r = rt(sid);
     const q = r?.queue.find((x) => x.id === id);
-    if (!r || !q) return;
+    if (!r || !q || q.sent) return;
     if (p.priority === 'now' && inTurn(sid)) {
       emit(sid, { t: 'queue', queue: r.queue.filter((x) => x.id !== id) });
       const m = queued.get(id) ?? { text: q.text };
@@ -266,16 +289,19 @@ register({
       keepQueued();
     }
     emit(sid, { t: 'queue', queue: r.queue.map((x) => (x.id === id ? { ...x, ...p } : x)) });
+    if (p.priority === 'next' && inTurn(sid)) handOver(sid, queued.get(id) ?? { text: p.text ?? q.text }, id);
   },
   removeQueued: (sid, id) => {
     const r = rt(sid);
     if (!r) return;
-    forget(r.queue.filter((q) => !id || q.id === id).map((q) => q.id));
-    emit(sid, { t: 'queue', queue: id ? r.queue.filter((x) => x.id !== id) : [] });
+    // Claude Code already holds what was handed over.
+    const gone = r.queue.filter((q) => !q.sent && (!id || q.id === id));
+    forget(gone.map((q) => q.id));
+    emit(sid, { t: 'queue', queue: r.queue.filter((q) => !gone.includes(q)) });
   },
   interrupt: async (sid) => {
     await interruptTurn(sid);
-    return rt(sid)?.queue ?? [];
+    return (rt(sid)?.queue ?? []).filter((q) => !q.sent);
   },
   runQueued: (sid) => void pumpQueue(sid),
   respondApproval: (sid, id, a) => void answerRequest(sid, id, a),

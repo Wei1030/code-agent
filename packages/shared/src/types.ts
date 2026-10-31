@@ -416,6 +416,8 @@ export interface QueuedMessage {
   priority: 'now' | 'next' | 'later';
   /** Sent by another session. */
   from?: PeerOrigin;
+  /** Already handed to Claude Code, which reads it once the tool calls running now end: it cannot change any more. */
+  sent?: boolean;
 }
 
 export type TransientStatus =

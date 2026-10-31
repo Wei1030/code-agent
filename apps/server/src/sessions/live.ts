@@ -83,6 +83,8 @@ export interface Live {
   taskByTool: Map<string, string>;
   /** Commands Claude Code registered as tasks while they run in the foreground: listed once they go to the background. */
   foreground: Map<string, BgTask>;
+  /** Messages handed to the running turn to read after its current tool calls, by uuid, until Claude reads them. */
+  afterTools: Map<string, Outgoing>;
   /** API message being streamed and its blocks by index. */
   curMsg: string;
   streamIdx: Map<number, StreamItem>;
@@ -247,7 +249,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   let endedResolve!: () => void;
   l = {
     sid, q, input, cwd: opts.cwd, closing: false, turn: null, pending: new Map(), asks: [], tools: new Map(), streams: new Map(), group: null,
-    taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), foreground: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
+    taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), foreground: new Map(), afterTools: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
   };
   lives.set(sid, l);
   patchSummary(sid, { live: true, draft: false, waiting: false, lastActive: Date.now() });
@@ -430,6 +432,40 @@ export function steer(sid: string, m: Outgoing) {
 }
 
 /**
+ * Hand a message to the running turn, to be read once its current tool calls end (priority "next");
+ * it shows in the transcript when Claude reads it. False when no turn runs.
+ */
+export function sendAfterTools(sid: string, m: Outgoing, id: string): boolean {
+  const l = lives.get(sid);
+  if (!l?.turn) return false;
+  l.afterTools.set(id, m);
+  l.input.push(userMessage({ ...m, priority: 'next' }, id));
+  raw(sid, 'user', `工具后：${(m.shown ?? m.text).slice(0, 50)}`, { uuid: id, priority: 'next' });
+  return true;
+}
+
+const readFns: Array<(sid: string, id: string) => void> = [];
+/** Runs when Claude reads a message handed over after tool calls. */
+export function onReadAfterTools(fn: (sid: string, id: string) => void) {
+  readFns.push(fn);
+}
+
+/** Claude Code starts reading a message it holds: one handed over after tool calls shows there. */
+function noteRead(l: Live, id: string) {
+  const m = l.afterTools.get(id);
+  if (!m) return;
+  l.afterTools.delete(id);
+  // Read as a turn of its own when the turn it was handed to had no tool calls left.
+  if (!l.turn) {
+    l.turn = { userId: id, startedAt: Date.now(), toolCalls: 0, interrupted: false };
+    emit(l.sid, { t: 'state', state: l.asks.length ? 'requires_action' : 'running' });
+  }
+  l.group = null;
+  showUser(l.sid, m, id);
+  for (const fn of readFns) fn(l.sid, id);
+}
+
+/**
  * How context Code Agent adds without showing it starts (addContext with hidden): a transcript
  * read back later knows it is not something the user wrote.
  */
@@ -554,6 +590,9 @@ function lastUserId(sid: string): string {
 
 function handle(l: Live, m: SDKMessage) {
   const { sid } = l;
+  // Claude Code starting a message it holds: one handed over after tool calls is read now.
+  const life = m as unknown as { type: string; state?: string; command_uuid?: string };
+  if (life.type === 'command_lifecycle' && life.state === 'started' && life.command_uuid) noteRead(l, life.command_uuid);
   switch (m.type) {
     case 'stream_event':
       if (m.parent_tool_use_id) return;
