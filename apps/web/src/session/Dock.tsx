@@ -172,7 +172,7 @@ export function ApprovalPanel({ sid, req, onStop }: { sid: string; req: Extract<
         </div>
       </div>
       <div className="dpanel-foot">
-        <Button variant="danger-outline" icon="stop" onClick={() => { api.respondApproval(sid, req.id, { behavior: 'deny', interrupt: true }); if (!req.agent) onStop(); }}>{t('拒绝并停止本轮')}</Button>
+        <Button variant="danger-outline" icon="stop" onClick={() => { api.respondApproval(sid, req.id, { behavior: 'deny', interrupt: true }); if (!req.background) onStop(); }}>{t('拒绝并停止本轮')}</Button>
         <span className="grow" />
         <Button variant={choice === 'deny' ? 'danger' : 'primary'} onClick={submit} disabled={choice === 'always' && !alwaysOk}>{primaryLabel}</Button>
       </div>

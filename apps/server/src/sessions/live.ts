@@ -1242,6 +1242,19 @@ function upsertBg(sid: string, b: BgTask) {
   emit(sid, { t: 'background', background: i < 0 ? [...r.background, b] : r.background.map((x) => (x.id === b.id ? b : x)) });
 }
 
+/**
+ * Whether a task (a subagent asking for something) runs in the background, itself or inside one that
+ * does: stopping it then stops that work only. A foreground subagent shares the turn's: stopping it
+ * stops the turn.
+ */
+export function inBackground(l: Live, taskId: string): boolean {
+  const listed = rt(l.sid)?.background ?? [];
+  for (let id: string | undefined = taskId; id; id = l.foreground.get(id)?.parent) {
+    if (listed.some((b) => b.id === id)) return true;
+  }
+  return false;
+}
+
 /** A task that went to the background is listed from then on; a command keeps its name and start. */
 function toBackground(l: Live, taskId: string, description?: string) {
   const fg = l.foreground.get(taskId);

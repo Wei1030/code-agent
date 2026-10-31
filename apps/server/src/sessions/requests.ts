@@ -12,7 +12,7 @@ import type {
 import { parseRule } from '@code-agent/shared/rules';
 import { app, update } from '../state';
 import { addItem, emit, findItem, patchItem, rt } from './registry';
-import { stoppingTurn, waitForUser, type Live } from './live';
+import { inBackground, stoppingTurn, waitForUser, type Live } from './live';
 import { proposedDiff, toolDetail, toolName, mcpParts } from './describe';
 import { cwdOf } from './options';
 
@@ -70,13 +70,14 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
             : `允许使用 ${name}？`;
   const reason = o.decisionReason ? `Claude Code 的判断：${o.decisionReason}` : '没有匹配的允许规则；当前会话对未授权的操作会先询问。';
   const agentType = o.agentID ? l.taskTypes.get(o.agentID) ?? '子代理' : undefined;
+  const background = !!o.agentID && inBackground(l, o.agentID);
   // Claude Code says when a lasting rule would grant more than this one call: then none is offered.
   const suggestions = o.suppressAlwaysAllowRule || o.defaultToNo ? [] : (o.suggestions ?? []).map(suggested);
   const req: PendingRequest = {
     kind: 'approval', id: randomUUID(), toolItemId: item.id, tool: toolName(name), title, reason,
     ...(command ? { command } : {}), ...(typeof input.description === 'string' ? { description: input.description } : {}),
     ...(diff ? { diff } : {}),
-    ...(agentType ? { agent: agentType } : {}),
+    ...(agentType ? { agent: agentType } : {}), ...(background ? { background: true } : {}),
     suggestions,
     ...(o.defaultToNo ? { defaultToNo: true } : {}),
     ...(o.decisionReason ? { decisionReason: o.decisionReason } : {}),
@@ -93,9 +94,9 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
   o.signal.removeEventListener('abort', onAbort);
   if (a.behavior === 'deny') {
     patchItem(l.sid, item.id, { status: 'denied', right: undefined, provenance: '已被你拒绝', ...(a.message ? { denialMessage: a.message } : {}) });
-    // Denied and stopped: the turn stops as with the interrupt button. A subagent's request stops that
-    // subagent only; the turn goes on.
-    if (a.interrupt && !o.agentID) await stoppingTurn(l);
+    // Denied and stopped: the turn stops as with the interrupt button, also for a foreground subagent,
+    // which shares the turn's stop. A background subagent's stops that subagent only; the turn goes on.
+    if (a.interrupt && !background) await stoppingTurn(l);
     return { behavior: 'deny', message: a.message || 'The user denied this action.', interrupt: !!a.interrupt, toolUseID: o.toolUseID };
   }
   const kept = a.always?.updates ?? [];

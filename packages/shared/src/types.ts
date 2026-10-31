@@ -285,6 +285,8 @@ export type PendingRequest =
     description?: string;
     diff?: { path: string; lines: string[] };
     agent?: string;
+    /** Asked by a subagent running in the background: denying and stopping stops that subagent, not the turn. */
+    background?: boolean;
     /** Claude Code's suggestions for not being asked again, as it gave them and in its order. */
     suggestions: SuggestedUpdate[];
     defaultToNo?: boolean;

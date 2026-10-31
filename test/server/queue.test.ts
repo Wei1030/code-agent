@@ -100,10 +100,29 @@ test('denying a subagent\'s tool call and stopping stops that subagent only: the
   env.model.script(/子任务：跑个要审批的命令/, [shell(sleepCmd(1)), [say('子代理完了')]]);
   const sid = await env.start('派子代理后接着说');
   const req = await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent ? r : undefined; }, 'the subagent asks', 30_000);
+  assert.equal(req.background, true, 'the request says it comes from the background');
   await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
   await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'footer'), 'the turn ends', 60_000);
   const footer = (await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string };
   assert.notEqual(footer.stopReason, 'interrupted', 'the turn was not stopped');
+});
+
+test('denying a foreground subagent\'s tool call and stopping stops the turn: an "after tools" message is taken back (review R11)', async () => {
+  // A foreground subagent shares the turn's stop: denying and stopping its request stops the turn.
+  env.model.script(/^等前台子代理$/, [[use('Agent', { description: '前台子代理', subagent_type: 'general-purpose', prompt: '子任务：前台跑个要审批的命令', run_in_background: false })], [say('不该走到这里')]]);
+  env.model.script(/子任务：前台跑个要审批的命令/, [shell(sleepCmd(1)), [say('子代理完了')]]);
+  env.model.script(/^前台停下后收回的话$/, [[say('前台停下后收回的话 读到了')]]);
+  const sid = await env.start('等前台子代理');
+  const req = await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent ? r : undefined; }, 'the subagent asks', 30_000);
+  assert.equal(req.background, undefined, 'a foreground subagent');
+  await env.c.call('send', sid, '前台停下后收回的话', { priority: 'next' });
+  assert.equal((await env.rt(sid)).queue[0]?.sent, true);
+  await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'footer'), 'the turn ends', 60_000);
+  await sleep(3000);
+  assert.equal(((await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string }).stopReason, 'interrupted');
+  assert.ok(!reached('前台停下后收回的话'), 'Claude does not run it by itself');
+  assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, !!m.sent]), [['前台停下后收回的话', false]], 'it waits for the user\'s choice');
 });
 
 test('"after tools" still unread when the turn ends goes first, as its own turn; the queue waits for it (review R2)', async () => {
