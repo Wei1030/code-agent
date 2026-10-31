@@ -13,7 +13,7 @@ import { LOGS_DIR, WORKTREES_DIR } from '../paths';
 import { configDir } from '../claude/files';
 import { allSummaries, patchSummary, summary } from './registry';
 import { closeProcess, live, liveIds } from './live';
-import { restartWhenIdle } from './slots';
+import { restartWhenIdle } from './ops';
 import { cwdOf, workspaceOf } from './options';
 
 const run = promisify(execFile);

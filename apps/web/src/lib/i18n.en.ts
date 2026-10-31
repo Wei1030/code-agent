@@ -438,7 +438,7 @@ export const EN: Record<string, string> = {
   "参数": "Arguments",
   "双方权限模式不同：一方跳过权限检查，另一方没有": "Permission modes differ: one session bypasses permissions, the other doesn't",
   "双方都跳过权限检查，或都没有跳过时直接送达；否则先等你放行。这样宽松的会话没法借一条消息，让需要审批的会话替它做事。": "Delivered directly when both sessions bypass permissions or neither does; otherwise it waits for you to release it. This way a permissive session can't use a message to get a session that needs approval to act for it.",
-  "发一句很短的提示，看服务是否回复": "Send a very short prompt to see whether the service replies",
+  "发一句很短的提示，看服务是否回复；端点报告了上下文窗口的话，顺便填上": "Send a very short prompt to see whether the service answers; if the endpoint reports a context window, fill it in too",
   "发出第一条消息后才会启动 Claude Code 进程。": "The Claude Code process starts only after the first message is sent.",
   "发消息和新建会话默认要回执：对方处理完后，结果会作为一条消息回到发起的会话。": "Messages and new sessions ask for a receipt by default: when the other session is done, the result comes back as a message to the session that sent it.",
   "发消息给会话": "Message a session",
@@ -1785,6 +1785,8 @@ export const EN: Record<string, string> = {
   "上下文窗口": "Context window",
   "上下文窗口填 token 数，比如 128k、1m 或 131072": "Enter the context window in tokens, such as 128k, 1m or 131072",
   "插入消息前没能把运行中的工作转入后台：{0}": "Could not move the running work to the background before inserting the message: {0}",
-  "模型能接收的 token 数，比如 128k、1m。不填时 Claude Code 按 200k 算，并据此决定何时自动压缩对话。改了以后，正在用这个模型的会话会在空闲时重新启动。": "How many tokens the model takes, such as 128k or 1m. Left empty, Claude Code assumes 200k and compacts the conversation by that. After a change, sessions on this model restart once they are idle.",
+  "模型能接收的 token 数，比如 128k、1m。不填时 Claude Code 按 200k 算，并据此决定何时自动压缩对话。点「测试」时，端点报告了上下文窗口的话会自动填上。改了以后，正在用这个模型的会话会在空闲时重新启动。": "How many tokens the model takes, such as 128k or 1m. Left empty, Claude Code assumes 200k and compacts the conversation by that. \"Test\" fills it in if the endpoint reports a context window. After a change, sessions on this model restart once they are idle.",
   "没能把运行中的工作转入后台：{0}": "Could not move the running work to the background: {0}",
+  "；按端点报告填上了上下文窗口 {w}": "; filled in the context window the endpoint reports: {w}",
+  "；端点报告的上下文窗口是 {w}，保留了你填的 {v}": "; the endpoint reports a context window of {w}, kept yours: {v}",
 };

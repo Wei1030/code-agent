@@ -6,9 +6,9 @@
 import { query, type Query, type SDKControlInitializeResponse } from '@anthropic-ai/claude-agent-sdk';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
-import type { ModelInfo, Provider } from '@code-agent/shared/types';
+import type { Endpoint, ModelInfo, Provider } from '@code-agent/shared/types';
 import { app, onWrite, set } from './state';
-import { applyConfigDir, endpointKey, ENV_CONFIG_DIR, envCredentialVar, processEnv, setEndpointKey, systemClaude } from './claude/files';
+import { applyConfigDir, endpointKey, ENV_CONFIG_DIR, envCredentialVar, NO_TOKEN, processEnv, setEndpointKey, systemClaude } from './claude/files';
 import { recordLimits } from './usage';
 import { register } from './hub';
 import { apiErrorText } from '@code-agent/shared/catalog';
@@ -89,9 +89,32 @@ export function checkLogin(): Promise<void> {
   return checking;
 }
 
-/** Send one short prompt to a model to see whether its service answers. */
-async function testModel(modelId: string): Promise<{ ok: boolean; message: string }> {
+/**
+ * The context window an endpoint reports for a model: max_input_tokens from the Models API
+ * (GET /v1/models/<name>). Most endpoints do not have it; then there is none.
+ */
+async function reportedWindow(ep: Endpoint, name: string): Promise<number | undefined> {
+  const key = endpointKey(ep.id) || NO_TOKEN;
+  try {
+    const res = await fetch(`${ep.url.replace(/\/+$/, '')}/v1/models/${encodeURIComponent(name)}`, {
+      headers: { authorization: `Bearer ${key}`, 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return undefined;
+    const n = ((await res.json()) as { max_input_tokens?: unknown }).max_input_tokens;
+    return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Send one short prompt to a model to see whether its service answers. For an endpoint model, also
+ * ask the endpoint for its context window, and fill it in unless one is set already.
+ */
+async function testModel(modelId: string): Promise<{ ok: boolean; message: string; contextWindow?: number }> {
   const r = resolveModel(modelId);
+  const reported = r.endpoint ? reportedWindow(r.endpoint, r.name) : undefined;
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), 60_000);
   const t0 = Date.now();
@@ -126,12 +149,16 @@ async function testModel(modelId: string): Promise<{ ok: boolean; message: strin
   } finally {
     clearTimeout(timer);
   }
+  const contextWindow = await reported;
   if (r.endpoint) {
     const ep = r.endpoint;
     const test = { ...result, at: Date.now() };
-    set('provider', { ...app.provider, endpoints: app.provider.endpoints.map((e) => (e.id !== ep.id ? e : { ...e, models: e.models.map((m) => (m.name === r.name ? { ...m, test } : m)) })) });
+    const prev = app.provider;
+    set('provider', { ...prev, endpoints: prev.endpoints.map((e) => (e.id !== ep.id ? e : { ...e, models: e.models.map((m) => (m.name !== r.name ? m : { ...m, test, contextWindow: m.contextWindow ?? contextWindow })) })) });
+    // A window filled in restarts the sessions on the model, as one typed in does.
+    void restartStale((model) => model === modelId && settingsOf(prev, model) !== settingsOf(app.provider, model));
   }
-  return result;
+  return { ...result, contextWindow };
 }
 
 /**
@@ -147,25 +174,22 @@ const settingsOf = (p: Provider, model: string) => {
   const em = ep && ep.models.find((x) => x.name === m[2]);
   return em ? `${ep.url}\t${em.effort}\t${em.contextWindow ?? ''}` : '';
 };
-async function restart(sid: string) {
-  const { closeProcess, startProcess } = await import('./sessions/live');
-  const { addItem, rt } = await import('./sessions/registry');
-  const model = rt(sid)?.model ?? '';
-  const gone = !app.models.some((m) => m.id === model);
-  addItem(sid, gone
-    ? { kind: 'notice', id: randomUUID(), tone: 'warn', text: `模型 ${model.replace(/^ep:[^:]+:/, '')} 已经从兼容端点里删除，Claude Code 已退出。恢复会话时可以选一个模型，默认用「默认」方案的模型。` }
-    : { kind: 'notice', id: randomUUID(), tone: 'info', text: '兼容端点的设置改了，Claude Code 按新设置重新启动后接着这段对话。' });
-  await closeProcess(sid);
-  if (!gone) await startProcess(sid, { resume: true });
-}
 async function restartStale(changed: (model: string) => boolean) {
-  const { liveIds } = await import('./sessions/live');
-  const { rt } = await import('./sessions/registry');
+  const { closeProcess, liveIds } = await import('./sessions/live');
+  const { addItem, rt } = await import('./sessions/registry');
+  const { restartProcess } = await import('./sessions/ops');
   const { whenIdle } = await import('./sessions/slots');
   for (const sid of liveIds()) {
     const model = rt(sid)?.model;
     if (!model || isClaudeModel(model) || !changed(model)) continue;
-    whenIdle(sid, () => void restart(sid).catch((e) => console.error('[provider] restart failed:', e)));
+    whenIdle(sid, () => {
+      const now = rt(sid)?.model ?? '';
+      const gone = !app.models.some((m) => m.id === now);
+      addItem(sid, gone
+        ? { kind: 'notice', id: randomUUID(), tone: 'warn', text: `模型 ${now.replace(/^ep:[^:]+:/, '')} 已经从兼容端点里删除，Claude Code 已退出。恢复会话时可以选一个模型，默认用「默认」方案的模型。` }
+        : { kind: 'notice', id: randomUUID(), tone: 'info', text: '兼容端点的设置改了，Claude Code 按新设置重新启动后接着这段对话。' });
+      void (gone ? closeProcess(sid) : restartProcess(sid)).catch((e) => console.error('[provider] restart failed:', e));
+    });
   }
 }
 

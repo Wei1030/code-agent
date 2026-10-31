@@ -151,6 +151,40 @@ test('endpoint: a model\'s context window is the one Claude Code works with; uns
   }
 });
 
+test('endpoint: the test button fills in the context window the endpoint reports, and keeps one set by hand (FR-AUTH-03)', async () => {
+  const p = env.c.slices.provider;
+  const windowOf = (name: string) => env.c.slices.provider.endpoints[0].models.find((m) => m.name === name)?.contextWindow;
+  env.model.script(/窗口填上前/, [[say('好')]]);
+  const sid = await env.start('窗口填上前');
+  await env.turns(sid);
+  env.model.describe('model-one', { max_input_tokens: 512_000, max_tokens: 64_000 });
+  try {
+    const one = await env.c.call('testModel', M1);
+    assert.equal(one.ok, true, one.message);
+    assert.equal(one.contextWindow, 512_000);
+    await until(() => windowOf('model-one') === 512_000, 'filled in');
+    // As when typed in: the session on that model restarts and works with it.
+    await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'notice' && /兼容端点的设置改了/.test(i.text)), 'restarted');
+    env.model.script(/窗口填上后/, [[say('好')]]);
+    await env.c.call('send', sid, '窗口填上后', {});
+    await until(async () => (await env.rt(sid)).context.max === 512_000, 'the new window');
+    assert.equal(env.model.modelLookups.at(-1)?.authorization, 'Bearer test-token', 'asked with the endpoint\'s token');
+    // Not reported: nothing changes, and the test still passes.
+    const two = await env.c.call('testModel', M2);
+    assert.equal(two.ok, true, two.message);
+    assert.equal(two.contextWindow, undefined);
+    assert.equal(windowOf('model-two'), undefined);
+    // Set by hand: kept.
+    await env.c.call('setState', { provider: { ...p, endpoints: p.endpoints.map((e) => ({ ...e, models: e.models.map((m) => (m.name === 'model-one' ? { ...m, contextWindow: 300_000 } : m)) })) } });
+    assert.equal((await env.c.call('testModel', M1)).contextWindow, 512_000);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(windowOf('model-one'), 300_000);
+  } finally {
+    env.model.describe('model-one', null);
+    await env.c.call('setState', { provider: p });
+  }
+});
+
 test('switching to a model of another endpoint restarts the process and keeps the conversation (FR-MOD-01)', async () => {
   env.model.script(/换模型前/, [[say('好')]]);
   env.model.script(/换模型后/, [[say('还记得')]]);
@@ -163,6 +197,19 @@ test('switching to a model of another endpoint restarts the process and keeps th
   const req = env.model.sent(/换模型后/)[0];
   assert.equal(req.model, 'model-two');
   assert.match(JSON.stringify(req.body.messages), /换模型前/);
+});
+
+test('a message sent while the process restarts waits, and goes out once it runs again (FR-MOD-01)', async () => {
+  env.model.script(/重启前/, [[say('好')]]);
+  env.model.script(/重启时发的/, [[say('收到')]]);
+  const sid = await env.start('重启前');
+  await env.turns(sid);
+  const switching = env.c.call('setModel', sid, M2);
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'notice' && /已换到/.test(i.text)), 'restarting');
+  await env.c.call('send', sid, '重启时发的', {});
+  await switching;
+  await until(() => env.model.sent(/重启时发的/).length > 0, 'sent once it runs again');
+  assert.equal(env.model.sent(/重启时发的/)[0].model, 'model-two');
 });
 
 test('removing an endpoint model moves the profile that named it; the board recorder keeps its choice (FR-AUTH-01)', async () => {

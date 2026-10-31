@@ -101,6 +101,9 @@ export class FakeModel {
   private scripts: Script[] = [];
   private structuredFns: Array<(schema: any, req: Req) => { output?: unknown; blocks?: Block[] } | undefined> = [];
   private failing = new Map<string, Fault>();
+  private infos = new Map<string, Record<string, unknown>>();
+  /** Headers of every Models API lookup (GET /v1/models/<name>). */
+  readonly modelLookups: http.IncomingHttpHeaders[] = [];
   private open = new Set<http.ServerResponse>();
   private server!: http.Server;
   url = '';
@@ -132,6 +135,12 @@ export class FakeModel {
   failModel(model: string, f: Fault | null) {
     if (f) this.failing.set(model, f);
     else this.failing.delete(model);
+  }
+
+  /** What the Models API says about this model name (null: not found, as for any name by default). */
+  describe(model: string, info: Record<string, unknown> | null) {
+    if (info) this.infos.set(model, info);
+    else this.infos.delete(model);
   }
 
   /** Requests of the agent loop (with tools; not title or summary requests) whose latest prompt matches. */
@@ -185,6 +194,13 @@ export class FakeModel {
     req.on('end', () => {
       let body: any = {};
       try { body = raw ? JSON.parse(raw) : {}; } catch { /* not JSON */ }
+      const lookup = req.method === 'GET' ? /^\/v1\/models\/([^/?]+)/.exec(req.url ?? '') : null;
+      if (lookup) this.modelLookups.push(req.headers);
+      const info = lookup && this.infos.get(decodeURIComponent(lookup[1]));
+      if (info) {
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ type: 'model', id: decodeURIComponent(lookup[1]), display_name: lookup[1], created_at: '2026-01-01T00:00:00Z', ...info }));
+        return;
+      }
       if (req.method !== 'POST' || !req.url?.startsWith('/v1/messages')) {
         res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ type: 'error', error: { type: 'not_found_error', message: 'not here' } }));
         return;

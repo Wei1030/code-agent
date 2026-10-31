@@ -122,7 +122,8 @@ export interface ServerApi {
   /** Save (or with an empty key, remove) a compatible endpoint's token; it stays on the server. */
   setEndpointKey(endpointId: string, key: string): void;
   /** Send one short prompt to a model to see whether its service answers. */
-  testModel(modelId: string): { ok: boolean; message: string };
+  /** contextWindow: what the endpoint reports for the model (the Models API's max_input_tokens), if it does. */
+  testModel(modelId: string): { ok: boolean; message: string; contextWindow?: number };
   refreshUsage(): void;
   refreshMcp(): void;
   testMcp(id: string): void;

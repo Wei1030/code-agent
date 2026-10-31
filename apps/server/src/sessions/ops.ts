@@ -10,7 +10,7 @@ import { app } from '../state';
 import { load, save } from '../store';
 import { addItem, allSummaries, closeOpen, conversationOf, dropSession, emit, initRuntime, patchItem, patchSummary, rt, searchTranscripts, summary, upsert } from './registry';
 import { addContext, answerRequest, closeProcess, inTurn, interruptTurn, live, onAfterToolsTakenBack, onProcessEnd, onReadAfterTools, onTurnEnd, refreshContext, sendAfterTools, sendTurn, startProcess, steer, type Outgoing } from './live';
-import { acquire, cancelWaiting, isWaiting, pump } from './slots';
+import { acquire, cancelWaiting, isWaiting, pump, whenIdle } from './slots';
 import { cwdOf } from './options';
 import { lastPage, pageBefore } from './page';
 import { oneProcess, resolveModel, validModel } from '../models';
@@ -108,6 +108,33 @@ export function pumpQueue(sid: string): boolean {
   return true;
 }
 
+/** Sessions whose process is restarting. */
+const restarting = new Set<string>();
+
+/**
+ * Close the process and start it again on the same conversation (new settings, another model). A
+ * message sent in between would reach the closing process and be lost: it waits in the queue and
+ * goes out once the new process runs.
+ */
+export async function restartProcess(sid: string) {
+  restarting.add(sid);
+  try {
+    await closeProcess(sid);
+    await startProcess(sid, { resume: true });
+  } finally {
+    restarting.delete(sid);
+  }
+  pumpQueue(sid);
+}
+
+/** Restart a running session once it is idle so it picks up new settings, and carry on the conversation. */
+export function restartWhenIdle(sid: string, why: string) {
+  whenIdle(sid, () => {
+    addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'info', text: `${why}，Claude Code 按新设置重新启动后接着这段对话。` });
+    void restartProcess(sid).catch((e) => console.error('[ops] restart failed:', e));
+  });
+}
+
 onTurnEnd((sid, t) => {
   // After an interrupt the queue waits: the user chooses to run it (runQueued) or drop it.
   if (t.interrupted) return;
@@ -154,7 +181,7 @@ export async function send(sid: string, text: string, opts: SendOptions = {}) {
     await acquire(sid, () => startProcess(sid, { resume: false }), () => pumpQueue(sid));
     return;
   }
-  if (sum.waiting || isWaiting(sid)) {
+  if (sum.waiting || isWaiting(sid) || restarting.has(sid)) {
     enqueue(sid, m, 'later');
     return;
   }
@@ -337,8 +364,7 @@ register({
       if (r.background.some((b) => b.status === 'running')) throw new Error('后台任务还在运行：等它们完成，或在「后台」里停止后，才能换到这个模型');
       emit(sid, { t: 'settings', patch: { model, effort } });
       addItem(sid, { kind: 'notice', id: randomUUID(), tone: 'info', text: `已换到 ${info?.label ?? model}（${info?.desc ?? ''}），Claude Code 重新启动后接着这段对话。` });
-      await closeProcess(sid);
-      await startProcess(sid, { resume: true });
+      await restartProcess(sid);
       return;
     }
     emit(sid, { t: 'settings', patch: { model, effort } });
