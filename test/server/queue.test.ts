@@ -90,8 +90,10 @@ test('denying a tool call and stopping takes back an "after tools" message too: 
   assert.ok(!reached('拒绝后收回的话'), 'Claude does not run it by itself');
   assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, !!m.sent]), [['拒绝后收回的话', false]], 'it waits, and can change again');
   assert.equal(((await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string }).stopReason, 'interrupted');
+  assert.equal((await env.rt(sid)).queueHeld, true, 'the page asks whether to run it');
   await env.c.call('runQueued', sid);
   await until(() => reached('拒绝后收回的话'), 'it runs once the user says so');
+  assert.ok(!(await env.rt(sid)).queueHeld, 'a turn started: nothing is held any more');
 });
 
 test('denying a subagent\'s tool call and stopping stops that subagent only: the turn goes on and ends as usual (review R10)', async () => {
@@ -100,11 +102,12 @@ test('denying a subagent\'s tool call and stopping stops that subagent only: the
   env.model.script(/子任务：跑个要审批的命令/, [shell(sleepCmd(1)), [say('子代理完了')]]);
   const sid = await env.start('派子代理后接着说');
   const req = await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent ? r : undefined; }, 'the subagent asks', 30_000);
-  assert.equal(req.background, true, 'the request says it comes from the background');
+  assert.ok((await env.rt(sid)).background.some((b) => b.kind === 'agent'), 'the subagent runs in the background');
   await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
   await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'footer'), 'the turn ends', 60_000);
   const footer = (await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string };
   assert.notEqual(footer.stopReason, 'interrupted', 'the turn was not stopped');
+  assert.ok(!(await env.rt(sid)).queueHeld, 'nothing to ask about the queue');
 });
 
 test('denying a foreground subagent\'s tool call and stopping stops the turn: an "after tools" message is taken back (review R11)', async () => {
@@ -114,7 +117,7 @@ test('denying a foreground subagent\'s tool call and stopping stops the turn: an
   env.model.script(/^前台停下后收回的话$/, [[say('前台停下后收回的话 读到了')]]);
   const sid = await env.start('等前台子代理');
   const req = await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent ? r : undefined; }, 'the subagent asks', 30_000);
-  assert.equal(req.background, undefined, 'a foreground subagent');
+  assert.ok(!(await env.rt(sid)).background.some((b) => b.kind === 'agent'), 'a foreground subagent');
   await env.c.call('send', sid, '前台停下后收回的话', { priority: 'next' });
   assert.equal((await env.rt(sid)).queue[0]?.sent, true);
   await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
@@ -123,6 +126,7 @@ test('denying a foreground subagent\'s tool call and stopping stops the turn: an
   assert.equal(((await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string }).stopReason, 'interrupted');
   assert.ok(!reached('前台停下后收回的话'), 'Claude does not run it by itself');
   assert.deepEqual((await env.rt(sid)).queue.map((m) => [m.text, !!m.sent]), [['前台停下后收回的话', false]], 'it waits for the user\'s choice');
+  assert.equal((await env.rt(sid)).queueHeld, true);
 });
 
 test('a foreground subagent moved to the background while its request waits: denying and stopping it then stops that subagent only (review R12)', async () => {
@@ -130,12 +134,13 @@ test('a foreground subagent moved to the background while its request waits: den
   env.model.script(/子任务：转后台前要审批/, [shell(sleepCmd(1)), [say('子代理完了')]]);
   const sid = await env.start('前台转后台再拒绝');
   const req = await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.agent ? r : undefined; }, 'the subagent asks', 30_000);
-  assert.equal(req.background, undefined, 'in the foreground when it asks');
+  assert.ok(!(await env.rt(sid)).background.some((b) => b.kind === 'agent'), 'in the foreground when it asks');
   await env.c.call('backgroundAll', sid);
-  await until(async () => { const r = (await env.rt(sid)).request; return r?.kind === 'approval' && r.id === req.id && r.background; }, 'the waiting request now comes from the background', 15_000);
+  await until(async () => (await env.rt(sid)).background.some((b) => b.kind === 'agent'), 'the subagent went to the background while its request waits', 15_000);
   await env.c.call('respondApproval', sid, req.id, { behavior: 'deny', interrupt: true });
   await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'footer'), 'the turn ends', 60_000);
   assert.notEqual(((await env.rt(sid)).items.find((i) => i.kind === 'footer') as { stopReason?: string }).stopReason, 'interrupted', 'the turn goes on and ends as usual');
+  assert.ok(!(await env.rt(sid)).queueHeld, 'nothing to ask about the queue');
 });
 
 test('"after tools" still unread when the turn ends goes first, as its own turn; the queue waits for it (review R2)', async () => {

@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { relTime } from '../../lib/format';
 import type { Endpoint, EndpointModel, EnvVar, GitBash, RuntimeSettings } from '../../api/types';
-import { COMMON_ENV } from '../../lib/catalog';
+import { COMMON_ENV, decidesOwnWindow } from '../../lib/catalog';
 import { Icon } from '../../components/Icon';
 import { Button, Chip, Field, Radio, Seg, Select, Status, Toggle } from '../../components/ui';
 import { useApp } from '../../store/app';
@@ -218,8 +218,7 @@ function ContextWindow({ name, value, onChange }: { name: string; value?: number
   const t = useT();
   const app = useApp();
   const [text, setText] = useState<string | null>(null);
-  // Claude Code decides the window of claude-… names itself and ignores the setting there.
-  const own = name.toLowerCase().startsWith('claude-');
+  const own = decidesOwnWindow(name);
   const commit = () => {
     if (text === null) return;
     const v = parseWindow(text);

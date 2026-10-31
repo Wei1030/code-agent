@@ -292,8 +292,6 @@ export type PendingRequest =
     agent?: string;
     /** The asking subagent's task. */
     agentTask?: string;
-    /** Asked by a subagent running in the background: denying and stopping stops that subagent, not the turn. */
-    background?: boolean;
     /** Claude Code's suggestions for not being asked again, as it gave them and in its order. */
     suggestions: SuggestedUpdate[];
     defaultToNo?: boolean;
@@ -452,6 +450,8 @@ export interface SessionRuntime {
   status: TransientStatus | null;
   /** Saved session opened without a running process. */
   readOnly: boolean;
+  /** The last turn was interrupted: its queue waits for the user to run or drop it. The next turn clears it. */
+  queueHeld?: boolean;
   turn: number;
   tokens: number;
   info?: SessionInfo;
@@ -491,7 +491,7 @@ export type SessionEvent =
   | { t: 'raw'; type: string; summary: string; json: unknown }
   | { t: 'stderr'; line: string }
   | { t: 'status'; status: TransientStatus | null }
-  | { t: 'settings'; patch: Partial<Pick<SessionRuntime, 'model' | 'effort' | 'mode' | 'readOnly' | 'turn' | 'tokens' | 'info' | 'boardCheck'>> };
+  | { t: 'settings'; patch: Partial<Pick<SessionRuntime, 'model' | 'effort' | 'mode' | 'readOnly' | 'queueHeld' | 'turn' | 'tokens' | 'info' | 'boardCheck'>> };
 
 // ------------------------------------------------------------------ settings
 

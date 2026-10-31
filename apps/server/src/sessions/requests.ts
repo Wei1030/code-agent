@@ -70,14 +70,13 @@ export async function canUseTool(l: Live, name: string, input: Input, o: CanUseO
             : `允许使用 ${name}？`;
   const reason = o.decisionReason ? `Claude Code 的判断：${o.decisionReason}` : '没有匹配的允许规则；当前会话对未授权的操作会先询问。';
   const agentType = o.agentID ? l.taskTypes.get(o.agentID) ?? '子代理' : undefined;
-  const background = !!o.agentID && inBackground(l, o.agentID);
   // Claude Code says when a lasting rule would grant more than this one call: then none is offered.
   const suggestions = o.suppressAlwaysAllowRule || o.defaultToNo ? [] : (o.suggestions ?? []).map(suggested);
   const req: PendingRequest = {
     kind: 'approval', id: randomUUID(), toolItemId: item.id, tool: toolName(name), title, reason,
     ...(command ? { command } : {}), ...(typeof input.description === 'string' ? { description: input.description } : {}),
     ...(diff ? { diff } : {}),
-    ...(agentType ? { agent: agentType, agentTask: o.agentID } : {}), ...(background ? { background: true } : {}),
+    ...(agentType ? { agent: agentType, agentTask: o.agentID } : {}),
     suggestions,
     ...(o.defaultToNo ? { defaultToNo: true } : {}),
     ...(o.decisionReason ? { decisionReason: o.decisionReason } : {}),

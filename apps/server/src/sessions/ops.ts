@@ -137,7 +137,10 @@ export function restartWhenIdle(sid: string, why: string) {
 
 onTurnEnd((sid, t) => {
   // After an interrupt the queue waits: the user chooses to run it (runQueued) or drop it.
-  if (t.interrupted) return;
+  if (t.interrupted) {
+    emit(sid, { t: 'settings', patch: { queueHeld: true } });
+    return;
+  }
   // Give other turn-end handlers (reviews, receipts) a moment to queue their messages first.
   setTimeout(() => pumpQueue(sid), 0);
 });

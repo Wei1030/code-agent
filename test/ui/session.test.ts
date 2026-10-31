@@ -194,6 +194,34 @@ test('while Claude works a message queues; interrupting offers to keep or cancel
   await p.close();
 });
 
+test('the interrupt receipt belongs to the stopped turn: its queue removed by hand, a message queued in a later turn asks nothing (review R1)', async () => {
+  env.model.script(/先忙一阵/, [shell(sleepCmd(30)), [say('完成')]]);
+  env.model.script(/再忙一阵/, [shell(sleepCmd(30)), [say('完成')]]);
+  const sid = await env.start('先忙一阵', { mode: 'bypassPermissions' });
+  const p = await env.page(`/s/${sid}`);
+  await p.waitEl('.c-right .btn', '中断');
+  await p.type('.c-input', '中断前排的');
+  await p.press('Enter');
+  await p.waitEl('.queue', '中断前排的');
+  await p.click('.c-right .btn', '中断');
+  await p.waitEl('.receipt', '1 条排队消息');
+  // Taken out of the queue by hand instead of answering the receipt.
+  await p.click('.queue .btn[title="移出队列"]');
+  await p.gone('.queue');
+  await p.gone('.receipt');
+  await until(async () => (await env.rt(sid)).state === 'idle', 'the stopped turn ended');
+  await p.type('.c-input', '再忙一阵');
+  await p.press('Enter');
+  await p.waitEl('.c-right .btn', '中断');
+  await p.type('.c-input', '后来排的');
+  await p.press('Enter');
+  await p.waitEl('.queue', '后来排的');
+  await sleep(300);
+  assert.equal(await p.eval('!!document.querySelector(".receipt")'), false, 'the receipt was about the message removed');
+  noPageErrors(p);
+  await p.close();
+});
+
 test('saving a working session from the sessions list asks first, though it was never opened in the page (FR-SES-13)', async () => {
   env.model.script(/列表里保存/, [shell(sleepCmd(30)), [say('完成')]]);
   const sid = await env.start('列表里保存', { mode: 'bypassPermissions' });

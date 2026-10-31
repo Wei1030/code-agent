@@ -185,6 +185,24 @@ test('endpoint: the test button fills in the context window the endpoint reports
   }
 });
 
+test('endpoint: the test button leaves a claude-… model\'s window alone: Claude Code decides it itself (review R2)', async () => {
+  const p = env.c.slices.provider;
+  const name = 'claude-sonnet-4-5';
+  await env.c.call('setState', { provider: { ...p, endpoints: p.endpoints.map((e) => ({ ...e, models: [...e.models, { name, effort: false }] })) } });
+  env.model.describe(name, { max_input_tokens: 512_000 });
+  try {
+    const lookups = env.model.modelLookups.length;
+    const r = await env.c.call('testModel', `ep:${EP}:${name}`);
+    assert.equal(r.ok, true, r.message);
+    assert.equal(r.contextWindow, undefined);
+    assert.equal(env.model.modelLookups.length, lookups, 'not asked');
+    assert.equal(env.c.slices.provider.endpoints[0].models.find((m) => m.name === name)?.contextWindow, undefined);
+  } finally {
+    env.model.describe(name, null);
+    await env.c.call('setState', { provider: p });
+  }
+});
+
 test('switching to a model of another endpoint restarts the process and keeps the conversation (FR-MOD-01)', async () => {
   env.model.script(/换模型前/, [[say('好')]]);
   env.model.script(/换模型后/, [[say('还记得')]]);

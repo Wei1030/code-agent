@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { setupUi, noPageErrors, type UiEnv } from '../harness/ui';
 import { say, use } from '../harness/fake-model';
-import { until } from '../harness/client';
+import { sleep, until } from '../harness/client';
 import type { Item } from '@code-agent/shared/types';
 
 let env: UiEnv;
@@ -68,6 +68,27 @@ test('deny with a note (FR-PERM-04)', async () => {
   await p.click('.dpanel-foot .btn', '拒绝并发送说明');
   await p.gone('.dpanel.approval');
   await until(async () => (await card(sid)).denialMessage === '不用读外面的文件', 'denied with the note');
+  noPageErrors(p);
+  await p.close();
+});
+
+test('stopping the turn from the panel with nothing queued: a message queued in a later turn asks nothing and goes out (review R1)', async () => {
+  const sid = await asking('面板上停下');
+  const p = await env.page(`/s/${sid}`);
+  await p.click('.dpanel-foot .btn', '拒绝并停止本轮');
+  await p.gone('.dpanel.approval');
+  await until(async () => (await env.rt(sid)).state === 'idle', 'stopped');
+  // A later turn that streams for a while, so a message sent meanwhile queues.
+  env.model.script(/下一轮慢慢说/, [[say('这一轮慢慢说完。'.repeat(60))]], { slow: 300 });
+  await p.type('.c-input', '下一轮慢慢说');
+  await p.press('Enter');
+  await p.waitEl('.c-right .btn', '中断');
+  await p.type('.c-input', '排着的消息');
+  await p.press('Enter');
+  await p.waitEl('.queue', '排着的消息');
+  await sleep(300);
+  assert.equal(await p.eval('!!document.querySelector(".receipt")'), false, 'nothing was interrupted');
+  await until(() => env.model.sent(/排着的消息/).length > 0, 'the queued message went out', 60_000);
   noPageErrors(p);
   await p.close();
 });

@@ -55,7 +55,7 @@ function kept(suggestions: SuggestedUpdate[], lines: Line[]): SuggestedUpdate[] 
 
 const VALID_RULE = /^[\w-]+(\(.*\))?$/s;
 
-export function ApprovalPanel({ sid, req, onStop }: { sid: string; req: Extract<PendingRequest, { kind: 'approval' }>; onStop: () => void }) {
+export function ApprovalPanel({ sid, req }: { sid: string; req: Extract<PendingRequest, { kind: 'approval' }> }) {
   const t = useT();
   const waited = useSince(req.since);
   const showRaw = useApp((s) => s.prefs.showRawSdkText);
@@ -172,7 +172,7 @@ export function ApprovalPanel({ sid, req, onStop }: { sid: string; req: Extract<
         </div>
       </div>
       <div className="dpanel-foot">
-        <Button variant="danger-outline" icon="stop" onClick={() => { api.respondApproval(sid, req.id, { behavior: 'deny', interrupt: true }); if (!req.background) onStop(); }}>{t('拒绝并停止本轮')}</Button>
+        <Button variant="danger-outline" icon="stop" onClick={() => api.respondApproval(sid, req.id, { behavior: 'deny', interrupt: true })}>{t('拒绝并停止本轮')}</Button>
         <span className="grow" />
         <Button variant={choice === 'deny' ? 'danger' : 'primary'} onClick={submit} disabled={choice === 'always' && !alwaysOk}>{primaryLabel}</Button>
       </div>
@@ -413,14 +413,15 @@ export function QueueList({ sid, queue, saved }: { sid: string; queue: QueuedMes
   );
 }
 
-export function InterruptReceipt({ sid, count, onDone }: { sid: string; count: number; onDone: () => void }) {
+/** After an interrupt the queue waits (the server holds it): run it or drop it. */
+export function InterruptReceipt({ sid, count }: { sid: string; count: number }) {
   const t = useT();
   return (
     <div className="receipt">
       <Icon name="warning" size={16} />
       <span className="grow">{t('本轮已中断。有 {n} 条排队消息没有取消，要继续执行吗？', { n: count })}</span>
-      <Button size="sm" onClick={() => { api.runQueued(sid); onDone(); }}>{t('保留并执行')}</Button>
-      <Button size="sm" variant="danger-outline" onClick={() => { api.removeQueued(sid); onDone(); }}>{t('取消排队消息')}</Button>
+      <Button size="sm" onClick={() => api.runQueued(sid)}>{t('保留并执行')}</Button>
+      <Button size="sm" variant="danger-outline" onClick={() => api.removeQueued(sid)}>{t('取消排队消息')}</Button>
     </div>
   );
 }

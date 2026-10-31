@@ -3,6 +3,12 @@ import type { CommandInfo, ModelInfo } from './types';
 
 export type { CommandInfo };
 
+/**
+ * Claude Code decides the context window of a claude-… model name itself and ignores
+ * CLAUDE_CODE_MAX_CONTEXT_TOKENS there: an endpoint model of that name has no window of its own.
+ */
+export const decidesOwnWindow = (name: string) => name.toLowerCase().startsWith('claude-');
+
 /** Fallback until the server reports the models Claude Code offers; replaced in place at startup. */
 export const MODELS: ModelInfo[] = [
   { id: 'opus', label: 'Opus 5.5', desc: '最强的编码与 Agent 能力', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },

@@ -70,8 +70,8 @@ function storeText(sid: string, text: string) {
  * The input of one session (SessionPage keys it by session, so its state is that session's). It shows
  * nothing of the transcript, so a streaming reply does not draw it again.
  */
-export const Composer = memo(function Composer({ rt, workspaceId, disabled, onInterrupt }: {
-  rt: SessionRuntime; workspaceId: string; disabled?: boolean; onInterrupt: (queued: number) => void;
+export const Composer = memo(function Composer({ rt, workspaceId, disabled }: {
+  rt: SessionRuntime; workspaceId: string; disabled?: boolean;
 }) {
   const t = useT();
   const sid = rt.id;
@@ -379,7 +379,7 @@ export const Composer = memo(function Composer({ rt, workspaceId, disabled, onIn
         <div className="c-right">
           {running ? (
             <>
-              <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => api.interrupt(sid).then((q) => onInterrupt(q.length))}>{t('中断')}</Button>
+              <Button size="sm" variant="danger-outline" icon="stop" title={t('中断本轮，Claude 停在当前位置')} onClick={() => void api.interrupt(sid)}>{t('中断')}</Button>
               <span className="split">
                 <Button size="sm" variant="primary" icon="queue" disabled={!canSend} onClick={() => doSend()}>{t('排队')}</Button>
                 <MenuButton icon="chevDown" variant="primary" size="sm" title={t('发送方式')} placement="top-end" width={300} items={[

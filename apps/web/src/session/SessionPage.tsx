@@ -28,7 +28,6 @@ export function SessionPage() {
   const rt = useSessions((s) => s.runtimes[id]);
   const record = useApp((s) => s.reviewRecord);
   const [rewindAt, setRewindAt] = useState<{ userId: string; n: number } | null>(null);
-  const [receipt, setReceipt] = useState<number>(0);
   // The same functions from one render to the next: the transcript's items draw again only when they change.
   const latest = useRef(rt);
   latest.current = rt;
@@ -48,7 +47,6 @@ export function SessionPage() {
     const tab = (location.state as { inspector?: InspectorTab } | null)?.inspector;
     useApp.getState().setInspector(tab ? { open: true, tab } : { open: false });
     if (sum) useApp.getState().set({ currentWorkspaceId: sum.workspaceId });
-    setReceipt(0);
     setRewindAt(null);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Coming back to this workspace's sessions opens this one again.
@@ -79,13 +77,12 @@ export function SessionPage() {
         {rt.boardCheck && <BoardCheckPanel sid={id} check={rt.boardCheck} />}
         <div className="dock">
           <div className="dock-inner">
-            {receipt > 0 && rt.queue.length > 0 && <InterruptReceipt sid={id} count={rt.queue.length} onDone={() => setReceipt(0)} />}
+            {rt.queueHeld && rt.queue.some((q) => !q.sent) && <InterruptReceipt sid={id} count={rt.queue.filter((q) => !q.sent).length} />}
             <ReviewDecisionPanel sid={id} />
             {(sum.requests?.length ?? 0) > 1 && (
               <div className="more-requests"><Icon name="bell" size={14} />{t('Claude 同时提出了 {n} 个请求：处理完这一个，下一个会接着出现', { n: sum.requests!.length })}</div>
             )}
-            {/* Stopping the turn there asks about the queue, as the interrupt button does. */}
-            {rt.request?.kind === 'approval' && <ApprovalPanel key={rt.request.id} sid={id} req={rt.request} onStop={() => setReceipt(1)} />}
+            {rt.request?.kind === 'approval' && <ApprovalPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'question' && <QuestionPanel key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'plan' && <PlanReviewBar key={rt.request.id} sid={id} req={rt.request} />}
             {rt.request?.kind === 'elicitation' && <ElicitationPanel key={rt.request.id} sid={id} req={rt.request} />}
@@ -100,7 +97,7 @@ export function SessionPage() {
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />
-                <Composer key={id} rt={rt} workspaceId={sum.workspaceId} onInterrupt={setReceipt} />
+                <Composer key={id} rt={rt} workspaceId={sum.workspaceId} />
               </>
             )}
           </div>

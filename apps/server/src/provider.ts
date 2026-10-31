@@ -12,7 +12,7 @@ import { applyConfigDir, endpointKey, ENV_CONFIG_DIR, envCredentialVar, NO_TOKEN
 import { GIT_BASH } from './claude/gitbash';
 import { recordLimits } from './usage';
 import { register } from './hub';
-import { apiErrorText } from '@code-agent/shared/catalog';
+import { apiErrorText, decidesOwnWindow } from '@code-agent/shared/catalog';
 import { envFor, isClaudeModel, noteClaudeModels, reasoning, refreshModels, resolveModel } from './models';
 
 const DESC: Record<string, string> = {
@@ -110,12 +110,13 @@ async function reportedWindow(ep: Endpoint, name: string): Promise<number | unde
 }
 
 /**
- * Send one short prompt to a model to see whether its service answers. For an endpoint model, also
- * ask the endpoint for its context window, and fill it in unless one is set already.
+ * Send one short prompt to a model to see whether its service answers. For an endpoint model whose
+ * window Claude Code does not decide itself, also ask the endpoint for its context window, and fill
+ * it in unless one is set already.
  */
 async function testModel(modelId: string): Promise<{ ok: boolean; message: string; contextWindow?: number }> {
   const r = resolveModel(modelId);
-  const reported = r.endpoint ? reportedWindow(r.endpoint, r.name) : undefined;
+  const reported = r.endpoint && !decidesOwnWindow(r.name) ? reportedWindow(r.endpoint, r.name) : undefined;
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), 60_000);
   const t0 = Date.now();
