@@ -32,7 +32,8 @@ export async function drive(c: Client, model: FakeModel, world: World & { repos:
   await c.call('setEndpointKey', 'ep-old', 'old-token');
   await until(() => s().models?.some((m) => m.id === PRO), 'endpoint models', 15_000);
   await c.call('setState', {
-    profiles: s().profiles.map((p) => ({ ...p, model: PRO, effort: 'high' as Effort })),
+    // The demo asks for approvals, so its screens can show them.
+    profiles: s().profiles.map((p) => ({ ...p, model: PRO, effort: 'high' as Effort, mode: 'default' as const })),
     reviewProfile: { ...s().reviewProfile, model: PRO, effort: 'high', extraPrompt: '金额计算和参数校验要特别注意边界值。' },
     boardSettings: { ...s().boardSettings, recorder: true, recorderModel: LITE, recorderEffort: 'low' },
     maxRunning: 40,

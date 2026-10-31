@@ -12,7 +12,7 @@ import { db, later, load, save, tx } from './store';
 
 export const DEFAULT_PROFILE: Profile = {
   id: 'p-default', name: '默认', desc: '新会话和 Claude 新建的会话使用', isDefault: true,
-  model: 'opus', effort: 'xhigh', mode: 'default', prompts: 'host',
+  model: 'opus', effort: 'xhigh', mode: 'bypassPermissions', prompts: 'host',
   tools: BUILTIN_TOOLS.map((t) => t.name), questionPreviews: true,
   sources: { user: true, project: true, local: true }, promptMode: 'append', promptText: '', responseLanguage: 'ui',
   features: { checkpoints: true, subagentText: true, progressSummaries: true, hookEvents: true, persist: true, verbatim: false },

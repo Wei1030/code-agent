@@ -81,7 +81,8 @@ async function ready(world: World, model: FakeModel, server: Server, opts: EnvOp
   await c.call('setEndpointKey', EP, 'test-token');
   await until(() => c.slices.models?.some((m) => m.id === M1), 'endpoint models');
   await c.call('setState', {
-    profiles: c.slices.profiles.map((p) => ({ ...p, model: M1, effort: 'high' as Effort })),
+    // Tests ask for approvals unless they choose a mode: Code Agent's own default skips them.
+    profiles: c.slices.profiles.map((p) => ({ ...p, model: M1, effort: 'high' as Effort, mode: 'default' as const })),
     reviewProfile: { ...c.slices.reviewProfile, model: M1, effort: 'high' },
     boardSettings: { ...c.slices.boardSettings, recorderModel: M2 },
     maxRunning: opts.maxRunning ?? 8,
