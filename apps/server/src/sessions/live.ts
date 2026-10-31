@@ -419,13 +419,17 @@ export function sendTurn(sid: string, m: Outgoing): string {
   return id;
 }
 
-/** Put a message into the running turn (priority "now"). */
-export function steer(sid: string, m: Outgoing) {
+/**
+ * Put a message into the running turn (priority "now"). What runs in the foreground goes to the
+ * background first: cutting the turn for the message, Claude Code would wait for a Bash command to end.
+ */
+export async function steer(sid: string, m: Outgoing) {
   const l = lives.get(sid);
   if (!l?.turn) return sendTurn(sid, m);
   const id = randomUUID();
   showUser(sid, m, id);
   l.group = null;
+  await l.q.backgroundTasks();
   l.input.push(userMessage({ ...m, priority: 'now' }, id));
   raw(sid, 'user', `插入本轮：${(m.shown ?? m.text).slice(0, 50)}`, { uuid: id, priority: 'now' });
   return id;

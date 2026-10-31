@@ -53,7 +53,7 @@ test('"insert now" reaches Claude at once; the running command goes on in the ba
   // Claude Code moves a command to the background only once it has registered it as a task.
   await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'tool' && i.status === 'running' && i.backgroundable), 'a backgroundable command', 15_000);
   await env.c.call('send', sid, '顺便看看日志', { priority: 'now' });
-  await until(() => env.model.requests.some((r) => r.tools.length && /顺便看看日志/.test(JSON.stringify(r.body.messages)) && /running in background/.test(JSON.stringify(r.body.messages))), 'the inserted message with the backgrounded command');
+  await until(() => env.model.requests.some((r) => r.tools.length && /顺便看看日志/.test(JSON.stringify(r.body.messages)) && /running in background|manually backgrounded/.test(JSON.stringify(r.body.messages))), 'the inserted message with the backgrounded command');
   const rt = await env.rt(sid);
   assert.equal(rt.queue.length, 0);
   assert.ok(rt.background.some((b) => b.kind === 'bash' && b.status === 'running'), 'the command keeps running in the background');

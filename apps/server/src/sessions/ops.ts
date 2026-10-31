@@ -170,7 +170,7 @@ export async function send(sid: string, text: string, opts: SendOptions = {}) {
   if (inTurn(sid)) {
     // Not saying when, it waits in the queue for the turn to end, and can still change.
     const priority = opts.priority ?? 'later';
-    if (priority === 'now') steer(sid, m);
+    if (priority === 'now') await steer(sid, m);
     else if (priority === 'next') handOver(sid, m);
     else enqueue(sid, m, priority);
     return;
@@ -280,7 +280,7 @@ register({
       emit(sid, { t: 'queue', queue: r.queue.filter((x) => x.id !== id) });
       const m = queued.get(id) ?? { text: q.text };
       forget([id]);
-      steer(sid, p.text !== undefined ? { ...m, text: p.text, shown: undefined } : m);
+      void steer(sid, p.text !== undefined ? { ...m, text: p.text, shown: undefined } : m);
       return;
     }
     if (p.text !== undefined) {
