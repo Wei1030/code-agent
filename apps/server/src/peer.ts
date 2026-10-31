@@ -405,9 +405,9 @@ function workspaceServer(sid: string): McpServerConfig {
         const what = res === 'delivered' ? 'delivered; it is working on it now' : res === 'queued' ? 'queued; it will get it when it is free' : 'held for the user to approve (different permission class, or too many messages without a human in between)';
         return text(`Message to "${s.title}" ${what}.${a.notify !== false && res !== 'held' ? ' You will receive a receipt when it has handled it; keep working meanwhile.' : ''}`);
       }),
-      tool('create_session', 'Create a new session in this workspace for a substantial piece of work the user may want to follow or join. Its first message is yours. Use worktree: true when it will edit files in parallel with other sessions. Built-in subagents are better for short side tasks.', {
+      tool('create_session', 'Create a new session in this workspace for a substantial piece of work the user may want to follow or join. Its first message is yours. Use worktree: true when it will edit files in parallel with other sessions. Built-in subagents are better for short side tasks. Leave effort unset unless the user asked for one: the new session then thinks as hard as this one.', {
         title: z.string().describe('Short title shown in the session list'), message: z.string().describe('The complete task for the new session'),
-        model: z.string().optional(), effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+        model: z.string().optional(), effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional().describe('Only when the user asked for an effort'),
         mode: z.enum(['default', 'acceptEdits', 'plan', 'dontAsk', 'bypassPermissions']).optional(),
         worktree: z.boolean().optional(), notify: z.boolean().optional(),
       }, async (a) => {

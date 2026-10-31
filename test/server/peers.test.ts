@@ -149,16 +149,23 @@ test('policies: always deliver, always hold; the hop limit stops a chain', async
   await setPeer({ inbound: 'parity', maxHops: 6 });
 });
 
-test('a session created by a session: own worktree and branch, at most the creator\'s mode, its origin shown', async () => {
+test('a session created by a session: own worktree and branch, at most the creator\'s mode, the creator\'s effort unless the user asked, its origin shown', async () => {
   env.model.script(/开个新会话/, [[use('mcp__workspace__create_session', { title: '子任务会话', message: '子任务：看一下 README', worktree: true, mode: 'bypassPermissions', notify: false })], [say('开好了')]]);
   env.model.script(/子任务：看一下 README/, [[say('README 很短')]]);
+  // With tool search off the workspace tools come with their descriptions in the first request.
+  const mb = env.c.slices.mcpBehavior;
+  await env.c.call('setState', { mcpBehavior: { ...mb, toolSearch: 'off' } });
   const a = await env.start('开个新会话', { mode: 'acceptEdits' });
   await env.turns(a);
+  await env.c.call('setState', { mcpBehavior: mb });
+  const tools = env.model.sent(/开个新会话/)[0].body.tools as Array<{ name: string; description?: string }>;
+  assert.match(tools.find((x) => x.name === 'mcp__workspace__create_session')?.description ?? '', /Leave effort unset unless the user asked for one/);
   const child = await until(() => [...env.c.sessions.values()].find((s) => s.title === '子任务会话'), 'child session');
   assert.equal(child.createdBy?.sessionId, a);
   assert.match(child.worktree ?? '', /^ca\//);
   assert.ok(child.cwd && existsSync(child.cwd), 'its checkout exists');
   assert.equal((await env.rt(child.id)).mode, 'acceptEdits', 'not above the creator');
+  assert.equal((await env.rt(child.id)).effort, (await env.rt(a)).effort, 'no effort given: the creator\'s');
   await until(async () => (await env.rt(child.id)).items.some((i) => i.kind === 'text' && /README 很短/.test(i.text)), 'child works');
   const wt = await env.c.call('listWorktrees');
   assert.ok(wt.some((w) => w.branch === child.worktree), 'listed on the worktree tab');

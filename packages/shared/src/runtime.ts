@@ -7,7 +7,7 @@ export function emptyContext(model = ''): ContextUsage {
 
 export function emptyRuntime(id: string, p: Partial<SessionRuntime> = {}): SessionRuntime {
   return {
-    id, items: [], state: 'idle', model: 'opus', effort: 'max', mode: 'default', request: null, queue: [],
+    id, items: [], state: 'idle', model: 'opus', effort: 'xhigh', mode: 'default', request: null, queue: [],
     tasks: [], background: [], changes: [], context: emptyContext(), events: [], stderr: [],
     status: null, readOnly: false, turn: 0, tokens: 0, ...p,
   };

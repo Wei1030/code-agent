@@ -46,7 +46,7 @@ export function Jobs() {
   const create = () => {
     const j: JobTemplate = {
       id: uid('job'), name: t('新作业'), workspaceId: app.currentWorkspaceId || app.workspaces[0]?.id || '',
-      prompt: '', schema: NEW_JOB_SCHEMA, model: 'opus', effort: 'max', mode: 'dontAsk', notify: 'failure',
+      prompt: '', schema: NEW_JOB_SCHEMA, model: 'opus', effort: 'xhigh', mode: 'dontAsk', notify: 'failure',
       schedule: { kind: 'manual', time: '09:00', weekdays: [1, 2, 3, 4, 5], everyHours: 6, cron: '0 9 * * 1-5', enabled: true, vars: {}, missed: 'runOnce' },
     };
     app.set({ jobs: [...app.jobs, j] });
