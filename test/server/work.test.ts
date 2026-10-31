@@ -117,10 +117,12 @@ test('moving a running command to the background lets the turn go on (FR-BG-03)'
   assert.ok(!card.backgroundable, 'no button before Claude Code can do it');
   // Claude Code registers a command as a task after a couple of seconds; then the button shows.
   await until(async () => ((await env.rt(sid)).items.find((i) => i.id === card.id) as Tool).backgroundable, 'backgroundable', 15_000);
+  assert.deepEqual((await env.rt(sid)).background.filter((b) => b.status === 'running'), [], 'a command in the foreground is no background task');
   await env.c.call('backgroundTool', sid, card.id);
   await env.turns(sid);
   assert.ok((await env.rt(sid)).items.some((i) => i.kind === 'text' && /先答别的/.test(i.text)));
-  assert.ok((await env.rt(sid)).background.some((b) => b.status === 'running'));
+  const bg = (await env.rt(sid)).background.find((b) => b.status === 'running');
+  assert.equal(bg?.kind, 'bash', 'listed as a command once it went to the background');
 });
 
 test('rewind: a dry run lists the files, then they are put back; or rewind and fork (FR-CKPT-01..04)', async () => {

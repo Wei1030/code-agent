@@ -81,6 +81,8 @@ export interface Live {
   denied: Map<string, string>;
   /** Background task id by the tool_use id that started it. */
   taskByTool: Map<string, string>;
+  /** Commands Claude Code registered as tasks while they run in the foreground: listed once they go to the background. */
+  foreground: Map<string, BgTask>;
   /** API message being streamed and its blocks by index. */
   curMsg: string;
   streamIdx: Map<number, StreamItem>;
@@ -245,7 +247,7 @@ export async function startProcess(sid: string, so: StartOptions): Promise<void>
   let endedResolve!: () => void;
   l = {
     sid, q, input, cwd: opts.cwd, closing: false, turn: null, pending: new Map(), asks: [], tools: new Map(), streams: new Map(), group: null,
-    taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
+    taskTypes: new Map(), denied: new Map(), taskByTool: new Map(), foreground: new Map(), curMsg: '', streamIdx: new Map(), commands: [], model: r.model, ready: Promise.resolve(), ended: new Promise((res) => (endedResolve = res)),
   };
   lives.set(sid, l);
   patchSummary(sid, { live: true, draft: false, waiting: false, lastActive: Date.now() });
@@ -848,7 +850,9 @@ function onToolResults(l: Live, content: unknown, structured: unknown, parent: s
     }
     // A foreground task (subagent or command) ends with its result; one that went to the background goes on.
     const task = l.taskByTool.get(b.tool_use_id);
+    if (task && p.background) toBackground(l, task);
     if (task && !p.background) {
+      l.foreground.delete(task);
       const cur = rt(l.sid)!.background.find((x) => x.id === task);
       if (cur?.status === 'running') upsertBg(l.sid, { ...cur, status: isError ? 'failed' : 'completed', endedAt: Date.now() });
     }
@@ -1022,14 +1026,16 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const taskId = String(m.task_id);
       if (m.subagent_type) l.taskTypes.set(taskId, String(m.subagent_type));
       const kind: BgTask['kind'] = m.task_type === 'local_bash' ? 'bash' : m.task_type === 'local_workflow' ? 'workflow' : m.task_type === 'monitor' ? 'monitor' : 'agent';
+      const task: BgTask = { id: taskId, kind, name: String(m.description ?? ''), status: 'running', startedAt: Date.now(), parent: m.parent_task_id as string | undefined };
+      const card = m.tool_use_id ? findItem(sid, String(m.tool_use_id)) : undefined;
       if (m.tool_use_id) {
         l.taskByTool.set(String(m.tool_use_id), taskId);
-        const card = findItem(sid, String(m.tool_use_id));
         if (card?.kind === 'tool' && card.status === 'running' && !card.background && m.is_backgrounded !== true) patchItem(sid, card.id, { backgroundable: true });
       }
-      if (m.is_backgrounded === true || kind === 'bash' || kind === 'monitor') {
-        upsertBg(sid, { id: taskId, kind, name: String(m.description ?? ''), status: 'running', startedAt: Date.now(), parent: m.parent_task_id as string | undefined });
-      }
+      // Claude Code registers every longer command as a task, so that it can go to the background:
+      // one running in the foreground is listed only once it goes there.
+      if (m.is_backgrounded === true || kind === 'monitor' || (kind === 'bash' && card?.kind === 'tool' && card.background)) upsertBg(sid, task);
+      else if (kind === 'bash') l.foreground.set(taskId, task);
       raw(sid, 'system/task_started', String(m.description ?? ''), m);
       return;
     }
@@ -1037,7 +1043,7 @@ function onSystem(l: Live, m: { subtype: string } & Record<string, unknown>) {
       const p = m.patch as { status?: string; is_backgrounded?: boolean; description?: string };
       const taskId = String(m.task_id);
       const cur = rt(sid)!.background.find((b) => b.id === taskId);
-      if (p.is_backgrounded && !cur) upsertBg(sid, { id: taskId, kind: 'agent', name: p.description ?? '', status: 'running', startedAt: Date.now() });
+      if (p.is_backgrounded && !cur) toBackground(l, taskId, p.description);
       if (p.status && cur) {
         const st = p.status === 'completed' ? 'completed' : p.status === 'failed' ? 'failed' : p.status === 'killed' ? 'stopped' : 'running';
         upsertBg(sid, { ...cur, status: st, ...(st !== 'running' ? { endedAt: Date.now() } : {}) });
@@ -1138,4 +1144,12 @@ function upsertBg(sid: string, b: BgTask) {
   const r = rt(sid)!;
   const i = r.background.findIndex((x) => x.id === b.id);
   emit(sid, { t: 'background', background: i < 0 ? [...r.background, b] : r.background.map((x) => (x.id === b.id ? b : x)) });
+}
+
+/** A task that went to the background is listed from then on; a command keeps its name and start. */
+function toBackground(l: Live, taskId: string, description?: string) {
+  const fg = l.foreground.get(taskId);
+  l.foreground.delete(taskId);
+  if (rt(l.sid)!.background.some((b) => b.id === taskId)) return;
+  upsertBg(l.sid, fg ?? { id: taskId, kind: 'agent', name: description ?? '', status: 'running', startedAt: Date.now() });
 }

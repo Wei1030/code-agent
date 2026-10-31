@@ -35,8 +35,8 @@ test('messages sent during a turn wait, then go in order; "next" goes before "la
 
 test('"insert now" reaches Claude at once; the running command goes on in the background (FR-IN-06, FR-BG-03)', async () => {
   const sid = await busy('插入测试', 8);
-  // Claude Code moves a command to the background only once it really runs.
-  await sleep(1500);
+  // Claude Code moves a command to the background only once it has registered it as a task.
+  await until(async () => (await env.rt(sid)).items.some((i) => i.kind === 'tool' && i.status === 'running' && i.backgroundable), 'a backgroundable command', 15_000);
   await env.c.call('send', sid, '顺便看看日志', { priority: 'now' });
   await until(() => env.model.requests.some((r) => r.tools.length && /顺便看看日志/.test(JSON.stringify(r.body.messages)) && /running in background/.test(JSON.stringify(r.body.messages))), 'the inserted message with the backgrounded command');
   const rt = await env.rt(sid);
