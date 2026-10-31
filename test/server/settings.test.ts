@@ -134,6 +134,23 @@ test('endpoint: the test button reports success and a refused token (FR-AUTH-03)
   env.model.failModel('model-two', null);
 });
 
+test('endpoint: a model\'s context window is the one Claude Code works with; unset, it assumes 200k (FR-MOD-01)', async () => {
+  const windowOf = async (tag: string) => {
+    env.model.script(new RegExp(tag), [[say('好')]]);
+    const sid = await env.start(tag);
+    await env.turns(sid);
+    return until(async () => { const c = (await env.rt(sid)).context; return c.categories.length ? c.max : null; }, 'context usage');
+  };
+  assert.equal(await windowOf('默认窗口'), 200_000);
+  const p = env.c.slices.provider;
+  await env.c.call('setState', { provider: { ...p, endpoints: p.endpoints.map((e) => ({ ...e, models: e.models.map((m) => (m.name === 'model-one' ? { ...m, contextWindow: 640_000 } : m)) })) } });
+  try {
+    assert.equal(await windowOf('设了窗口'), 640_000);
+  } finally {
+    await env.c.call('setState', { provider: p });
+  }
+});
+
 test('switching to a model of another endpoint restarts the process and keeps the conversation (FR-MOD-01)', async () => {
   env.model.script(/换模型前/, [[say('好')]]);
   env.model.script(/换模型后/, [[say('还记得')]]);

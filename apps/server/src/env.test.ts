@@ -29,3 +29,10 @@ test('a Claude process keeps the subscription setup', () => {
   assert.equal(env.ANTHROPIC_BASE_URL, undefined);
   assert.equal(env.ANTHROPIC_MODEL, undefined);
 });
+
+test('an endpoint model\'s context window wins over a variable set for every process', () => {
+  app.env = [{ id: 'v1', key: 'CLAUDE_CODE_MAX_CONTEXT_TOKENS', value: '100000', note: '' }];
+  assert.equal(processEnv({ url: 'http://127.0.0.1:1', key: '', model: 'm', contextWindow: 640_000 }).CLAUDE_CODE_MAX_CONTEXT_TOKENS, '640000');
+  assert.equal(processEnv({ url: 'http://127.0.0.1:1', key: '', model: 'm' }).CLAUDE_CODE_MAX_CONTEXT_TOKENS, '100000');
+  app.env = [];
+});

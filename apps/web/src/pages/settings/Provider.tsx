@@ -179,6 +179,7 @@ function EndpointEditor({ ep, onChange, onRemove }: { ep: Endpoint; onChange: (p
             <span title={t('开启：发送思考（thinking）和思考强度。关闭：关掉思考；Claude Code 默认的思考强度如果被端点拒绝，它会自动去掉再发。端点不支持思考时请关闭。')}>
               <Toggle on={m.effort} onChange={(v) => onChange({ models: ep.models.map((x) => (x.name === m.name ? { ...x, effort: v } : x)) })} label={t('思考与思考强度')} />
             </span>
+            <ContextWindow name={m.name} value={m.contextWindow} onChange={(v) => onChange({ models: ep.models.map((x) => (x.name === m.name ? { ...x, contextWindow: v } : x)) })} />
             {m.test && <Chip tone={m.test.ok ? 'good' : 'crit'} title={`${relTime(m.test.at)} · ${t(m.test.message)}`}>{m.test.ok ? t('可用') : t('失败')}</Chip>}
             <Button size="sm" disabled={!ep.url} title={t('发一句很短的提示，看服务是否回复')} onClick={() => settled().then(() => api.testModel(`ep:${ep.id}:${m.name}`)).then((r) => app.toast(r.ok ? t('{m} 可用：{x}', { m: m.name, x: t(r.message) }) : t('{m} 测试失败：{x}', { m: m.name, x: t(r.message) }), r.ok ? 'good' : 'crit'))}>{t('测试')}</Button>
             <Button size="sm" variant="ghost" icon="trash" title={t('删除这个模型')} onClick={() => onChange({ models: ep.models.filter((x) => x.name !== m.name) })} />
@@ -191,6 +192,40 @@ function EndpointEditor({ ep, onChange, onRemove }: { ep: Endpoint; onChange: (p
       </div>
       <div className="row"><span className="grow" /><Button size="sm" variant="danger-outline" icon="trash" onClick={onRemove}>{t('删除端点')}</Button></div>
     </div>
+  );
+}
+
+/** 128k, 1m, 131072 → tokens; empty → not set; null: not a window. */
+function parseWindow(s: string): number | undefined | null {
+  if (!s.trim()) return undefined;
+  const m = /^\s*(\d+(?:\.\d+)?)\s*([km]?)\s*$/i.exec(s);
+  const n = m ? Math.round(Number(m[1]) * ({ k: 1000, m: 1_000_000 }[m[2].toLowerCase()] ?? 1)) : 0;
+  return n > 0 ? n : null;
+}
+const windowText = (n: number) => (n % 1_000_000 === 0 ? `${n / 1_000_000}m` : n % 1000 === 0 ? `${n / 1000}k` : String(n));
+
+/** An endpoint model's context window, for a name Claude Code does not know (it assumes 200k for those). */
+function ContextWindow({ name, value, onChange }: { name: string; value?: number; onChange: (v: number | undefined) => void }) {
+  const t = useT();
+  const app = useApp();
+  const [text, setText] = useState<string | null>(null);
+  // Claude Code decides the window of claude-… names itself and ignores the setting there.
+  const own = name.toLowerCase().startsWith('claude-');
+  const commit = () => {
+    if (text === null) return;
+    const v = parseWindow(text);
+    setText(null);
+    if (v === null) app.toast(t('上下文窗口填 token 数，比如 128k、1m 或 131072'), 'crit');
+    else if (v !== value) onChange(v);
+  };
+  return (
+    <label className="row" style={{ gap: 6 }} title={own
+      ? t('claude- 开头的模型名由 Claude Code 自己决定上下文窗口，这里的设置不生效。')
+      : t('模型能接收的 token 数，比如 128k、1m。不填时 Claude Code 按 200k 算，并据此决定何时自动压缩对话。改了以后，正在用这个模型的会话会在空闲时重新启动。')}>
+      <span className="muted" style={{ fontSize: 12.5 }}>{t('上下文窗口')}</span>
+      <input className="input sm mono" style={{ width: 76 }} placeholder="200k" disabled={own} value={text ?? (value ? windowText(value) : '')}
+        onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) commit(); }} />
+    </label>
   );
 }
 

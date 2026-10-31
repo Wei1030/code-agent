@@ -1781,4 +1781,10 @@ export const EN: Record<string, string> = {
   "通知内容": "Notification text",
   "问题": "Issue",
   "（已暂停）": " (paused)",
+  "claude- 开头的模型名由 Claude Code 自己决定上下文窗口，这里的设置不生效。": "Claude Code decides the context window of model names starting with claude- itself; this setting has no effect on them.",
+  "上下文窗口": "Context window",
+  "上下文窗口填 token 数，比如 128k、1m 或 131072": "Enter the context window in tokens, such as 128k, 1m or 131072",
+  "插入消息前没能把运行中的工作转入后台：{0}": "Could not move the running work to the background before inserting the message: {0}",
+  "模型能接收的 token 数，比如 128k、1m。不填时 Claude Code 按 200k 算，并据此决定何时自动压缩对话。改了以后，正在用这个模型的会话会在空闲时重新启动。": "How many tokens the model takes, such as 128k or 1m. Left empty, Claude Code assumes 200k and compacts the conversation by that. After a change, sessions on this model restart once they are idle.",
+  "没能把运行中的工作转入后台：{0}": "Could not move the running work to the background: {0}",
 };

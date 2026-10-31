@@ -136,15 +136,16 @@ async function testModel(modelId: string): Promise<{ ok: boolean; message: strin
 
 /**
  * Running endpoint processes whose environment no longer holds (the endpoint is gone or moved, its
- * token or the model's thinking switch changed) restart with the new settings and carry on the
- * conversation; when the model itself is gone, the process ends and the session asks for another.
+ * token, the model's thinking switch or context window changed) restart with the new settings and
+ * carry on the conversation; when the model itself is gone, the process ends and the session asks
+ * for another.
  * A busy session (a turn, a pending request, queued messages, background work) is left to finish first.
  */
 const settingsOf = (p: Provider, model: string) => {
   const m = /^ep:([^:]+):([\s\S]+)$/.exec(model);
   const ep = m && p.endpoints.find((e) => e.id === m[1]);
   const em = ep && ep.models.find((x) => x.name === m[2]);
-  return em ? `${ep.url}\t${em.effort}` : '';
+  return em ? `${ep.url}\t${em.effort}\t${em.contextWindow ?? ''}` : '';
 };
 async function restart(sid: string) {
   const { closeProcess, startProcess } = await import('./sessions/live');

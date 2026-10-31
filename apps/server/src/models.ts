@@ -56,6 +56,8 @@ export interface Resolved {
   name: string;
   /** Whether to send thinking and the effort level. */
   effort: boolean;
+  /** The endpoint model's context window in tokens, if set. */
+  contextWindow?: number;
 }
 
 /**
@@ -73,14 +75,15 @@ export function resolveModel(id: string): Resolved {
   if (!m) return { name: id, effort: true };
   const ep = app.provider.endpoints.find((e) => e.id === m[1]);
   if (!ep) throw new Error(`模型 ${m[2]} 所在的兼容端点已经删除，请换一个模型`);
-  return { endpoint: ep, name: m[2], effort: !!ep.models.find((x) => x.name === m[2])?.effort };
+  const em = ep.models.find((x) => x.name === m[2]);
+  return { endpoint: ep, name: m[2], effort: !!em?.effort, contextWindow: em?.contextWindow };
 }
 
 /** Environment of a Claude Code process running this model. */
 export function envFor(modelId: string) {
   const r = resolveModel(modelId);
   if (!r.endpoint) return processEnv();
-  return processEnv({ url: r.endpoint.url, key: endpointKey(r.endpoint.id), model: r.name });
+  return processEnv({ url: r.endpoint.url, key: endpointKey(r.endpoint.id), model: r.name, contextWindow: r.contextWindow });
 }
 
 /**

@@ -36,6 +36,11 @@ export interface EndpointModel {
   name: string;
   /** Send thinking and the effort level (only if the endpoint understands them); off turns thinking off. */
   effort: boolean;
+  /**
+   * Its context window in tokens (CLAUDE_CODE_MAX_CONTEXT_TOKENS). Unset: Claude Code assumes 200k
+   * for a model it does not know, and compacts by that. A name Claude Code knows keeps its own.
+   */
+  contextWindow?: number;
   /** Last connection test from Settings. */
   test?: { ok: boolean; at: number; message: string };
 }

@@ -113,6 +113,8 @@ export interface EndpointTarget {
   url: string;
   key: string;
   model: string;
+  /** Its context window in tokens, if set. */
+  contextWindow?: number;
 }
 
 /**
@@ -159,5 +161,7 @@ export function processEnv(endpoint?: EndpointTarget): Record<string, string | u
     // An endpoint's address and token are its own; the variables cannot point it elsewhere.
     if (k && !(endpoint && (CREDENTIAL_VARS.includes(k) || k === 'ANTHROPIC_BASE_URL'))) env[k] = v.value;
   }
+  // The model's own window wins over a variable set for every process.
+  if (endpoint?.contextWindow) env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = String(endpoint.contextWindow);
   return env;
 }
