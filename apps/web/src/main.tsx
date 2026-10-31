@@ -12,7 +12,8 @@ connect();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    {/* A page change is a plain update: as a transition, a streaming reply would keep interrupting it. */}
+    <BrowserRouter useTransitions={false}>
       <App />
     </BrowserRouter>
   </StrictMode>,

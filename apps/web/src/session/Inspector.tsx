@@ -1,8 +1,8 @@
 /** Right-hand inspector: tasks, background work, changes, checkpoints, context, raw events, a file, session info. */
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { SessionRuntime } from '../api/types';
 import { api } from '../api';
-import { promptsOf } from '../store/sessions';
+import { promptsOf, sameApartFromItems } from '../store/sessions';
 import { Icon } from '../components/Icon';
 import { Button, Chip, Modal, Tabs } from '../components/ui';
 import { useApp, type InspectorTab } from '../store/app';
@@ -30,11 +30,25 @@ const MIN_W = 280;
 const MAX_W = 900;
 const CENTER_MIN = 560;
 
+type InspectorProps = { rt: SessionRuntime; onRewind: (userId: string) => void };
+
+const canBackgroundIn = (rt: SessionRuntime) => rt.items.some((it) => it.kind === 'tool' && it.backgroundable && it.status === 'running');
+
+/** Of the transcript, the inspector shows only what can go to the background and the prompts to rewind to. */
+function sameForInspector(a: InspectorProps, b: InspectorProps) {
+  if (!sameApartFromItems(a, b)) return false;
+  if (a.rt.items === b.rt.items) return true;
+  const users = (rt: SessionRuntime) => rt.items.filter((x) => x.kind === 'user');
+  const ua = users(a.rt);
+  const ub = users(b.rt);
+  return canBackgroundIn(a.rt) === canBackgroundIn(b.rt) && ua.length === ub.length && ua.every((x, i) => x === ub[i]);
+}
+
 /**
  * The icon rail on the far right is always there. Clicking an icon opens the panel on that tab;
  * clicking the open tab's icon closes it. The panel's left edge can be dragged to resize it.
  */
-export function Inspector({ rt, onRewind }: { rt: SessionRuntime; onRewind: (userId: string) => void }) {
+export const Inspector = memo(function Inspector({ rt, onRewind }: InspectorProps) {
   const t = useT();
   const ins = useApp((s) => s.inspector);
   const setInspector = useApp((s) => s.setInspector);
@@ -96,7 +110,7 @@ export function Inspector({ rt, onRewind }: { rt: SessionRuntime; onRewind: (use
       </nav>
     </div>
   );
-}
+}, sameForInspector);
 
 function TasksTab({ rt }: { rt: SessionRuntime }) {
   const t = useT();
@@ -133,8 +147,8 @@ function BackgroundTab({ rt }: { rt: SessionRuntime }) {
     .sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt));
   const shown = byView(view);
   const none = { running: '没有进行中的后台任务', completed: '没有已完成的后台任务', unfinished: '没有未完成的后台任务' } as const;
-  const canBackground = rt.items.some((it) => it.kind === 'tool' && it.backgroundable && it.status === 'running');
-  const kindLabel = { agent: '子代理', bash: '命令', workflow: '工作流', monitor: '监控' } as const;
+  const canBackground = canBackgroundIn(rt);
+  const kindLabel ={ agent: '子代理', bash: '命令', workflow: '工作流', monitor: '监控' } as const;
   const statusTone = { running: 'accent', completed: 'good', failed: 'crit', stopped: 'outline' } as const;
   const statusLabel = { running: '运行中', completed: '已完成', failed: '失败', stopped: '已停止' } as const;
   const [output, setOutput] = useState<{ name: string; text: string } | null>(null);

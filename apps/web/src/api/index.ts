@@ -5,7 +5,7 @@
  */
 import type { ClientApi } from '@code-agent/shared/api';
 import { READONLY_SLICES } from '@code-agent/shared/types';
-import type { AppSlices, ServerMessage, SliceKey } from './types';
+import type { AppSlices, ServerMessage, SessionEvent, SliceKey } from './types';
 import { MODELS } from '../lib/catalog';
 import { useApp } from '../store/app';
 import { emptyRuntime, useSessions } from '../store/sessions';
@@ -58,7 +58,39 @@ function applySlices(patch: Partial<AppSlices>) {
   }
 }
 
+/**
+ * Session events wait for the next frame and go in together, so a fast stream renders the page once a
+ * frame instead of once a fragment. Any other message applies them first and never sees them out of
+ * order: an opened session's state, for one, already includes the events sent before it.
+ */
+let pending: Array<{ sid: string; ev: SessionEvent }> = [];
+let cancelFlush: (() => void) | null = null;
+
+function flushEvents() {
+  cancelFlush?.();
+  cancelFlush = null;
+  if (!pending.length) return;
+  const batch = pending;
+  pending = [];
+  useSessions.getState().applyAll(batch);
+}
+
+function queueEvent(sid: string, ev: SessionEvent) {
+  pending.push({ sid, ev });
+  if (cancelFlush) return;
+  // A hidden tab gets no frames: once a second is enough there.
+  if (document.hidden) {
+    const timer = setTimeout(flushEvents, 1000);
+    cancelFlush = () => clearTimeout(timer);
+  } else {
+    const frame = requestAnimationFrame(flushEvents);
+    cancelFlush = () => cancelAnimationFrame(frame);
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) flushEvents(); });
+
 function handle(m: ServerMessage) {
+  if (m.t !== 'ev') flushEvents();
   switch (m.t) {
     case 'hello': {
       applySlices(m.slices);
@@ -82,7 +114,7 @@ function handle(m: ServerMessage) {
       useSessions.getState().drop(m.id);
       break;
     case 'ev':
-      useSessions.getState().apply(m.sid, m.ev);
+      queueEvent(m.sid, m.ev);
       break;
     case 'notify':
       notify(m.n.kind, m.n);

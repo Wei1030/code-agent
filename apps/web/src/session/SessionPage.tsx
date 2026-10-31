@@ -1,5 +1,5 @@
 /** P04 — a session: session column, transcript, docked panels, composer, inspector. */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { SessionRuntime, SessionSummary } from '../api/types';
 import { api } from '../api';
@@ -10,7 +10,7 @@ import { useApp, type InspectorTab } from '../store/app';
 import { promptsOf, useSessions } from '../store/sessions';
 import { hhmm, relTime, tokens as fmtTokens } from '../lib/format';
 import { cx } from '../lib/util';
-import { useT } from '../lib/i18n';
+import { t as translateNow, useT } from '../lib/i18n';
 import { SessionLink, Transcript } from './Transcript';
 import { ApprovalPanel, ElicitationPanel, InterruptReceipt, PlanReviewBar, QuestionPanel, QueueList, ReadOnlyBar, ResumeBar, WaitingBar } from './Dock';
 import { Composer } from './Composer';
@@ -29,6 +29,18 @@ export function SessionPage() {
   const record = useApp((s) => s.reviewRecord);
   const [rewindAt, setRewindAt] = useState<{ userId: string; n: number } | null>(null);
   const [receipt, setReceipt] = useState<number>(0);
+  // The same functions from one render to the next: the transcript's items draw again only when they change.
+  const latest = useRef(rt);
+  latest.current = rt;
+  const onFork = useCallback(async (userId: string) => {
+    const newId = await api.forkAt(id, userId);
+    nav(`/s/${newId}`);
+    useApp.getState().toast(translateNow('已分叉：新会话停在这条消息之前'), 'good');
+  }, [id, nav]);
+  const onRewind = useCallback((userId: string) => {
+    const n = promptsOf(latest.current!).findIndex((x) => x.id === userId) + 1;
+    setRewindAt({ userId, n });
+  }, []);
 
   useEffect(() => {
     api.openSession(id);
@@ -53,16 +65,6 @@ export function SessionPage() {
     );
   }
   if (!rt) return <div className="session-layout"><SessionColumn current={sum} /><div className="scenter"><div className="loading-block"><span className="spinner" />{t('正在载入会话…')}</div></div></div>;
-
-  const onFork = async (userId: string) => {
-    const newId = await api.forkAt(id, userId);
-    nav(`/s/${newId}`);
-    useApp.getState().toast(t('已分叉：新会话停在这条消息之前'), 'good');
-  };
-  const onRewind = (userId: string) => {
-    const n = promptsOf(rt).findIndex((x) => x.id === userId) + 1;
-    setRewindAt({ userId, n });
-  };
 
   return (
     <div className="session-layout">
@@ -93,7 +95,7 @@ export function SessionPage() {
             ) : (
               <>
                 <QueueList sid={id} queue={rt.queue} />
-                <Composer key={id} rt={rt} workspaceId={sum.workspaceId} onInterrupt={(n) => setReceipt(n)} />
+                <Composer key={id} rt={rt} workspaceId={sum.workspaceId} onInterrupt={setReceipt} />
               </>
             )}
           </div>
@@ -106,7 +108,7 @@ export function SessionPage() {
   );
 }
 
-function SessionColumn({ current }: { current: SessionSummary | null }) {
+const SessionColumn = memo(function SessionColumn({ current }: { current: SessionSummary | null }) {
   const t = useT();
   const nav = useNavigate();
   const wsId = useApp((s) => current?.workspaceId ?? s.currentWorkspaceId);
@@ -155,7 +157,7 @@ function SessionColumn({ current }: { current: SessionSummary | null }) {
       <div className="scol-foot"><Link to="/sessions">{t('全部会话 →')}</Link></div>
     </div>
   );
-}
+});
 
 function SessionHeader({ sum, rt }: { sum: SessionSummary; rt: SessionRuntime }) {
   const t = useT();

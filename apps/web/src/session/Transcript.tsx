@@ -1,5 +1,5 @@
 /** Transcript items: messages, thinking, tool cards, plans, banners and notices. */
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Item, PeerCall, PlanDoc, SessionRef, SessionRuntime, ToolItem } from '../api/types';
 import { Icon } from '../components/Icon';
@@ -46,9 +46,9 @@ export function Transcript({ rt, onRewind, onFork }: { rt: SessionRuntime; onRew
   return (
     <>
       {list.map((b, i) => {
-        if (Array.isArray(b)) return <Steps key={`steps:${b[0].id}`} steps={b} rt={rt} wsId={wsId} live={i === list.length - 1 && rt.state === 'running'} />;
+        if (Array.isArray(b)) return <Steps key={`steps:${b[0].id}`} steps={b} sid={rt.id} wsId={wsId} live={i === list.length - 1 && rt.state === 'running'} />;
         if (b.kind === 'user') userN += 1;
-        return <ItemView key={b.id} it={b} rt={rt} wsId={wsId} userN={userN} onRewind={onRewind} onFork={onFork} />;
+        return <ItemView key={b.id} it={b} sid={rt.id} readOnly={rt.readOnly} wsId={wsId} userN={b.kind === 'user' ? userN : 0} onRewind={onRewind} onFork={onFork} />;
       })}
     </>
   );
@@ -60,7 +60,7 @@ const toolName = (tool: string) => (tool.startsWith('mcp__') ? tool.split('__').
  * Thinking and tool calls up to Claude's next reply (or a task it starts in the background): one
  * line saying how many, until opened. While they are still going on, the line says what Claude is doing.
  */
-function Steps({ steps, rt, wsId, live }: { steps: Step[]; rt: SessionRuntime; wsId: string; live: boolean }) {
+const Steps = memo(function Steps({ steps, sid, wsId, live }: { steps: Step[]; sid: string; wsId: string; live: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const tools = steps.flatMap((x) => (x.kind === 'tool' ? [x] : x.kind === 'toolgroup' ? x.tools : []));
@@ -85,15 +85,16 @@ function Steps({ steps, rt, wsId, live }: { steps: Step[]; rt: SessionRuntime; w
       </div>
       {open && (
         <div className="steps-body">
-          {steps.map((it) => <ItemView key={it.id} it={it} rt={rt} wsId={wsId} userN={0} onRewind={noop} onFork={noop} />)}
+          {steps.map((it) => <ItemView key={it.id} it={it} sid={sid} wsId={wsId} userN={0} onRewind={noop} onFork={noop} />)}
         </div>
       )}
     </div>
   );
-}
+}, (a, b) => a.sid === b.sid && a.wsId === b.wsId && a.live === b.live && a.steps.length === b.steps.length && a.steps.every((x, i) => x === b.steps[i]));
 const noop = () => undefined;
 
-function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: SessionRuntime; wsId: string; userN: number; onRewind: (id: string) => void; onFork: (id: string) => void }) {
+/** One transcript item; drawn again only when it (or what it is shown with) changes. */
+const ItemView = memo(function ItemView({ it, sid, readOnly, wsId, userN, onRewind, onFork }: { it: Item; sid: string; readOnly?: boolean; wsId: string; userN: number; onRewind: (id: string) => void; onFork: (id: string) => void }) {
   const t = useT();
   switch (it.kind) {
     case 'user':
@@ -113,7 +114,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
                 : <Chip key={a.id} icon={a.kind === 'image' ? 'image' : a.kind === 'paste' ? 'copy' : 'file'}>{a.name} · {a.meta}</Chip>))}
             </div>
           )}
-          {!rt.readOnly && (
+          {!readOnly && (
             <div className="hover-actions">
               <Button size="sm" icon="rewind" title={t('把文件回退到这条消息之前')} onClick={() => onRewind(it.id)}>{t('回退文件')}</Button>
               <Button size="sm" icon="branch" title={t('新建一个会话，停在这条消息之前')} onClick={() => onFork(it.id)}>{t('从这里分叉')}</Button>
@@ -125,7 +126,7 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
     case 'text':
       return (
         <div className="atext">
-          <Markdown text={it.text} wsId={wsId} sid={rt.id} />
+          <Markdown text={it.text} wsId={wsId} sid={sid} />
           {it.streaming && <span className="caret" />}
           {it.aborted && <span className="aborted-tag">{t('（已中断）')}</span>}
         </div>
@@ -133,9 +134,9 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
     case 'thinking':
       return <Thinking text={it.text} seconds={it.seconds} streaming={it.streaming} />;
     case 'tool':
-      return <ToolCard tool={it} sid={rt.id} />;
+      return <ToolCard tool={it} sid={sid} />;
     case 'toolgroup':
-      return <ToolGroup label={it.label} tools={it.tools} sid={rt.id} />;
+      return <ToolGroup label={it.label} tools={it.tools} sid={sid} />;
     case 'plan':
       return <PlanCard plan={it.plan} version={it.version} status={it.status} />;
     case 'footer':
@@ -149,16 +150,15 @@ function ItemView({ it, rt, wsId, userN, onRewind, onFork }: { it: Item; rt: Ses
     case 'divider':
       return <div className="divider"><span>{t(it.label)}</span></div>;
     case 'notice':
-      return <Notice tone={it.tone} text={it.text} action={it.action} sid={rt.id} />;
+      return <Notice tone={it.tone} text={it.text} action={it.action} sid={sid} />;
     case 'banner':
-      return <Banner kind={it.banner} id={it.id} resolved={it.resolved} sid={rt.id} detail={it.detail} />;
+      return <Banner kind={it.banner} id={it.id} resolved={it.resolved} sid={sid} detail={it.detail} />;
     case 'review':
       return <ReviewCard ticketId={it.ticketId} round={it.round} what={it.what} />;
     case 'board':
-      return <BoardRecord it={it} sid={rt.id} wsId={wsId} />;
+      return <BoardRecord it={it} sid={sid} wsId={wsId} />;
   }
-}
-
+});
 
 /** Board changes from the recorder or Claude's board tools, with one-click undo. */
 function BoardRecord({ it, sid, wsId }: { it: Extract<Item, { kind: 'board' }>; sid: string; wsId: string }) {

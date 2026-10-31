@@ -1,5 +1,5 @@
 /** Markdown as Claude writes it: headings, lists, code blocks, tables, quotes, links, images, and board ids as links. */
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, memo, useMemo, type ReactNode } from 'react';
 import { linkify } from './BoardLink';
 import { imageSrc, Thumb } from './Thumb';
 import { guessLanguage, highlight, languageOf } from '../lib/highlight';
@@ -148,6 +148,15 @@ function render(blocks: Block[], wsId?: string, sid?: string): ReactNode {
   });
 }
 
-export function Markdown({ text, wsId, sid, className }: { text: string; wsId?: string; sid?: string; className?: string }) {
-  return <div className={className ?? 'md'}>{render(parse(text), wsId, sid)}</div>;
-}
+/** One block, rendered again only when it changed: a reply that streams in redraws only its last block. */
+const MdBlock = memo(
+  function MdBlock({ block, wsId, sid }: { block: Block; wsId?: string; sid?: string }) {
+    return <>{render([block], wsId, sid)}</>;
+  },
+  (a, b) => a.wsId === b.wsId && a.sid === b.sid && (a.block === b.block || JSON.stringify(a.block) === JSON.stringify(b.block)),
+);
+
+export const Markdown = memo(function Markdown({ text, wsId, sid, className }: { text: string; wsId?: string; sid?: string; className?: string }) {
+  const blocks = useMemo(() => parse(text), [text]);
+  return <div className={className ?? 'md'}>{blocks.map((b, i) => <MdBlock key={i} block={b} wsId={wsId} sid={sid} />)}</div>;
+});

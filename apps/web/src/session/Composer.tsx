@@ -1,5 +1,6 @@
 /** Message composer: "+" attachments, "/" commands, "@" session and file mentions, model / effort / mode, send. */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { sameApartFromItems } from '../store/sessions';
 import type { Attachment, Effort, PermissionMode, SessionRef, SessionRuntime } from '../api/types';
 import { api } from '../api';
 import { COMMANDS, MODE_INFO, type CommandInfo, type FsNode } from '../lib/catalog';
@@ -65,8 +66,11 @@ function storeText(sid: string, text: string) {
   }
 }
 
-/** The input of one session (SessionPage keys it by session, so its state is that session's). */
-export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
+/**
+ * The input of one session (SessionPage keys it by session, so its state is that session's). It shows
+ * nothing of the transcript, so a streaming reply does not draw it again.
+ */
+export const Composer = memo(function Composer({ rt, workspaceId, disabled, onInterrupt }: {
   rt: SessionRuntime; workspaceId: string; disabled?: boolean; onInterrupt: (queued: number) => void;
 }) {
   const t = useT();
@@ -456,4 +460,4 @@ export function Composer({ rt, workspaceId, disabled, onInterrupt }: {
       </Popover>
     </div>
   );
-}
+}, sameApartFromItems);
